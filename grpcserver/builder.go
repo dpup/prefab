@@ -27,15 +27,16 @@ const (
 	MetadataPrefix = "prefab-"
 )
 
-type BuilderOption func(*builder)
+// ServerOptions customize the configuration and operation of the GRPC server.
+type ServerOption func(*builder)
 
 type handler struct {
 	prefix  string
 	handler http.Handler
 }
 
-// Build returns a new server server.
-func Build(opts ...BuilderOption) *Server {
+// New returns a new server.
+func New(opts ...ServerOption) *Server {
 	b := &builder{
 		host:          defaultHost,
 		port:          defaultPort,
@@ -175,14 +176,14 @@ func (b *builder) isSecure() bool {
 }
 
 // WithHost configures the hostname or IP the server will listen on.
-func WithHost(host string) BuilderOption {
+func WithHost(host string) ServerOption {
 	return func(b *builder) {
 		b.host = host
 	}
 }
 
 // WithPort configures the port the server will listen on.
-func WithPort(port int) BuilderOption {
+func WithPort(port int) ServerOption {
 	return func(b *builder) {
 		b.port = port
 	}
@@ -190,7 +191,7 @@ func WithPort(port int) BuilderOption {
 
 // WithCORSAllowedOrigins specifies origins that are allowed to make requests.
 // See https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
-func WithCORSAllowedOrigins(origins ...string) BuilderOption {
+func WithCORSAllowedOrigins(origins ...string) ServerOption {
 	return func(b *builder) {
 		b.corsOrigins = append(b.corsOrigins, origins...)
 	}
@@ -198,7 +199,7 @@ func WithCORSAllowedOrigins(origins ...string) BuilderOption {
 
 // WithIncomingHeaders specifies a safe-list of headers that can be forwarded
 // via CORS and made available in as GRPC metadata with the `prefab` prefix.
-func WithIncomingHeaders(headers ...string) BuilderOption {
+func WithIncomingHeaders(headers ...string) ServerOption {
 	return func(b *builder) {
 		b.incomingHeaders = append(b.incomingHeaders, headers...)
 	}
@@ -206,7 +207,7 @@ func WithIncomingHeaders(headers ...string) BuilderOption {
 
 // WithTLS configures the server to allow traffic via TLS using the provided
 // cert. If not called server will use HTTP/H2C.
-func WithTLS(certFile, keyFile string) BuilderOption {
+func WithTLS(certFile, keyFile string) ServerOption {
 	return func(b *builder) {
 		b.certFile = certFile
 		b.keyFile = keyFile
@@ -214,7 +215,7 @@ func WithTLS(certFile, keyFile string) BuilderOption {
 }
 
 // WithMaxRecvMsgSize sets the maximum GRPC message size. Default is 4Mb.
-func WithMaxRecvMsgSize(maxMsgSizeBytes int) BuilderOption {
+func WithMaxRecvMsgSize(maxMsgSizeBytes int) ServerOption {
 	return func(b *builder) {
 		b.maxMsgSizeBytes = maxMsgSizeBytes
 	}
@@ -222,7 +223,7 @@ func WithMaxRecvMsgSize(maxMsgSizeBytes int) BuilderOption {
 
 // WithGatewayPrefix sets the path prefix that the GRPC Gateway will be bound
 // to. Default is `/v1/`.
-func WithGatewayPrefix(prefix string) BuilderOption {
+func WithGatewayPrefix(prefix string) ServerOption {
 	return func(b *builder) {
 		b.gatewayPrefix = prefix
 	}
@@ -230,7 +231,7 @@ func WithGatewayPrefix(prefix string) BuilderOption {
 
 // WithStaticFileServer configures the server to serve static files from disk
 // for HTTP requests that match the given prefix.
-func WithStaticFiles(prefix, dir string) BuilderOption {
+func WithStaticFiles(prefix, dir string) ServerOption {
 	return func(b *builder) {
 		b.httpHandlers = append(b.httpHandlers, handler{
 			prefix:  prefix,
@@ -240,7 +241,7 @@ func WithStaticFiles(prefix, dir string) BuilderOption {
 }
 
 // WithHTTPHandler adds an HTTP handler.
-func WithHTTPHandler(prefix string, h http.Handler) BuilderOption {
+func WithHTTPHandler(prefix string, h http.Handler) ServerOption {
 	return func(b *builder) {
 		b.httpHandlers = append(b.httpHandlers, handler{
 			prefix:  prefix,
@@ -250,7 +251,7 @@ func WithHTTPHandler(prefix string, h http.Handler) BuilderOption {
 }
 
 // WithHTTPHandlerFunc adds an HTTP handler function.
-func WithHTTPHandlerFunc(prefix string, h func(http.ResponseWriter, *http.Request)) BuilderOption {
+func WithHTTPHandlerFunc(prefix string, h func(http.ResponseWriter, *http.Request)) ServerOption {
 	return func(b *builder) {
 		b.httpHandlers = append(b.httpHandlers, handler{
 			prefix:  prefix,
@@ -261,7 +262,7 @@ func WithHTTPHandlerFunc(prefix string, h func(http.ResponseWriter, *http.Reques
 
 // WithGRPCInterceptor configures GRPC Unary Interceptors. They will be executed
 // in the order they were added.
-func WithGRPCInterceptor(interceptor grpc.UnaryServerInterceptor) BuilderOption {
+func WithGRPCInterceptor(interceptor grpc.UnaryServerInterceptor) ServerOption {
 	return func(b *builder) {
 		b.interceptors = append(b.interceptors, interceptor)
 	}

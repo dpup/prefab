@@ -23,7 +23,7 @@ import (
 //
 // Usage:
 //
-//	server := grpcserver.Build(opts...)
+//	server := grpcserver.New(opts...)
 //	debugservice.RegisterDebugServiceHandlerFromEndpoint(server.GatewayArgs())
 //	debugservice.RegisterDebugServiceServer(server.ServiceRegistrar(), &impl{})
 //	server.Start()

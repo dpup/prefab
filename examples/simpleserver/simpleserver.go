@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	server := grpcserver.Build(
+	server := grpcserver.New(
 		grpcserver.WithHTTPHandler("/", http.HandlerFunc(ack)),
 	)
 
