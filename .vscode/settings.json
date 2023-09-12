@@ -1,0 +1,11 @@
+{
+  "gopls": {
+    "build.buildFlags": ["-tags=tools"],
+  },
+  "protoc": {
+    "options": [
+      "--proto_path=${workspaceRoot}",
+      "--proto_path=${workspaceRoot}/third_party/googleapis",
+    ]
+  }
+}

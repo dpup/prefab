@@ -1,0 +1,8 @@
+.envrc
+
+# Generated files from prefab Makefile.
+out/
+tools/bin
+*.touchfile
+*.pb.go
+*.pb.gw.go

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package prefab;
+option go_package = "github.com/dpup/prefab/examples/simpleserver/simpleservice";
+
+import "google/api/annotations.proto";
+
+service Simple {
+  // Health returns information about the current server's health status.
+  rpc Health(HealthRequest) returns (HealthResponse) {
+    option (google.api.http) = {
+      get: "/v1/health"
+    };
+  }
+}
+
+// An empty request with no parameters for now.
+message HealthRequest {}
+
+// The response message containing the current health status.
+message HealthResponse {
+  // How the server is feeling.
+  string status = 1;
+}
