@@ -1,4 +1,7 @@
 {
+  "terminal.integrated.env.osx": {
+    "PATH": "${env:PATH}:${workspaceRoot}/tools/bin"
+  },
   "gopls": {
     "build.buildFlags": ["-tags=tools"],
   },
@@ -6,6 +9,11 @@
     "options": [
       "--proto_path=${workspaceRoot}",
       "--proto_path=${workspaceRoot}/third_party/googleapis",
+      "--grpc-gateway_out=${env.GOPATH}/src",
+      "--grpc-gateway_opt=logtostderr=true",
+      "--grpc_out=${env.GOPATH}/src",
+      "--go_out=${env.GOPATH}/src",
+      "--grpc-gateway_opt=generate_unbound_methods=true "
     ]
   }
 }

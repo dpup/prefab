@@ -5,7 +5,7 @@ option go_package = "github.com/dpup/prefab/examples/simpleserver/simpleservice"
 
 import "google/api/annotations.proto";
 
-service Simple {
+service SimpleService {
   // Health returns information about the current server's health status.
   rpc Health(HealthRequest) returns (HealthResponse) {
     option (google.api.http) = {

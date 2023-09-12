@@ -20,6 +20,15 @@ import (
 )
 
 // Server wraps a HTTP server, a GRPC server, and a GRPC Gateway.
+//
+// Usage:
+//
+//	server := grpcserver.Build(opts...)
+//	debugservice.RegisterDebugServiceHandlerFromEndpoint(server.GatewayArgs())
+//	debugservice.RegisterDebugServiceServer(server.ServiceRegistrar(), &impl{})
+//	server.Start()
+//
+// See examples/simpleserver.
 type Server struct {
 	// Hostname or IP to bind to.
 	host string
@@ -52,6 +61,35 @@ type Server struct {
 	gatewayOpts []grpc.DialOption
 }
 
+// GRPCServer returns the GRPC Service Registrar for use with service
+// implementations.
+//
+// For example, if you have DebugService:
+//
+//	debugservice.RegisterDebugServiceServer(server.ServiceRegistrar(), &debugServiceImpl{})
+func (s *Server) ServiceRegistrar() grpc.ServiceRegistrar {
+	return s.grpcServer
+}
+
+// GatewayArgs is used when registering a gateway handler.
+//
+// For example, if you have DebugService:
+//
+//	debugservice.RegisterDebugServiceHandlerFromEndpoint(server.GatewayArgs())
+func (s *Server) GatewayArgs() (ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) {
+	ctx = s.baseContext
+	mux = s.grpcGateway
+	opts = s.gatewayOpts
+	if s.host == "0.0.0.0" {
+		// Special case of 0.0.0.0 is a listen-only IP, and must be changed into
+		// localhost in a containerized environment.
+		endpoint = fmt.Sprintf("localhost:%d", s.port)
+	} else {
+		endpoint = fmt.Sprintf("%s:%d", s.host, s.port)
+	}
+	return
+}
+
 // Start serving requests. Blocks until Shutdown is called.
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
@@ -70,23 +108,17 @@ func (s *Server) Start() error {
 		signal.Notify(gracefulStop, syscall.SIGTERM)
 		signal.Notify(gracefulStop, syscall.SIGINT)
 		sig := <-gracefulStop
-		fmt.Printf("👋 Graceful shutdown triggered... (sig %+v)", sig)
+		fmt.Printf("👋 Graceful shutdown triggered... (sig %+v)\n", sig)
 		s.Shutdown()
 		close(done)
 	}()
 
-	var ln net.Listener
-	// if s.bufconn != nil {
-	// 	ln = s.bufconn
-	// } else {
-	ln, err = net.Listen("tcp", addr)
+	// TODO: Allow bufconn to be injected to allow tests to avoid the network.
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
-	// }
 	defer ln.Close()
-
-	fmt.Printf("🚀  Listening for traffic on %s", addr)
 
 	grpcHandler := s.grpcServer
 	httpHandler := gziphandler.GzipHandler(s.httpMux)
@@ -101,9 +133,11 @@ func (s *Server) Start() error {
 	if s.certFile != "" {
 		s.httpServer.Handler = handler
 		s.httpServer.TLSConfig = safeTLSConfig()
+		fmt.Printf("🚀  Listening for traffic on https://%s\n", addr)
 		err = s.httpServer.ServeTLS(ln, s.certFile, s.keyFile)
 	} else {
 		s.httpServer.Handler = h2c.NewHandler(handler, &http2.Server{})
+		fmt.Printf("🚀  Listening for traffic on http://%s\n", addr)
 		err = s.httpServer.Serve(ln)
 	}
 
@@ -124,9 +158,9 @@ func (s *Server) Shutdown() error {
 
 	err := s.httpServer.Shutdown(ctx)
 	if err != nil {
-		fmt.Printf("❌ Shutdown error: %v", err)
+		fmt.Printf("❌ Shutdown error: %v\n", err)
 	} else {
-		fmt.Printf("👍 Connections drained")
+		fmt.Printf("👍 Connections drained\n")
 	}
 	s.httpServer = nil
 	return err
