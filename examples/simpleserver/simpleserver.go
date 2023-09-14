@@ -6,6 +6,7 @@ import (
 
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
 	"github.com/dpup/prefab/grpcserver"
+	"github.com/dpup/prefab/logging"
 )
 
 func main() {
@@ -22,6 +23,6 @@ func main() {
 }
 
 func ack(w http.ResponseWriter, req *http.Request) {
-	fmt.Printf("👋  Ack!  %v\n", req.URL)
+	logging.Infow(req.Context(), "👋  Ack!", "url", req.URL)
 	w.Write([]byte("SimpleServer HTTP Ack\n"))
 }

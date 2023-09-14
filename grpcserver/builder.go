@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dpup/prefab/logging"
+
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -57,6 +59,7 @@ type builder struct {
 	certFile        string
 	keyFile         string
 	maxMsgSizeBytes int
+	logger          logging.Logger
 	httpHandlers    []handler
 	interceptors    []grpc.UnaryServerInterceptor
 }
@@ -89,8 +92,15 @@ func (b *builder) build() *Server {
 		runtime.WithOutgoingHeaderMatcher(runtime.DefaultHeaderMatcher),
 	)
 
+	ctx := context.Background()
+	if b.logger != nil {
+		ctx = logging.With(ctx, b.logger)
+	} else {
+		ctx = logging.With(ctx, logging.NewDevLogger())
+	}
+
 	s := &Server{
-		baseContext: context.Background(),
+		baseContext: ctx,
 		host:        b.host,
 		port:        b.port,
 		certFile:    b.certFile,
@@ -134,9 +144,8 @@ func (b *builder) wrapHandler(h http.Handler) http.Handler {
 }
 
 func (b *builder) buildGRPCOpts() []grpc.ServerOption {
-	opts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(b.interceptors...)),
-	}
+	interceptors := append([]grpc.UnaryServerInterceptor{logging.Interceptor()}, b.interceptors...)
+	opts := []grpc.ServerOption{grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(interceptors...))}
 	if b.isSecure() {
 		opts = append(opts, grpc.Creds(serverTLSFromFile(b.certFile, b.keyFile)))
 	}
@@ -265,6 +274,13 @@ func WithHTTPHandlerFunc(prefix string, h func(http.ResponseWriter, *http.Reques
 func WithGRPCInterceptor(interceptor grpc.UnaryServerInterceptor) ServerOption {
 	return func(b *builder) {
 		b.interceptors = append(b.interceptors, interceptor)
+	}
+}
+
+// WithLogger overrides the logger used by the server.
+func WithLogger(logger logging.Logger) ServerOption {
+	return func(b *builder) {
+		b.logger = logger
 	}
 }
 

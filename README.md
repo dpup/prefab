@@ -1,4 +1,7 @@
 
-## Dependencies
+## Opinions
 
-brew install bufbuild/buf/buf
+- Zap for logging.
+- [TK] for templating. (e.g. for default login page)
+
+

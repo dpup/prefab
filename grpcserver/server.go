@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/dpup/prefab/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -108,7 +109,7 @@ func (s *Server) Start() error {
 		signal.Notify(gracefulStop, syscall.SIGTERM)
 		signal.Notify(gracefulStop, syscall.SIGINT)
 		sig := <-gracefulStop
-		fmt.Printf("👋 Graceful shutdown triggered... (sig %+v)\n", sig)
+		logging.Infof(s.baseContext, "👋 Graceful shutdown triggered... (sig %+v)\n", sig)
 		s.Shutdown()
 		close(done)
 	}()
@@ -133,11 +134,11 @@ func (s *Server) Start() error {
 	if s.certFile != "" {
 		s.httpServer.Handler = handler
 		s.httpServer.TLSConfig = safeTLSConfig()
-		fmt.Printf("🚀  Listening for traffic on https://%s\n", addr)
+		logging.Infof(s.baseContext, "🚀  Listening for traffic on https://%s\n", addr)
 		err = s.httpServer.ServeTLS(ln, s.certFile, s.keyFile)
 	} else {
 		s.httpServer.Handler = h2c.NewHandler(handler, &http2.Server{})
-		fmt.Printf("🚀  Listening for traffic on http://%s\n", addr)
+		logging.Infof(s.baseContext, "🚀  Listening for traffic on http://%s\n", addr)
 		err = s.httpServer.Serve(ln)
 	}
 

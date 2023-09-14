@@ -2,7 +2,8 @@ package simpleservice
 
 import (
 	"context"
-	"fmt"
+
+	"github.com/dpup/prefab/logging"
 )
 
 func New() SimpleServiceServer {
@@ -15,7 +16,7 @@ type server struct {
 }
 
 func (s *server) Health(ctx context.Context, in *HealthRequest) (*HealthResponse, error) {
-	fmt.Printf("❤️  Server health reported\n")
+	logging.Info(ctx, "❤️  Server health reported")
 	return &HealthResponse{
 		Status: "OK",
 	}, nil
