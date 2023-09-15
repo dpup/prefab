@@ -4,9 +4,11 @@ go 1.21.0
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
+	github.com/gertd/go-pluralize v0.2.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.0
+	github.com/iancoleman/strcase v0.3.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.18.1
 	golang.org/x/net v0.15.0
