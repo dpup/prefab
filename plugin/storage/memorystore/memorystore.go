@@ -1,12 +1,13 @@
 // Package memory implements storage.Store in a purely in-memory manner.
-package memory
+package memorystore
 
 import (
 	"encoding/json"
 	"reflect"
 	"sort"
+	"sync"
 
-	"github.com/dpup/prefab/storage"
+	"github.com/dpup/prefab/plugin/storage"
 )
 
 // New returns a store that provides transient, in-memory storage.
@@ -19,9 +20,12 @@ func New() storage.Store {
 type store struct {
 	// store[tableName][entityID] = JSON
 	data map[string]map[string][]byte
+	mu   sync.RWMutex
 }
 
 func (s *store) Put(models ...storage.Model) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, m := range models {
 		n := storage.Name(m)
 		if s.data[n] == nil {
@@ -37,6 +41,8 @@ func (s *store) Put(models ...storage.Model) error {
 }
 
 func (s *store) Get(id string, model storage.Model) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	n := storage.Name(model)
 	if s.data[n] == nil {
 		return storage.ErrNotFound
@@ -52,6 +58,9 @@ func (s *store) Get(id string, model storage.Model) error {
 }
 
 func (s *store) Exists(id string, model storage.Model) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	n := storage.Name(model)
 	if s.data[n] == nil {
 		return false, nil
@@ -63,6 +72,9 @@ func (s *store) Exists(id string, model storage.Model) (bool, error) {
 }
 
 func (s *store) Delete(model storage.Model) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	n := storage.Name(model)
 	id := model.PK()
 	if s.data[n] == nil {
@@ -77,6 +89,9 @@ func (s *store) Delete(model storage.Model) error {
 
 // List always performs a full scan of all items.
 func (s *store) List(models interface{}, filter storage.Model) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	modelsVal := reflect.ValueOf(models)
 	if modelsVal.Kind() != reflect.Ptr || modelsVal.Elem().Kind() != reflect.Slice {
 		return storage.ErrSliceRequired

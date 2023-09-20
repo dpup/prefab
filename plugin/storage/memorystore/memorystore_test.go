@@ -1,9 +1,9 @@
-package memory
+package memorystore
 
 import (
 	"testing"
 
-	"github.com/dpup/prefab/storage"
+	"github.com/dpup/prefab/plugin/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -11,12 +11,12 @@ import (
 type Color int
 
 const (
-	ColorRed     Color = 1
-	ColorGreen   Color = 2
-	ColorOrgange Color = 3
-	ColorYellow  Color = 4
-	ColorBlue    Color = 5
-	ColorPurple  Color = 6
+	ColorRed    Color = 1
+	ColorGreen  Color = 2
+	ColorOrange Color = 3
+	ColorYellow Color = 4
+	ColorBlue   Color = 5
+	ColorPurple Color = 6
 )
 
 type Fruit struct {
@@ -136,7 +136,7 @@ func TestList(t *testing.T) {
 	err := store.Put(
 		Fruit{"1", "Apple", ColorGreen, nil},
 		Fruit{"2", "Banana", ColorYellow, nil},
-		Fruit{"3", "Mango", ColorOrgange, nil},
+		Fruit{"3", "Mango", ColorOrange, nil},
 	)
 	assert.Nil(t, err)
 
@@ -147,7 +147,7 @@ func TestList(t *testing.T) {
 	expected := []Fruit{
 		{"1", "Apple", ColorGreen, nil},
 		{"2", "Banana", ColorYellow, nil},
-		{"3", "Mango", ColorOrgange, nil},
+		{"3", "Mango", ColorOrange, nil},
 	}
 
 	assert.Equal(t, expected, actual)
@@ -159,10 +159,10 @@ func TestListFilter(t *testing.T) {
 	err := store.Put(
 		Fruit{"1", "Apple", ColorGreen, nil},
 		Fruit{"2", "Banana", ColorYellow, nil},
-		Fruit{"3", "Mango", ColorOrgange, nil},
+		Fruit{"3", "Mango", ColorOrange, nil},
 		Fruit{"4", "Cherry", ColorRed, nil},
 		Fruit{"5", "Grape", ColorGreen, nil},
-		Fruit{"6", "Stawberry", ColorRed, nil},
+		Fruit{"6", "Strawberry", ColorRed, nil},
 		Fruit{"7", "Plum", ColorPurple, nil},
 		Fruit{"8", "Tomato", ColorRed, nil},
 	)
@@ -186,7 +186,7 @@ func TestListFilterZero(t *testing.T) {
 	err := store.Put(
 		Fruit{"1", "Apple", ColorGreen, pint(4)},
 		Fruit{"2", "Banana", ColorYellow, pint(3)},
-		Fruit{"3", "Mango", ColorOrgange, pint(0)},
+		Fruit{"3", "Mango", ColorOrange, pint(0)},
 		Fruit{"4", "Cherry", ColorRed, pint(0)},
 		Fruit{"5", "Grape", ColorGreen, nil},
 	)
@@ -197,7 +197,7 @@ func TestListFilterZero(t *testing.T) {
 	assert.Nil(t, err)
 
 	expected := []Fruit{
-		{"3", "Mango", ColorOrgange, pint(0)},
+		{"3", "Mango", ColorOrange, pint(0)},
 		{"4", "Cherry", ColorRed, pint(0)},
 	}
 
