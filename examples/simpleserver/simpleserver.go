@@ -5,19 +5,19 @@ import (
 	"net/http"
 
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
-	"github.com/dpup/prefab/grpcserver"
 	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/server"
 )
 
 func main() {
-	server := grpcserver.New(
-		grpcserver.WithHTTPHandler("/", http.HandlerFunc(ack)),
+	s := server.New(
+		server.WithHTTPHandler("/", http.HandlerFunc(ack)),
 	)
 
-	simpleservice.RegisterSimpleServiceHandlerFromEndpoint(server.GatewayArgs())
-	simpleservice.RegisterSimpleServiceServer(server.ServiceRegistrar(), simpleservice.New())
+	simpleservice.RegisterSimpleServiceHandlerFromEndpoint(s.GatewayArgs())
+	simpleservice.RegisterSimpleServiceServer(s.ServiceRegistrar(), simpleservice.New())
 
-	if err := server.Start(); err != nil {
+	if err := s.Start(); err != nil {
 		fmt.Println(err)
 	}
 }
