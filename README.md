@@ -1,7 +1,8 @@
 
 ## Opinions
 
-- Zap for logging.
+- Zap was chosen as default logging library.
+- JWT for authorization tokens and cookies.
 - [TK] for templating. (e.g. for default login page)
 
 

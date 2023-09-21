@@ -15,5 +15,6 @@
       "--go_out=${env.GOPATH}/src",
       "--grpc-gateway_opt=generate_unbound_methods=true "
     ]
-  }
+  },
+  "cSpell.allowCompoundWords": true,
 }

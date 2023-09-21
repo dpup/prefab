@@ -4,9 +4,10 @@
     "dictionaryDefinitions": [],
     "dictionaries": [],
     "words": [
+        "anypb",
+        "Infof",
         "Infow",
-        "memorystore",
-        "simpleservice"
+        "protobuf"
     ],
     "ignoreWords": [],
     "import": []

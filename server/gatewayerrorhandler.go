@@ -20,7 +20,7 @@ func gatewayErrorHandler(ctx context.Context, mux *runtime.ServeMux, marshaler r
 	runtime.DefaultHTTPErrorHandler(ctx, mux, m, w, r, err)
 }
 
-// monkeyPatcher wrapes a GRPC Gateway Marshaller and hijacks the marshalling
+// monkeyPatcher wraps a GRPC Gateway Marshaller and hijacks the marshalling
 // of the grpc Status proto, to output our own error type.
 type monkeypatcher struct {
 	runtime.Marshaler
