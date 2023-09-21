@@ -6,23 +6,22 @@
 - [TK] for templating. (e.g. for default login page)
 
 
-## Ideas for "plugin" interface
+## Plugins
 
-Plugins can add:
+Plugins are essentially server scoped singletons.
 
-- http handlers
-- grpc handlers
-- interceptors
-- data to the context, made accessible via helper methods
+Plugins expose a `Name()` method which returns a string used for querying and
+for dependency resolution.
 
-Plugins provide:
-- static functions which can be called from other plugins or application code
+Plugins may expose a `Deps()` method which returns a list of names for plugins
+that should be initialized before hand.
 
-Plugins can access:
+Plugins may expose a `ServerOptions()` method, which allows for the registration
+of HTTP handlers, GRPC handlers, and interceptors.
 
-- storage
-- other plugins data via static function calls
+Plugins may expose an `Init()` method, which is called when the server starts
+up, and should be used for getting references to other plugins.
 
-Plugins:
-
-- specify dependencies to ensure initialization order is correct
+By convention, plugins should be named `Plugin`. If the plugin is intended to be
+used by other plugins, it's name should be exported as `PluginName`. For
+example, `gpt.Plugin` and `gpt.PluginName`.

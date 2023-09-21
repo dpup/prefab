@@ -5,36 +5,31 @@ import (
 	"fmt"
 )
 
-type entry struct {
-	key    string
-	plugin any
-	deps   []string
-}
-
 // Registry manages plugins and their dependencies.
 type Registry struct {
-	plugins map[string]entry
+	plugins map[string]Plugin
 }
 
 // Get a plugin.
-func (r *Registry) Get(key string) any {
+func (r *Registry) Get(key string) Plugin {
 	if p, ok := r.plugins[key]; ok {
-		return p.plugin
+		return p
 	}
 	return nil
 }
 
 // Register a plugin.
-func (r *Registry) Register(key string, plugin any, deps ...string) {
+func (r *Registry) Register(plugin Plugin) {
 	if r.plugins == nil {
-		r.plugins = map[string]entry{}
+		r.plugins = map[string]Plugin{}
 	}
-	r.plugins[key] = entry{key: key, plugin: plugin, deps: deps}
+	r.plugins[plugin.Name()] = plugin
 }
 
 // Init all plugins in the registry, in dependency order.
 func (r *Registry) Init(ctx context.Context) error {
 	// TODO: Should this protect against being called twice?
+
 	if r.plugins == nil {
 		return nil
 	}
@@ -66,14 +61,16 @@ func (r *Registry) validateDeps(key string, visiting map[string]bool) error {
 	}
 
 	visiting[key] = true
-	entry, ok := r.plugins[key]
+	plugin, ok := r.plugins[key]
 	if !ok {
 		return fmt.Errorf("plugin: missing dependency, %v not registered", key)
 	}
 
-	for _, dep := range entry.deps {
-		if err := r.validateDeps(dep, visiting); err != nil {
-			return err
+	if d, ok := plugin.(DependentPlugin); ok {
+		for _, dep := range d.Deps() {
+			if err := r.validateDeps(dep, visiting); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -87,18 +84,20 @@ func (r *Registry) initPlugin(ctx context.Context, key string, initialized map[a
 		return nil
 	}
 
-	entry, ok := r.plugins[key]
+	plugin, ok := r.plugins[key]
 	if !ok {
 		return fmt.Errorf("plugin %v not registered", key)
 	}
 
-	for _, dep := range entry.deps {
-		if err := r.initPlugin(ctx, dep, initialized); err != nil {
-			return err
+	if d, ok := plugin.(DependentPlugin); ok {
+		for _, dep := range d.Deps() {
+			if err := r.initPlugin(ctx, dep, initialized); err != nil {
+				return err
+			}
 		}
 	}
 
-	if p, ok := entry.plugin.(InitializablePlugin); ok {
+	if p, ok := plugin.(InitializablePlugin); ok {
 		if err := p.Init(ctx, r); err != nil {
 			return fmt.Errorf("plugin: failed to initialize %v: %w", key, err)
 		}

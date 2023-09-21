@@ -14,14 +14,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// key used for registering/fetching the sample plugin.
-const registryKey = "sample"
-
 func main() {
 	// Initialize the server with the sample plugin and a memory store.
 	s := server.New(
-		server.WithPlugin(registryKey, &samplePlugin{}, storage.RegistryKey),
-		server.WithPlugin(storage.RegistryKey, memorystore.New()),
+		server.WithPlugin(&samplePlugin{}),
+		server.WithPlugin(storage.Plugin(memorystore.New())),
 	)
 
 	// Register the GRPC service handlers from the other example.
@@ -46,16 +43,28 @@ type samplePlugin struct {
 	store storage.Store
 }
 
-// ServerOptions registers an additional interceptor for this plugin.
+// From plugin.Plugin, provides the plugin name for querying and dependency
+// resolution.
+func (s *samplePlugin) Name() string {
+	return "sample"
+}
+
+// From plugin.DependentPlugin, ensures dependencies are registered in order.
+func (s *samplePlugin) Deps() []string {
+	return []string{storage.PluginName}
+}
+
+// From server.OptionProvider, registers an additional interceptor.
 func (s *samplePlugin) ServerOptions() []server.ServerOption {
 	return []server.ServerOption{
 		server.WithGRPCInterceptor(s.interceptor),
 	}
 }
 
-// Init stores a reference to the storage plugin for use by the interceptor.
+// From plugin.InitializablePlugin, stores a reference to the storage plugin for
+// use by the interceptor.
 func (s *samplePlugin) Init(ctx context.Context, r *plugin.Registry) error {
-	s.store = r.Get(storage.RegistryKey).(storage.Store)
+	s.store = r.Get(storage.PluginName).(storage.Store)
 	logging.Info(ctx, "Sample Plugin initialized!")
 	return nil
 }

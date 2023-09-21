@@ -290,15 +290,15 @@ func WithLogger(logger logging.Logger) ServerOption {
 
 // WithPlugin registers a plugin with the server's registry. Plugins will be
 // initialized at server start. If the Plugin implements `OptionProvider` then
-// additional server options will be configured for the server.
-func WithPlugin(key string, plugin any, deps ...string) ServerOption {
+// additional server options can be configured for the server.
+func WithPlugin(p plugin.Plugin) ServerOption {
 	return func(b *builder) {
-		if so, ok := plugin.(OptionProvider); ok {
+		if so, ok := p.(OptionProvider); ok {
 			for _, opt := range so.ServerOptions() {
 				opt(b)
 			}
 		}
-		b.plugins.Register(key, plugin, deps...)
+		b.plugins.Register(p)
 	}
 }
 

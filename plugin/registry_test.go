@@ -11,6 +11,15 @@ var ctx = context.Background()
 
 type TestPlugin struct {
 	name string
+	deps []string
+}
+
+func (tp *TestPlugin) Name() string {
+	return tp.name
+}
+
+func (tp *TestPlugin) Deps() []string {
+	return tp.deps
 }
 
 func (tp *TestPlugin) Init(ctx context.Context, r *Registry) error {
@@ -27,10 +36,10 @@ func TestInit(t *testing.T) {
 	r := &Registry{}
 
 	// Register plugins with dependencies
-	r.Register("A", &TestPlugin{"A"}, "B", "C")
-	r.Register("B", &TestPlugin{"B"}, "C", "D")
-	r.Register("C", &TestPlugin{"C"}, "D")
-	r.Register("D", &TestPlugin{"D"})
+	r.Register(&TestPlugin{name: "A", deps: []string{"B", "C"}})
+	r.Register(&TestPlugin{name: "B", deps: []string{"C", "D"}})
+	r.Register(&TestPlugin{name: "C", deps: []string{"D"}})
+	r.Register(&TestPlugin{name: "D"})
 
 	// Initialize plugins
 	err := r.Init(ctx)
@@ -50,9 +59,9 @@ func TestCycleDetection(t *testing.T) {
 	r := &Registry{}
 
 	// Register plugins with a cycle: A -> B -> C -> A
-	r.Register("A", &TestPlugin{"A"}, "B")
-	r.Register("B", &TestPlugin{"B"}, "C")
-	r.Register("C", &TestPlugin{"C"}, "A")
+	r.Register(&TestPlugin{name: "A", deps: []string{"B"}})
+	r.Register(&TestPlugin{name: "B", deps: []string{"C"}})
+	r.Register(&TestPlugin{name: "C", deps: []string{"A"}})
 
 	err := r.Init(ctx)
 	assert.EqualError(t, err, "plugin: dependency cycle detected involving A")
@@ -65,8 +74,8 @@ func TestMissingDependency(t *testing.T) {
 	r := &Registry{}
 
 	// Register plugins with a missing dependency: A -> B -> XX
-	r.Register("A", &TestPlugin{"A"}, "B")
-	r.Register("B", &TestPlugin{"B"}, "XX")
+	r.Register(&TestPlugin{name: "A", deps: []string{"B"}})
+	r.Register(&TestPlugin{name: "B", deps: []string{"XX"}})
 
 	err := r.Init(ctx)
 	assert.EqualError(t, err, "plugin: missing dependency, XX not registered")

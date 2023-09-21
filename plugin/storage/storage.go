@@ -2,16 +2,28 @@
 // to other prefab plugins.
 package storage
 
-// RegistryKey should be used for registering and fetching the storage plugin.
+import "github.com/dpup/prefab/plugin"
+
+// PluginName can be used to query the storage plugin.
 //
 // Examples:
 //
-//		plugin.Register(storage.RegistryKey, memorystore.New())
+//		plugin.Register(storage.Plugin(memorystore.New()))
 //
 //	 func (m *MyPlugin) Init(r *plugin.Registry) error {
-//	   m.store = r.Get(storage.RegistryKey)
+//	   m.store = r.Get(storage.PluginName)
 //	 }
-//
-// TODO: Not a huge fan of the name `RegistryKey` but it is explicit. A possible
-// alternative is to use Plugin, Name, or maybe just Key.
-const RegistryKey = "storage"
+const PluginName = "storage"
+
+// Plugin wraps a storage implementation for registration.
+func Plugin(impl Store) plugin.Plugin {
+	return &wrapper{Store: impl}
+}
+
+type wrapper struct {
+	Store
+}
+
+func (p *wrapper) Name() string {
+	return PluginName
+}
