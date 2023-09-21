@@ -1,0 +1,112 @@
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
+	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/plugin"
+	"github.com/dpup/prefab/plugin/storage"
+	"github.com/dpup/prefab/plugin/storage/memorystore"
+	"github.com/dpup/prefab/server"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+)
+
+// key used for registering/fetching the sample plugin.
+const registryKey = "sample"
+
+func main() {
+	// Initialize the server with the sample plugin and a memory store.
+	s := server.New(
+		server.WithPlugin(registryKey, &samplePlugin{}, storage.RegistryKey),
+		server.WithPlugin(storage.RegistryKey, memorystore.New()),
+	)
+
+	// Register the GRPC service handlers from the other example.
+	simpleservice.RegisterSimpleServiceHandlerFromEndpoint(s.GatewayArgs())
+	simpleservice.RegisterSimpleServiceServer(s.ServiceRegistrar(), simpleservice.New())
+
+	// Guidance for people who don't read the example code.
+	fmt.Println("")
+	fmt.Println("Try making a request to the echo endpoint:")
+	fmt.Println("curl 'http://0.0.0.0:8000/v1/echo?ping=hello+world'")
+	fmt.Println("")
+	fmt.Println("Then note that the server logs contain a `req.ping` entry.")
+	fmt.Println("")
+
+	// Start the server.
+	if err := s.Start(); err != nil {
+		fmt.Println(err)
+	}
+}
+
+type samplePlugin struct {
+	store storage.Store
+}
+
+// ServerOptions registers an additional interceptor for this plugin.
+func (s *samplePlugin) ServerOptions() []server.ServerOption {
+	return []server.ServerOption{
+		server.WithGRPCInterceptor(s.interceptor),
+	}
+}
+
+// Init stores a reference to the storage plugin for use by the interceptor.
+func (s *samplePlugin) Init(ctx context.Context, r *plugin.Registry) error {
+	s.store = r.Get(storage.RegistryKey).(storage.Store)
+	logging.Info(ctx, "Sample Plugin initialized!")
+	return nil
+}
+
+// Simple interceptor that:
+// 1. adds fields from the request object to the logs.
+// 2. tracks per-method request counts.
+//
+// FWIW Neither implementation is safe for prod.
+func (s *samplePlugin) interceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+
+	// Add request fields in the form `req.field`
+	if msg, ok := req.(proto.Message); ok {
+		m := msg.ProtoReflect()
+		fields := m.Descriptor().Fields()
+		fieldsLen := fields.Len()
+		for i := 0; i < fieldsLen; i++ {
+			fd := fields.Get(i)
+			v := m.Get(fd)
+			fieldName := fmt.Sprintf("req.%s", fd.Name())
+			fieldValue := v.Interface()
+			logging.Track(ctx, fieldName, fieldValue)
+		}
+	}
+
+	// Get the current request count for this method.
+	var stats Stats
+	if err := s.store.Get(info.FullMethod, &stats); err == storage.ErrNotFound {
+		stats = Stats{Method: info.FullMethod, Count: 0}
+	} else if err != nil {
+		logging.Errorw(ctx, "error getting stats", "err", err)
+	}
+
+	// Increment the count, and store. Clearly not thread safe!
+	stats.Count++
+	if err := s.store.Put(&stats); err != nil {
+		logging.Errorw(ctx, "error saving stats", "err", err)
+	}
+
+	// Add the request count to the logging context.
+	logging.Track(ctx, "stats.counter", stats.Count)
+
+	return handler(ctx, req)
+}
+
+// Model for storing request counts.
+type Stats struct {
+	Method string
+	Count  int
+}
+
+func (s *Stats) PK() string {
+	return s.Method
+}

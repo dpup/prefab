@@ -5,9 +5,18 @@
     "dictionaries": [],
     "words": [
         "anypb",
+        "Debugf",
+        "Debugw",
+        "dpup",
+        "Errorw",
+        "Fatalw",
         "Infof",
         "Infow",
-        "protobuf"
+        "Initializable",
+        "Panicw",
+        "protobuf",
+        "Warnf",
+        "Warnw"
     ],
     "ignoreWords": [],
     "import": []

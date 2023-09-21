@@ -14,4 +14,4 @@ package storage
 //
 // TODO: Not a huge fan of the name `RegistryKey` but it is explicit. A possible
 // alternative is to use Plugin, Name, or maybe just Key.
-type RegistryKey struct{}
+const RegistryKey = "storage"

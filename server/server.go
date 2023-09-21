@@ -17,6 +17,7 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/plugin"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -63,6 +64,9 @@ type Server struct {
 
 	// DialOptions passed when registering GRPC Gateway handlers.
 	gatewayOpts []grpc.DialOption
+
+	// Plugins tied to the lifecycle of the server.
+	plugins *plugin.Registry
 }
 
 // GRPCServer returns the GRPC Service Registrar for use with service
@@ -96,6 +100,11 @@ func (s *Server) GatewayArgs() (ctx context.Context, mux *runtime.ServeMux, endp
 
 // Start serving requests. Blocks until Shutdown is called.
 func (s *Server) Start() error {
+	// Initialize plugins on start.
+	if err := s.plugins.Init(s.baseContext); err != nil {
+		return err
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	s.httpServer = &http.Server{
 		Addr: addr,
@@ -162,9 +171,9 @@ func (s *Server) Shutdown() error {
 
 	err := s.httpServer.Shutdown(ctx)
 	if err != nil {
-		fmt.Printf("❌ Shutdown error: %v\n", err)
+		logging.Infof(s.baseContext, "❌ Shutdown error: %v", err)
 	} else {
-		fmt.Printf("👍 Connections drained\n")
+		logging.Info(s.baseContext, "👍 Connections drained")
 	}
 	s.httpServer = nil
 	return err

@@ -71,6 +71,23 @@ func TestSaveGetRoundTrip(t *testing.T) {
 	assert.Equal(t, banana, banana2)
 }
 
+func TestGetWithNilPointer(t *testing.T) {
+	apple := Fruit{
+		ID:    "1",
+		Name:  "Apple",
+		Color: ColorGreen,
+	}
+
+	var apple2 *Fruit
+
+	store := New()
+	err := store.Put(apple)
+	require.Nil(t, err, "unexpected error putting records")
+
+	err = store.Get("1", apple2)
+	assert.EqualError(t, err, "uninitialized pointer passed as model")
+}
+
 func TestExists(t *testing.T) {
 	store := New()
 	exists, err := store.Exists("3", &Fruit{})

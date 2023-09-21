@@ -4,13 +4,13 @@ import "go.uber.org/zap"
 
 // NewDevLogger returns a zap logger that prints dev friendly output.
 func NewDevLogger() Logger {
-	l, _ := zap.NewDevelopment()
+	l, _ := zap.NewDevelopment(zap.AddCallerSkip(2))
 	return &ZapLogger{z: l.Sugar()}
 }
 
 // NewProdLogger returns a zap logger that outputs JSON.
 func NewProdLogger() Logger {
-	l, _ := zap.NewProduction()
+	l, _ := zap.NewProduction(zap.AddCallerSkip(2))
 	return &ZapLogger{z: l.Sugar()}
 }
 

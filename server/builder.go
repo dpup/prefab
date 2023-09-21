@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/plugin"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -43,6 +44,7 @@ func New(opts ...ServerOption) *Server {
 		host:          defaultHost,
 		port:          defaultPort,
 		gatewayPrefix: defaultGatewayPrefix,
+		plugins:       &plugin.Registry{},
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -62,6 +64,7 @@ type builder struct {
 	logger          logging.Logger
 	httpHandlers    []handler
 	interceptors    []grpc.UnaryServerInterceptor
+	plugins         *plugin.Registry
 }
 
 func (b *builder) build() *Server {
@@ -109,6 +112,7 @@ func (b *builder) build() *Server {
 		grpcServer:  grpc.NewServer(b.buildGRPCOpts()...),
 		gatewayOpts: gatewayOpts,
 		grpcGateway: gateway,
+		plugins:     b.plugins,
 	}
 
 	s.httpMux.Handle(b.gatewayPrefix, b.wrapHandler(http.Handler(gateway)))
@@ -284,6 +288,20 @@ func WithLogger(logger logging.Logger) ServerOption {
 	}
 }
 
+// WithPlugin registers a plugin with the server's registry. Plugins will be
+// initialized at server start. If the Plugin implements `OptionProvider` then
+// additional server options will be configured for the server.
+func WithPlugin(key string, plugin any, deps ...string) ServerOption {
+	return func(b *builder) {
+		if so, ok := plugin.(OptionProvider); ok {
+			for _, opt := range so.ServerOptions() {
+				opt(b)
+			}
+		}
+		b.plugins.Register(key, plugin, deps...)
+	}
+}
+
 // Creates credentials from a cert and key file.
 // Based on credentials.NewServerTLSFromFile
 func serverTLSFromFile(cert, key string) credentials.TransportCredentials {
@@ -318,4 +336,10 @@ func safeTLSConfig() *tls.Config {
 		MinVersion: tls.VersionTLS12,
 		MaxVersion: tls.VersionTLS13,
 	}
+}
+
+// OptionProvider can be implemented by plugins to augment the server at build
+// time.
+type OptionProvider interface {
+	ServerOptions() []ServerOption
 }

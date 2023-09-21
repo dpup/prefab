@@ -21,3 +21,9 @@ func (s *server) Health(ctx context.Context, in *HealthRequest) (*HealthResponse
 		Status: "OK",
 	}, nil
 }
+
+func (s *server) Echo(ctx context.Context, in *EchoRequest) (*EchoResponse, error) {
+	return &EchoResponse{
+		Pong: in.Ping,
+	}, nil
+}

@@ -12,6 +12,13 @@ service SimpleService {
       get: "/v1/health"
     };
   }
+
+  // Echo responds with the same value as was in the request.
+  rpc Echo(EchoRequest) returns (EchoResponse) {
+    option (google.api.http) = {
+      get: "/v1/echo"
+    };
+  }
 }
 
 // An empty request with no parameters for now.
@@ -21,4 +28,12 @@ message HealthRequest {}
 message HealthResponse {
   // How the server is feeling.
   string status = 1;
+}
+
+message EchoRequest {
+  string ping = 1;
+}
+
+message EchoResponse {
+  string pong = 1;
 }

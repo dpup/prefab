@@ -1,16 +1,19 @@
 package plugin
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+var ctx = context.Background()
+
 type TestPlugin struct {
 	name string
 }
 
-func (tp *TestPlugin) Init(r *Registry) error {
+func (tp *TestPlugin) Init(ctx context.Context, r *Registry) error {
 	initOrder = append(initOrder, tp.name)
 	return nil
 }
@@ -21,9 +24,7 @@ func TestInit(t *testing.T) {
 	// Resetting initOrder for the test
 	initOrder = []string{}
 
-	r := &Registry{
-		plugins: make(map[any]entry),
-	}
+	r := &Registry{}
 
 	// Register plugins with dependencies
 	r.Register("A", &TestPlugin{"A"}, "B", "C")
@@ -32,7 +33,7 @@ func TestInit(t *testing.T) {
 	r.Register("D", &TestPlugin{"D"})
 
 	// Initialize plugins
-	err := r.Init()
+	err := r.Init(ctx)
 	assert.Nil(t, err, "initialization failed")
 
 	// Check initialization order
@@ -46,16 +47,14 @@ func TestCycleDetection(t *testing.T) {
 	// Resetting initOrder for the test
 	initOrder = []string{}
 
-	r := &Registry{
-		plugins: make(map[any]entry),
-	}
+	r := &Registry{}
 
 	// Register plugins with a cycle: A -> B -> C -> A
 	r.Register("A", &TestPlugin{"A"}, "B")
 	r.Register("B", &TestPlugin{"B"}, "C")
 	r.Register("C", &TestPlugin{"C"}, "A")
 
-	err := r.Init()
+	err := r.Init(ctx)
 	assert.EqualError(t, err, "plugin: dependency cycle detected involving A")
 }
 
@@ -63,14 +62,12 @@ func TestMissingDependency(t *testing.T) {
 	// Resetting initOrder for the test
 	initOrder = []string{}
 
-	r := &Registry{
-		plugins: make(map[any]entry),
-	}
+	r := &Registry{}
 
 	// Register plugins with a missing dependency: A -> B -> XX
 	r.Register("A", &TestPlugin{"A"}, "B")
 	r.Register("B", &TestPlugin{"B"}, "XX")
 
-	err := r.Init()
+	err := r.Init(ctx)
 	assert.EqualError(t, err, "plugin: missing dependency, XX not registered")
 }

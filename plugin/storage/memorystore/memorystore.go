@@ -3,6 +3,7 @@ package memorystore
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sort"
 	"sync"
@@ -41,8 +42,13 @@ func (s *store) Put(models ...storage.Model) error {
 }
 
 func (s *store) Get(id string, model storage.Model) error {
+	if model == nil || (reflect.ValueOf(model).Kind() == reflect.Ptr && reflect.ValueOf(model).IsNil()) {
+		return fmt.Errorf("uninitialized pointer passed as model")
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	n := storage.Name(model)
 	if s.data[n] == nil {
 		return storage.ErrNotFound
