@@ -13,9 +13,13 @@ $(foreach cmd,${TOOL_CMDS},$(eval $(notdir ${cmd})Cmd := ${cmd}))
 
 export PATH := $(TOOLS_OUT):$(PATH)
 
+.PHONY: test 
+test: gen-proto
+	go test ./...
+
 .PHONY: gen-proto
 gen-proto: gen-proto.touchfile
-gen-proto.touchfile: $(GEN_OUT)/openapiv2 $(PROTO_FILES) tools
+gen-proto.touchfile: $(GEN_OUT)/openapiv2 $(PROTO_FILES) tools.touchfile
 	protoc -I$(GO_SRC) \
 		-I$(ROOT_DIR)/third_party/googleapis \
 		--go_out=$(GOPATH)src/ \
@@ -45,6 +49,8 @@ ${TOOL_CMDS}: go.mod
 	go build -o $@ $(filter %/$(@F),${TOOL_PKGS})
 
 .PHONY: tools
-tools: ${TOOL_CMDS}
+tools: tools.touchfile 
+tools.touchfile: ${TOOL_CMDS}
 	@# protoc looks for a different cmd name than what is installed by go.
+	@touch tools.touchfile
 	@cp $(TOOLS_OUT)/protoc-gen-go-grpc $(TOOLS_OUT)/protoc-gen-grpc
