@@ -8,6 +8,7 @@ import (
 // Registry manages plugins and their dependencies.
 type Registry struct {
 	plugins map[string]Plugin
+	keys    []string
 }
 
 // Get a plugin.
@@ -23,10 +24,12 @@ func (r *Registry) Register(plugin Plugin) {
 	if r.plugins == nil {
 		r.plugins = map[string]Plugin{}
 	}
-	r.plugins[plugin.Name()] = plugin
+	n := plugin.Name()
+	r.plugins[n] = plugin
+	r.keys = append(r.keys, n)
 }
 
-// Init all plugins in the registry, in dependency order.
+// Init all plugins in the registry. Plugins will be visited , in dependency order.
 func (r *Registry) Init(ctx context.Context) error {
 	// TODO: Should this protect against being called twice?
 
@@ -36,15 +39,15 @@ func (r *Registry) Init(ctx context.Context) error {
 
 	// Validate dependency graph first.
 	visiting := make(map[string]bool)
-	for key := range r.plugins {
+	for _, key := range r.keys {
 		if err := r.validateDeps(key, visiting); err != nil {
 			return err
 		}
 	}
 
 	// Initialize plugins if graph is valid.
-	initialized := make(map[any]bool)
-	for key := range r.plugins {
+	initialized := make(map[string]bool)
+	for _, key := range r.keys {
 		if err := r.initPlugin(ctx, key, initialized); err != nil {
 			return err
 		}
@@ -79,7 +82,7 @@ func (r *Registry) validateDeps(key string, visiting map[string]bool) error {
 }
 
 // Ensures plugins are initialized in dependency order.
-func (r *Registry) initPlugin(ctx context.Context, key string, initialized map[any]bool) error {
+func (r *Registry) initPlugin(ctx context.Context, key string, initialized map[string]bool) error {
 	if initialized[key] {
 		return nil
 	}

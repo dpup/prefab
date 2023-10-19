@@ -20,9 +20,3 @@ type InitializablePlugin interface {
 	// Init the plugin. Will be called in dependency order.
 	Init(ctx context.Context, r *Registry) error
 }
-
-type wrapper struct {
-	name string
-	deps []string
-	impl any
-}

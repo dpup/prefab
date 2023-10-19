@@ -14,13 +14,21 @@ $(foreach cmd,${TOOL_CMDS},$(eval $(notdir ${cmd})Cmd := ${cmd}))
 export PATH := $(TOOLS_OUT):$(PATH)
 
 .PHONY: test 
-test: gen-proto
-	go test ./...
+test: test-staticcheck test-vet test-unit
+
+test-unit: gen-proto
+	@go test ./... -cover
+
+test-vet:
+	@go vet ./...
+
+test-staticcheck:
+	@staticcheck ./...
 
 .PHONY: gen-proto
 gen-proto: gen-proto.touchfile
 gen-proto.touchfile: $(GEN_OUT)/openapiv2 $(PROTO_FILES) tools.touchfile
-	protoc -I$(GO_SRC) \
+	@protoc -I$(GO_SRC) \
 		-I$(ROOT_DIR)/third_party/googleapis \
 		--go_out=$(GOPATH)src/ \
 		--grpc_out=$(GOPATH)src/ \
@@ -46,7 +54,7 @@ go.mod: ${TOOLS_GO}
 	@touch go.mod
 
 ${TOOL_CMDS}: go.mod
-	go build -o $@ $(filter %/$(@F),${TOOL_PKGS})
+	@go build -o $@ $(filter %/$(@F),${TOOL_PKGS})
 
 .PHONY: tools
 tools: tools.touchfile 

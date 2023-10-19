@@ -3,11 +3,8 @@ package auth
 import "time"
 
 type Identity struct {
-	// Specifies the identity provider used. Maps to `iss` JWT claim.
-	Issuer string
-
 	// The time at which the identity was authenticated. Maps to `auth_time` JWT
-	// claim.
+	// claim. May differ from IssuedAt if a token is refreshed.
 	AuthTime time.Time
 
 	// Identity provider specific identifier. Maps to `sub` JWT claim.
