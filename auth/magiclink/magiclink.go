@@ -2,6 +2,13 @@
 // users to authenticate using a magic link that is sent to their email address.
 package magiclink
 
+import (
+	"context"
+
+	"github.com/dpup/prefab/auth"
+	"github.com/dpup/prefab/plugin"
+)
+
 /*
 Plan
 
@@ -35,3 +42,35 @@ Questions:
   access the resource.
 - can a browser have multiple authenticated identities
 */
+
+const (
+	// Constant name for the Magic Link auth plugin.
+	PluginName = "auth_magiclink"
+
+	// Constant name used as the auth provider in API requests.
+	ProviderName = "magiclink"
+)
+
+func Plugin() *MagicLinkPlugin {
+	return &MagicLinkPlugin{}
+}
+
+type MagicLinkPlugin struct {
+}
+
+// From plugin.Plugin
+func (p *MagicLinkPlugin) Name() string {
+	return PluginName
+}
+
+// From plugin.DependentPlugin
+func (p *MagicLinkPlugin) Deps() []string {
+	return []string{auth.PluginName}
+}
+
+// From plugin.InitializablePlugin.
+func (p *MagicLinkPlugin) Init(ctx context.Context, r *plugin.Registry) error {
+	ap := r.Get(auth.PluginName).(*auth.AuthPlugin)
+	ap.AddLoginHandler(ProviderName, LoginHandler)
+	return nil
+}
