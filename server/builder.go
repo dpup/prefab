@@ -65,6 +65,7 @@ type builder struct {
 	httpHandlers    []handler
 	interceptors    []grpc.UnaryServerInterceptor
 	plugins         *plugin.Registry
+	serverBuilders  []func(s *Server)
 }
 
 func (b *builder) build() *Server {
@@ -113,6 +114,10 @@ func (b *builder) build() *Server {
 		gatewayOpts: gatewayOpts,
 		grpcGateway: gateway,
 		plugins:     b.plugins,
+	}
+
+	for _, fn := range b.serverBuilders {
+		fn(s)
 	}
 
 	s.httpMux.Handle(b.gatewayPrefix, b.wrapHandler(http.Handler(gateway)))
@@ -278,6 +283,31 @@ func WithHTTPHandlerFunc(prefix string, h func(http.ResponseWriter, *http.Reques
 func WithGRPCInterceptor(interceptor grpc.UnaryServerInterceptor) ServerOption {
 	return func(b *builder) {
 		b.interceptors = append(b.interceptors, interceptor)
+	}
+}
+
+// WithGRPCService registers a GRPC service handler.
+func WithGRPCService(desc *grpc.ServiceDesc, impl any) ServerOption {
+	return func(b *builder) {
+		b.serverBuilders = append(b.serverBuilders, func(s *Server) {
+			s.ServiceRegistrar().RegisterService(desc, impl)
+		})
+	}
+}
+
+// WithGRPCGateway registers a GRPC gateway handler.
+//
+// Example:
+//
+//	WithGRPCGateway(debugservice.RegisterDebugServiceHandlerFromEndpoint)
+func WithGRPCGateway(fn func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error) ServerOption {
+	return func(b *builder) {
+		b.serverBuilders = append(b.serverBuilders, func(s *Server) {
+			err := fn(s.GatewayArgs())
+			if err != nil {
+				panic(err)
+			}
+		})
 	}
 }
 

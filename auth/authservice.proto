@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package prefab.auth;
+option go_package = "github.com/dpup/prefab/auth";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+service AuthService {
+  // Login allows a client to provide credentials which can be used to
+  // authenticate the client's identity.
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+    };
+  }
+}
+
+// A client request to authenticate the user. For instance:
+//   { "provider": "magiclink", "creds": {"email": "walt@disney.com"} }
+//
+message LoginRequest {
+  // Name of the auth-provider to use to process the creds.
+  string provider = 1;
+
+  // Creds contains key/value pairs of provider specific credentials.
+  map<string, string> creds = 2;
+
+  // Whether a token should be returned in the response. If false, a cookie will
+  // be set on the API root.
+  bool issue_token = 3;
+
+  // The URL where the user should be redirected after the cookie is set. 
+  // Incompatible with `issue_token`.
+  string redirect_uri = 4;
+}
+
+// The login response.
+message LoginResponse {
+  // Whether the token was issued. False does not necessarily indicate an error,
+  // some auth providers may require an additional step. For example, magiclink
+  // requires the user follow a URL that was sent to their email.
+  bool issued = 1;
+
+  // An auth token which can be used to make subsequently authenticated requests
+  // only set if `issue_token` is true.
+  string token = 2;
+
+  // When the token is set to expire.
+  google.protobuf.Timestamp expires = 3;
+
+  // Destination where the client should be redirected to, if applicable. HTTP
+  // headers will be added to GRPC metadata which will cause a 302 redirect if
+  // the RPC is called via the GRPC Gateway. Not compatible with `issue_token`
+  // set to true.
+  string redirect_uri = 4;
+}
