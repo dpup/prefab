@@ -6,7 +6,10 @@ import (
 	"context"
 
 	"github.com/dpup/prefab/auth"
+	"github.com/dpup/prefab/email"
 	"github.com/dpup/prefab/plugin"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 /*
@@ -56,6 +59,7 @@ func Plugin() *MagicLinkPlugin {
 }
 
 type MagicLinkPlugin struct {
+	emailer *email.EmailPlugin
 }
 
 // From plugin.Plugin
@@ -65,12 +69,35 @@ func (p *MagicLinkPlugin) Name() string {
 
 // From plugin.DependentPlugin
 func (p *MagicLinkPlugin) Deps() []string {
-	return []string{auth.PluginName}
+	return []string{auth.PluginName, email.PluginName}
 }
 
 // From plugin.InitializablePlugin.
 func (p *MagicLinkPlugin) Init(ctx context.Context, r *plugin.Registry) error {
+	p.emailer = r.Get(email.PluginName).(*email.EmailPlugin)
 	ap := r.Get(auth.PluginName).(*auth.AuthPlugin)
-	ap.AddLoginHandler(ProviderName, LoginHandler)
+	ap.AddLoginHandler(ProviderName, p.handleLogin)
 	return nil
+}
+
+// LoginHandler processes magiclink login requests.
+func (p *MagicLinkPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
+	if req.Provider != ProviderName {
+		return nil, status.Error(codes.InvalidArgument, "magiclink login handler called for wrong provider")
+	}
+	if req.Creds["token"] != "" {
+		return p.handleToken(ctx, req.Creds["token"])
+	}
+	if req.Creds["email"] != "" {
+		return p.handleEmail(ctx, req.Creds["email"])
+	}
+	return nil, status.Error(codes.InvalidArgument, "missing credentials, magiclink login requires an `email` or `token`")
+}
+
+func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string) (*auth.LoginResponse, error) {
+	return nil, nil
+}
+
+func (p *MagicLinkPlugin) handleToken(ctx context.Context, token string) (*auth.LoginResponse, error) {
+	return nil, nil
 }

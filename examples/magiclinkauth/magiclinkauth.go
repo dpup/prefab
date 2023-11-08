@@ -26,7 +26,7 @@ func main() {
 	// Guidance for people who don't read the example code.
 	fmt.Println("")
 	fmt.Println("Request a magic link using:")
-	fmt.Println(`curl -X POST -D '{"provider":"magiclink", "creds":{"email": "me@me.com"}}' 'http://0.0.0.0:8000/v1/auth/login'`)
+	fmt.Println(`curl -X POST -d '{"provider":"magiclink", "creds":{"email": "me@me.com"}}' 'http://0.0.0.0:8000/v1/auth/login'`)
 	fmt.Println("")
 
 	// Start the server.
