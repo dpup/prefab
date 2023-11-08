@@ -7,8 +7,9 @@
 ## Key dependencies
 
 - GRPC and GRPC Gateway ... obviously.
+- Viper for configuration.
 - Zap was chosen as default logging library.
-- Gomail for sending emails.
+- Gomail for sending emails, defaults to SMTP but can be customized.
 - [TK] for templating. (e.g. for default login page)
 
 ## Plugins
