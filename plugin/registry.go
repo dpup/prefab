@@ -60,24 +60,25 @@ func (r *Registry) Init(ctx context.Context) error {
 // there are no cycles.
 func (r *Registry) validateDeps(key string, visiting map[string]bool) error {
 	if visiting[key] {
-		return fmt.Errorf("plugin: dependency cycle detected involving %v", key)
+		return fmt.Errorf("plugin: dependency cycle detected involving '%v'", key)
 	}
 
-	visiting[key] = true
 	plugin, ok := r.plugins[key]
 	if !ok {
-		return fmt.Errorf("plugin: missing dependency, %v not registered", key)
+		// TODO: Add call graph to error message.
+		return fmt.Errorf("plugin: missing dependency, '%v' not registered", key)
 	}
 
 	if d, ok := plugin.(DependentPlugin); ok {
+		visiting[key] = true
 		for _, dep := range d.Deps() {
 			if err := r.validateDeps(dep, visiting); err != nil {
 				return err
 			}
 		}
+		delete(visiting, key)
 	}
 
-	delete(visiting, key)
 	return nil
 }
 
@@ -89,7 +90,7 @@ func (r *Registry) initPlugin(ctx context.Context, key string, initialized map[s
 
 	plugin, ok := r.plugins[key]
 	if !ok {
-		return fmt.Errorf("plugin %v not registered", key)
+		return fmt.Errorf("plugin '%v' not registered", key)
 	}
 
 	if d, ok := plugin.(DependentPlugin); ok {
@@ -102,7 +103,7 @@ func (r *Registry) initPlugin(ctx context.Context, key string, initialized map[s
 
 	if p, ok := plugin.(InitializablePlugin); ok {
 		if err := p.Init(ctx, r); err != nil {
-			return fmt.Errorf("plugin: failed to initialize %v: %w", key, err)
+			return fmt.Errorf("plugin: failed to initialize '%v': %w", key, err)
 		}
 	}
 
