@@ -8,11 +8,15 @@ import "google/protobuf/timestamp.proto";
 
 service AuthService {
   // Login allows a client to provide credentials which can be used to
-  // authenticate the client's identity.
+  // authenticate the client's identity. POST is preferred, some providers need
+  // credentials to be passed as GET.
   rpc Login(LoginRequest) returns (LoginResponse) {
     option (google.api.http) = {
-      post: "/v1/auth/login"
-      body: "*"
+      get: "/v1/auth/login"
+      additional_bindings {
+        post: "/v1/auth/login"
+        body: "*"
+      }
     };
   }
 }

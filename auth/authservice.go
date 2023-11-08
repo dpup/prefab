@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/dpup/prefab/logging"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // LoginHandler is a function which allows delegation of login requests.
@@ -30,7 +32,9 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 	logging.Track(ctx, "auth.provider", in.Provider)
 	logging.Info(ctx, "🔑  Login attempt")
 
-	return &LoginResponse{
-		Issued: false,
-	}, nil
+	if h, ok := s.handlers[in.Provider]; ok {
+		return h(ctx, in)
+	}
+
+	return nil, status.Error(codes.InvalidArgument, "unknown or unregistered authentication provider")
 }

@@ -1,8 +1,22 @@
 
+# User facing name that identifies the service.
+name: Prefab
+
 # How the server should be addressed externally when constructing URLs. In
 # development, this is likely the hostname and port configured during server
 # instantiation. In production, it may be a CDN or Load Balancer.
 address: http://localhost:8000
+
+# Template rendering configuration.
+templates:
+  # Whether to reparse templates everytime they are executed. Should be false in
+  # prod, but true makes dev easier.
+  alwaysparse: true
+
+  # List of directories to load templates from. Templates can be customized or 
+  # overridden, they should be shipped with the binary.
+  dirs:
+  - ./templates/default
 
 # Email sending configuration.
 email:
@@ -21,4 +35,4 @@ auth:
     # JWT signing key. Changing this will invalidate any outstanding tokens.
     signingkey: helloworld
     # How magiclinks should should be active for.
-    expiration: 1h
+    expiration: 15m

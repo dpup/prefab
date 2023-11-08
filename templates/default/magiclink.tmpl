@@ -1,0 +1,19 @@
+{{/*
+  Renders an HTML email that with a link to login.
+
+  @param .Data.Token
+  @param .Data.Expiration
+*/}}
+{{define "auth_magiclink"}}
+  <p>Here’s your magic link. Just click below to sign in to {{index .Config "name"}}:</p>
+  <p><b>›› <a href="{{index .Config "address"}}/v1/auth/login?provider=magiclink&creds[token]={{.Data.Token}}">Sign in</a></b></p>
+  <p>This link expires in {{.Data.Expiration}}. If you did not request this 
+  login, please disregard.</p>
+{{end}}
+
+{{/*
+  Renders the subject for the magiclink email.
+*/}}
+{{define "auth_magiclink_subject"}}
+  Sign in to {{index .Config "name"}}
+{{end}}

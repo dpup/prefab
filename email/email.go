@@ -81,6 +81,9 @@ func (p *EmailPlugin) Init(ctx context.Context, r *plugin.Registry) error {
 // https://pkg.go.dev/gopkg.in/gomail.v2#example-package-Daemon
 func (p *EmailPlugin) Send(ctx context.Context, msg *gomail.Message) error {
 	logging.Info(ctx, "Sending mail")
+	if len(msg.GetHeader("From")) == 0 {
+		msg.SetHeader("From", p.from)
+	}
 	d := gomail.NewDialer(p.smtpHost, p.smtpPort, p.smtpUsername, p.smtpPassword)
 	if err := d.DialAndSend(msg); err != nil {
 		return err
