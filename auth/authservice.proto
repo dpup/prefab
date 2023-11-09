@@ -4,7 +4,6 @@ package prefab.auth;
 option go_package = "github.com/dpup/prefab/auth";
 
 import "google/api/annotations.proto";
-import "google/protobuf/timestamp.proto";
 
 service AuthService {
   // Login allows a client to provide credentials which can be used to
@@ -51,12 +50,9 @@ message LoginResponse {
   // only set if `issue_token` is true.
   string token = 2;
 
-  // When the token is set to expire.
-  google.protobuf.Timestamp expires = 3;
-
   // Destination where the client should be redirected to, if applicable. HTTP
   // headers will be added to GRPC metadata which will cause a 302 redirect if
   // the RPC is called via the GRPC Gateway. Not compatible with `issue_token`
   // set to true.
-  string redirect_uri = 4;
+  string redirect_uri = 3;
 }

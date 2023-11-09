@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpup/prefab/server/serverutil"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -38,15 +38,15 @@ var (
 	jwtAudience = "access"
 
 	// TODO: Customize token expiry.
-	tokenExpiration = time.Hour * 24
+	identityExpiration = time.Hour * 24 * 30
 
 	// Allows for time to be stubbed in tests.
 	timeFunc = time.Now
 )
 
 const (
-	// Cookie name used for storing the prefab auth token.
-	AuthTokenCookieName = "pfat"
+	// Cookie name used for storing the prefab identity token.
+	IdentityTokenCookieName = "pfid"
 )
 
 type Claims struct {
@@ -62,22 +62,27 @@ func (c *Claims) Validate() error {
 	return nil
 }
 
-// Login creates a signed JWT and attaches it to the outgoing GRPC metadata such
+// SendIdentityCookie attaches the token to the outgoing GRPC metadata such
 // that it will be propagated as a `Set-Cookie` HTTP header by the Gateway.
-//
-// Login should be called by an identity provider that has verified the user's
-// identity.
-func Login(ctx context.Context, identity Identity) error {
-	return nil
+func SendIdentityCookie(ctx context.Context, token string) error {
+	return serverutil.SendCookie(ctx, &http.Cookie{
+		Name:     IdentityTokenCookieName,
+		Value:    token,
+		Path:     "/",
+		Secure:   true,
+		HttpOnly: true,
+		Expires:  time.Now().Add(identityExpiration),
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
-// IssueToken creates a signed JWT for the given identity.
-func IssueToken(ctx context.Context, identity Identity) (string, error) {
+// IdentityToken creates a signed JWT for the given identity.
+func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
 			Audience:  jwt.ClaimStrings{jwtAudience},
-			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(tokenExpiration)),
+			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(identityExpiration)),
 			IssuedAt:  jwt.NewNumericDate(timeFunc()),
 			Issuer:    jwtIssuer,
 			Subject:   identity.Subject,
@@ -95,9 +100,9 @@ func IssueToken(ctx context.Context, identity Identity) (string, error) {
 	return ss, nil
 }
 
-// ParseToken takes a signed JWT, validates it, and returns the identity
+// ParseIdentityToken takes a signed JWT, validates it, and returns the identity
 // information encoded within. Invalid and expired tokens will error.
-func ParseToken(ctx context.Context, tokenString string) (Identity, error) {
+func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&Claims{},
@@ -150,13 +155,13 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 	if len(auth) != 2 {
 		// Relaxed fallback that allows tokens to be passed without the "bearer"
 		// or "basic" prefix. Instead it takes the whole header.
-		return ParseToken(ctx, a[0])
+		return ParseIdentityToken(ctx, a[0])
 	}
 
 	switch strings.ToLower(auth[0]) {
 	case "bearer":
 		// Standard bearer token.
-		return ParseToken(ctx, auth[1])
+		return ParseIdentityToken(ctx, auth[1])
 
 	case "basic":
 		// Basic auth is the method preferred for curl based CLI clients.
@@ -167,7 +172,7 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 		if len(pair) != 2 || pair[1] != "" {
 			return Identity{}, ErrInvalid
 		}
-		return ParseToken(ctx, pair[0])
+		return ParseIdentityToken(ctx, pair[0])
 
 	default:
 		return Identity{}, ErrInvalid
@@ -176,29 +181,14 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 
 // TODO: Should we support multiple identities from cookies?
 func identityFromCookie(ctx context.Context) (Identity, error) {
-	cookies := CookiesFromIncomingContext(ctx)
-	c, ok := cookies[AuthTokenCookieName]
+	cookies := serverutil.CookiesFromIncomingContext(ctx)
+	c, ok := cookies[IdentityTokenCookieName]
 	if !ok {
 		return Identity{}, ErrNotFound
 	}
-	identity, err := ParseToken(ctx, c.Value)
+	identity, err := ParseIdentityToken(ctx, c.Value)
 	if err != nil {
 		return Identity{}, err
 	}
 	return identity, nil
-}
-
-// CookiesFromIncomingContext reads a standard HTTP cookie header from the GRPC
-// metadata and parses the contents.
-func CookiesFromIncomingContext(ctx context.Context) map[string]*http.Cookie {
-	md, _ := metadata.FromIncomingContext(ctx)
-	r := &http.Request{Header: http.Header{}}
-	for _, v := range md[runtime.MetadataPrefix+"cookie"] {
-		r.Header.Add("Cookie", v)
-	}
-	cookies := map[string]*http.Cookie{}
-	for _, c := range r.Cookies() {
-		cookies[c.Name] = c
-	}
-	return cookies
 }

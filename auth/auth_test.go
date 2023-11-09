@@ -24,10 +24,10 @@ func TestTokenRoundTrip(t *testing.T) {
 		Name:          "Casian Andor",
 	}
 
-	tokenString, err := IssueToken(ctx, original)
+	tokenString, err := IdentityToken(ctx, original)
 	assert.Nil(t, err, "failed to issue token")
 
-	parsed, err := ParseToken(ctx, tokenString)
+	parsed, err := ParseIdentityToken(ctx, tokenString)
 	assert.Nil(t, err, "failed to parse token")
 
 	assert.Equal(t, original, parsed, "Parsed and original identities do not match")
@@ -37,7 +37,7 @@ func TestTokenExpiration(t *testing.T) {
 	ctx := context.Background()
 	identity := Identity{Subject: "2"}
 
-	tokenString, err := IssueToken(ctx, identity)
+	tokenString, err := IdentityToken(ctx, identity)
 	assert.Nil(t, err, "failed to issue token")
 
 	// Stub time to return a time in the future.
@@ -48,7 +48,7 @@ func TestTokenExpiration(t *testing.T) {
 		timeFunc = time.Now
 	}()
 
-	_, err = ParseToken(ctx, tokenString)
+	_, err = ParseIdentityToken(ctx, tokenString)
 	assert.EqualError(t, err, "token has invalid claims: token is expired")
 }
 
@@ -59,12 +59,12 @@ func TestTokenSigning(t *testing.T) {
 	originalKey := jwtSigningKey
 	jwtSigningKey = []byte("sneaky")
 
-	tokenString, err := IssueToken(ctx, identity)
+	tokenString, err := IdentityToken(ctx, identity)
 	assert.Nil(t, err, "failed to issue token")
 
 	jwtSigningKey = originalKey
 
-	_, err = ParseToken(ctx, tokenString)
+	_, err = ParseIdentityToken(ctx, tokenString)
 	assert.EqualError(t, err, "token signature is invalid: signature is invalid")
 }
 
@@ -75,7 +75,7 @@ func TestIdentityFromCookie(t *testing.T) {
 		Subject:  "3",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
 	}
-	tokenString, err := IssueToken(ctx, expected)
+	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
 
 	md := metadata.Pairs("grpcgateway-cookie", fmt.Sprintf("pfat=%s", tokenString))
@@ -94,7 +94,7 @@ func TestIdentityFromBearerToken(t *testing.T) {
 		Subject:  "4",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
 	}
-	tokenString, err := IssueToken(ctx, expected)
+	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
 
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", tokenString))
@@ -113,7 +113,7 @@ func TestIdentityFromBasicAuth(t *testing.T) {
 		Subject:  "4",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
 	}
-	tokenString, err := IssueToken(ctx, expected)
+	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
 
 	basic := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:", tokenString)))

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/server/serverutil"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -30,11 +31,24 @@ func (s *impl) AddLoginHandler(provider string, h LoginHandler) {
 
 func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, error) {
 	logging.Track(ctx, "auth.provider", in.Provider)
+	logging.Track(ctx, "auth.issueToken", in.IssueToken)
+	logging.Track(ctx, "auth.redirectUri", in.RedirectUri)
 	logging.Info(ctx, "🔑  Login attempt")
 
-	if h, ok := s.handlers[in.Provider]; ok {
-		return h(ctx, in)
+	if in.RedirectUri != "" && in.IssueToken {
+		return nil, status.Error(codes.InvalidArgument, "auth: `issue_token` not compatible with `redirect_uri`")
 	}
 
-	return nil, status.Error(codes.InvalidArgument, "unknown or unregistered authentication provider")
+	if h, ok := s.handlers[in.Provider]; ok {
+		resp, err := h(ctx, in)
+
+		if resp != nil && resp.RedirectUri != "" {
+			// Send a 302 redirect.
+			serverutil.SendHeader(ctx, "location", resp.RedirectUri)
+		}
+
+		return resp, err
+	}
+
+	return nil, status.Error(codes.InvalidArgument, "auth: unknown or unregistered provider")
 }
