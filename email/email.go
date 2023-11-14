@@ -29,8 +29,11 @@ import (
 // Constant name for identifying the email plugin.
 const PluginName = "email"
 
+// EmailOptions customize the configuration of the email plugin.
+type EmailOption func(*EmailPlugin)
+
 // Plugin returns a new EmailPlugin.
-func Plugin() *EmailPlugin {
+func Plugin(opts ...EmailOption) *EmailPlugin {
 	// TODO: Make smtp optional and allow a gomail.SendFunc to be configured.
 	p := &EmailPlugin{
 		from:         viper.GetString("email.from"),
@@ -38,6 +41,9 @@ func Plugin() *EmailPlugin {
 		smtpPort:     viper.GetInt("email.smtp.port"),
 		smtpUsername: viper.GetString("email.smtp.username"),
 		smtpPassword: viper.GetString("email.smtp.password"),
+	}
+	for _, opt := range opts {
+		opt(p)
 	}
 	return p
 }
@@ -89,4 +95,21 @@ func (p *EmailPlugin) Send(ctx context.Context, msg *gomail.Message) error {
 		return err
 	}
 	return nil
+}
+
+// WithSMTP configures the SMTP server to use.
+func WithSMTP(host string, port int, username, password string) EmailOption {
+	return func(p *EmailPlugin) {
+		p.smtpHost = host
+		p.smtpPort = port
+		p.smtpUsername = username
+		p.smtpPassword = password
+	}
+}
+
+// WithFrom configures the default from address.
+func WithFrom(from string) EmailOption {
+	return func(p *EmailPlugin) {
+		p.from = from
+	}
 }
