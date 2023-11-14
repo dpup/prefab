@@ -7,9 +7,9 @@ import (
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
-	"github.com/dpup/prefab/plugin/storage"
-	"github.com/dpup/prefab/plugin/storage/memorystore"
 	"github.com/dpup/prefab/server"
+	"github.com/dpup/prefab/storage"
+	"github.com/dpup/prefab/storage/memorystore"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )

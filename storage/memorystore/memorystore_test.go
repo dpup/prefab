@@ -3,7 +3,7 @@ package memorystore
 import (
 	"testing"
 
-	"github.com/dpup/prefab/plugin/storage"
+	"github.com/dpup/prefab/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/dpup/prefab/plugin/storage"
+	"github.com/dpup/prefab/storage"
 )
 
 // New returns a store that provides transient, in-memory storage.
