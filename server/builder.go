@@ -11,6 +11,7 @@ import (
 
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
+	"github.com/spf13/viper"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -21,10 +22,6 @@ import (
 )
 
 const (
-	defaultHost          = "0.0.0.0"
-	defaultPort          = 8000
-	defaultGatewayPrefix = "/v1/"
-
 	// GRPC Metadata prefix that is added to allowed headers specified with
 	// WithIncomingHeaders.
 	MetadataPrefix = "prefab-"
@@ -41,10 +38,16 @@ type handler struct {
 // New returns a new server.
 func New(opts ...ServerOption) *Server {
 	b := &builder{
-		host:          defaultHost,
-		port:          defaultPort,
-		gatewayPrefix: defaultGatewayPrefix,
-		plugins:       &plugin.Registry{},
+		host:            viper.GetString("server.host"),
+		port:            viper.GetInt("server.port"),
+		gatewayPrefix:   viper.GetString("server.gatewayprefix"),
+		corsOrigins:     viper.GetStringSlice("server.corsorigins"),
+		incomingHeaders: viper.GetStringSlice("server.incomingheaders"),
+		certFile:        viper.GetString("server.tls.certfile"),
+		keyFile:         viper.GetString("server.tls.keyfile"),
+		maxMsgSizeBytes: viper.GetInt("server.maxmsgsizebytes"),
+
+		plugins: &plugin.Registry{},
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -193,14 +196,16 @@ func (b *builder) isSecure() bool {
 	return b.certFile != "" && b.keyFile != ""
 }
 
-// WithHost configures the hostname or IP the server will listen on.
+// WithHost configures the hostname or IP the server will listen on. Overrides
+// value set in config file.
 func WithHost(host string) ServerOption {
 	return func(b *builder) {
 		b.host = host
 	}
 }
 
-// WithPort configures the port the server will listen on.
+// WithPort configures the port the server will listen on. Overrides
+// value set in config file.
 func WithPort(port int) ServerOption {
 	return func(b *builder) {
 		b.port = port
@@ -240,7 +245,7 @@ func WithMaxRecvMsgSize(maxMsgSizeBytes int) ServerOption {
 }
 
 // WithGatewayPrefix sets the path prefix that the GRPC Gateway will be bound
-// to. Default is `/v1/`.
+// to. Default is `/v1/`. Overrides value set in config file.
 func WithGatewayPrefix(prefix string) ServerOption {
 	return func(b *builder) {
 		b.gatewayPrefix = prefix

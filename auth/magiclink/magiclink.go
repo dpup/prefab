@@ -134,6 +134,7 @@ func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirec
 	} else if redirectUri != "" {
 		url = redirectUri + "?token=" + token
 	} else {
+		// TODO: this will break if gatewayprefix is overridden.
 		url = p.address + "/v1/auth/login?provider=magiclink&creds[token]=" + token
 	}
 

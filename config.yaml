@@ -7,6 +7,35 @@ name: Prefab
 # instantiation. In production, it may be a CDN or Load Balancer.
 address: http://localhost:8000
 
+# Server configuration.
+server:
+  # Host and port to bind to.
+  host: localhost
+  port: 8000
+
+  # Prefix used for all GRPC API endpoints.
+  gatewayprefix: /v1/
+
+  # Optional server configuration:
+
+  # Override the default GRPC max msg size.
+  # maxmsgsizebytes: 10485760 # 10MB
+
+  # If configured, the server will listen on TLS.
+  # tls:
+  #   certfile: './certs/cert.pem'
+  #   keyfile: './certs/key.pem'
+
+  # Whether to allow cross-origin requests.
+  # corsorigins:
+  #  - https://www.somesite.com
+  #  - https://extension.thirdparty.com
+
+  # Incoming headers that should be forwarded on to GRPC services.
+  # incomingheaders:
+  # - X-Requested-With
+  # - X-Delegated-User
+
 # Template rendering configuration.
 templates:
   # Whether to reparse templates everytime they are executed. Should be false in

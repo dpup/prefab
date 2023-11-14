@@ -100,8 +100,10 @@ func (s *Server) GatewayArgs() (ctx context.Context, mux *runtime.ServeMux, endp
 
 // Start serving requests. Blocks until Shutdown is called.
 func (s *Server) Start() error {
+	ctx := context.WithValue(s.baseContext, ctxKey{}, s)
+
 	// Initialize plugins on start.
-	if err := s.plugins.Init(s.baseContext); err != nil {
+	if err := s.plugins.Init(ctx); err != nil {
 		return err
 	}
 
@@ -109,7 +111,7 @@ func (s *Server) Start() error {
 	s.httpServer = &http.Server{
 		Addr: addr,
 		BaseContext: func(listener net.Listener) context.Context {
-			return s.baseContext
+			return ctx
 		},
 	}
 
@@ -178,3 +180,5 @@ func (s *Server) Shutdown() error {
 	s.httpServer = nil
 	return err
 }
+
+type ctxKey struct{}
