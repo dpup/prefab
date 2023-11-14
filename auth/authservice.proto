@@ -18,6 +18,13 @@ service AuthService {
       }
     };
   }
+
+  // Identity returns information about the authenticated user.
+  rpc Identity(IdentityRequest) returns (IdentityResponse) {
+    option (google.api.http) = {
+      get: "/v1/auth/me"
+    };
+  }
 }
 
 // A client request to authenticate the user. For instance:
@@ -55,4 +62,22 @@ message LoginResponse {
   // the RPC is called via the GRPC Gateway. Not compatible with `issue_token`
   // set to true.
   string redirect_uri = 3;
+}
+
+// Empty request object. Auth credentials come from headers or cookie.
+message IdentityRequest {}
+
+// Information about the authenticated identity.
+message IdentityResponse {
+  // An auth provider specific identifier used to authenticate the user.
+  string subject = 1;
+
+  // An email address associated with the identity, if available.
+  string email = 2;
+
+  // Whether the email is thought to have been verified.
+  bool email_verified = 3;
+
+  // A name associated with the identity, if available.
+  string name = 4;
 }

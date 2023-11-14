@@ -48,32 +48,6 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-/*
-Plan
-
-- Login endpoint:
-  - takes email
-	- generates signed JWT with email and expiration
-	- sends email with the magic-link
-- Login endpoint:
-	- takes token from magic-link
-	- extracts email from token and creates auth token
-	- sets cookie or returns an auth token
-  - if cookie is set, needs a redirect
-    - 302 with cookie should work, but won't on localhost
-    - could use a meta-redirect if dest is localhost or different domain
-
-
-Questions:
-- should cookies only be set if there's a valid user?
-- if so, what is the underlying source of user data?
-- can it just be a pluggin?
-- can this just say: this user has verified they have access to this email? And
-  then ACL code should verify that the authenticated user is authorized to
-  access the resource.
-- can a browser have multiple authenticated identities
-*/
-
 const (
 	// Constant name for the Magic Link auth plugin.
 	PluginName = "auth_magiclink"
@@ -154,13 +128,13 @@ func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirec
 		return nil, err
 	}
 
-	url := p.address + "/v1/auth/login?provider=magiclink&creds[token]=" + token
-	if redirectUri != "" {
-		if strings.Contains(redirectUri, "?") {
-			url = redirectUri + "&token=" + token
-		} else {
-			url = redirectUri + "?token=" + token
-		}
+	var url string
+	if redirectUri != "" && strings.Contains(redirectUri, "?") {
+		url = redirectUri + "&token=" + token
+	} else if redirectUri != "" {
+		url = redirectUri + "?token=" + token
+	} else {
+		url = p.address + "/v1/auth/login?provider=magiclink&creds[token]=" + token
 	}
 
 	subject, err := p.renderer.Render(ctx, "auth_magiclink_subject", nil)
@@ -244,7 +218,7 @@ func (p *MagicLinkPlugin) parseToken(tokenString string) (auth.Identity, error) 
 		jwt.WithIssuedAt(),
 	)
 	if err != nil {
-		return auth.Identity{}, err
+		return auth.Identity{}, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if !token.Valid || token.Claims == nil {
 		return auth.Identity{}, status.Error(codes.InvalidArgument, "invalid token")

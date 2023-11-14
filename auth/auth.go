@@ -6,7 +6,6 @@ package auth
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -14,18 +13,21 @@ import (
 	"github.com/dpup/prefab/server/serverutil"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/spf13/viper"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var (
 	// No identity was found within the incoming context.
-	ErrNotFound = errors.New("identity not found")
+	ErrNotFound = status.Error(codes.NotFound, "identity not found")
 
 	// The token's expiration date was in the past.
-	ErrExpired = errors.New("token has expired")
+	ErrExpired = status.Error(codes.FailedPrecondition, "token has expired")
 
 	// The token was not signed correctly.
-	ErrInvalid = errors.New("token is invalid")
+	ErrInvalid = status.Error(codes.InvalidArgument, "token is invalid")
 
 	// TODO: Move to pluggable configuration, support multiple registed signing
 	// keys.
@@ -65,11 +67,15 @@ func (c *Claims) Validate() error {
 // SendIdentityCookie attaches the token to the outgoing GRPC metadata such
 // that it will be propagated as a `Set-Cookie` HTTP header by the Gateway.
 func SendIdentityCookie(ctx context.Context, token string) error {
+	// TODO: Can/should config be injected in via the context to avoid utility
+	// methods reaching into Viper?
+	isSecure := strings.HasPrefix(viper.GetString("address"), "https")
+
 	return serverutil.SendCookie(ctx, &http.Cookie{
 		Name:     IdentityTokenCookieName,
 		Value:    token,
 		Path:     "/",
-		Secure:   true,
+		Secure:   isSecure,
 		HttpOnly: true,
 		Expires:  time.Now().Add(identityExpiration),
 		SameSite: http.SameSiteLaxMode,
@@ -116,7 +122,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		jwt.WithIssuedAt(),
 	)
 	if err != nil {
-		return Identity{}, err
+		return Identity{}, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
@@ -132,9 +138,9 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 	return Identity{}, ErrInvalid
 }
 
-// GetIdentity parses and verifies a JWT received from incoming GRPC metadata.
-// An `Authorization` header will take precedence over a `Cookie`,
-func GetIdentity(ctx context.Context) (Identity, error) {
+// IdentityFromContext parses and verifies a JWT received from incoming GRPC
+// metadata. An `Authorization` header will take precedence over a `Cookie`,
+func IdentityFromContext(ctx context.Context) (Identity, error) {
 	i, err := identityFromAuthHeader(ctx)
 	if err != ErrNotFound {
 		return i, err

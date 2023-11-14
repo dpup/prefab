@@ -81,7 +81,7 @@ func TestIdentityFromCookie(t *testing.T) {
 	md := metadata.Pairs("grpcgateway-cookie", fmt.Sprintf("pfat=%s", tokenString))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
-	actual, err := GetIdentity(ctx)
+	actual, err := IdentityFromContext(ctx)
 	assert.Nil(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from cookie does not match")
@@ -100,7 +100,7 @@ func TestIdentityFromBearerToken(t *testing.T) {
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", tokenString))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
-	actual, err := GetIdentity(ctx)
+	actual, err := IdentityFromContext(ctx)
 	assert.Nil(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from header does not match")
@@ -120,7 +120,7 @@ func TestIdentityFromBasicAuth(t *testing.T) {
 	md := metadata.Pairs("authorization", fmt.Sprintf("basic %s", basic))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
-	actual, err := GetIdentity(ctx)
+	actual, err := IdentityFromContext(ctx)
 	assert.Nil(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from header does not match")

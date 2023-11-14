@@ -52,3 +52,16 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 
 	return nil, status.Error(codes.InvalidArgument, "auth: unknown or unregistered provider")
 }
+
+func (s *impl) Identity(ctx context.Context, in *IdentityRequest) (*IdentityResponse, error) {
+	i, err := IdentityFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &IdentityResponse{
+		Subject:       i.Subject,
+		Email:         i.Email,
+		EmailVerified: i.EmailVerified,
+		Name:          i.Name,
+	}, nil
+}
