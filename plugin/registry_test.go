@@ -64,7 +64,7 @@ func TestCycleDetection(t *testing.T) {
 	r.Register(&TestPlugin{name: "C", deps: []string{"A"}})
 
 	err := r.Init(ctx)
-	assert.EqualError(t, err, "plugin: dependency cycle detected involving A")
+	assert.EqualError(t, err, "plugin: dependency cycle detected involving 'A'")
 }
 
 func TestMissingDependency(t *testing.T) {
@@ -78,5 +78,5 @@ func TestMissingDependency(t *testing.T) {
 	r.Register(&TestPlugin{name: "B", deps: []string{"XX"}})
 
 	err := r.Init(ctx)
-	assert.EqualError(t, err, "plugin: missing dependency, XX not registered")
+	assert.EqualError(t, err, "plugin: missing dependency, 'XX' not registered")
 }

@@ -42,14 +42,14 @@ func TestTokenExpiration(t *testing.T) {
 
 	// Stub time to return a time in the future.
 	timeFunc = func() time.Time {
-		return time.Now().Add(time.Hour * 100)
+		return time.Now().Add(time.Hour * 24 * 365)
 	}
 	defer func() {
 		timeFunc = time.Now
 	}()
 
 	_, err = ParseIdentityToken(ctx, tokenString)
-	assert.EqualError(t, err, "token has invalid claims: token is expired")
+	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = token has invalid claims: token is expired")
 }
 
 func TestTokenSigning(t *testing.T) {
@@ -65,7 +65,7 @@ func TestTokenSigning(t *testing.T) {
 	jwtSigningKey = originalKey
 
 	_, err = ParseIdentityToken(ctx, tokenString)
-	assert.EqualError(t, err, "token signature is invalid: signature is invalid")
+	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = token signature is invalid: signature is invalid")
 }
 
 func TestIdentityFromCookie(t *testing.T) {
@@ -78,11 +78,11 @@ func TestIdentityFromCookie(t *testing.T) {
 	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
 
-	md := metadata.Pairs("grpcgateway-cookie", fmt.Sprintf("pfat=%s", tokenString))
+	md := metadata.Pairs("grpcgateway-cookie", fmt.Sprintf("%s=%s", IdentityTokenCookieName, tokenString))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	actual, err := IdentityFromContext(ctx)
-	assert.Nil(t, err, "failed to extract identity")
+	assert.Nil(t, err, "failed to extract identity: %v", err)
 
 	assert.Equal(t, expected, actual, "identity from cookie does not match")
 }
