@@ -59,13 +59,20 @@ const (
 	jwtAudience = "magiclink"
 )
 
+// MagicLinkOptions allow configuration of the MagicLinkPlugin.
+type MagicLinkOption func(*MagicLinkPlugin)
+
 // Plugin for handling passwordless authentication via email.
-func Plugin() *MagicLinkPlugin {
-	return &MagicLinkPlugin{
+func Plugin(opts ...MagicLinkOption) *MagicLinkPlugin {
+	p := &MagicLinkPlugin{
 		address:         viper.GetString("address"),
 		signingKey:      []byte(viper.GetString("auth.magiclink.signingkey")),
 		tokenExpiration: viper.GetDuration("auth.magiclink.expiration"),
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // Plugin for handling passwordless authentication via email.
@@ -239,4 +246,25 @@ type Claims struct {
 	Email       string `json:"email"`
 	IssueToken  bool   `json:"it"`
 	RedirectUri string `json:"ru"`
+}
+
+// WithAddress sets the address to use when constructing magic links.
+func WithAddress(address string) MagicLinkOption {
+	return func(p *MagicLinkPlugin) {
+		p.address = address
+	}
+}
+
+// WithSigningKey sets the signing key to use when signing magic link tokens.
+func WithSigningKey(signingKey []byte) MagicLinkOption {
+	return func(p *MagicLinkPlugin) {
+		p.signingKey = signingKey
+	}
+}
+
+// WithExpiration sets the expiration to use when signing magic link tokens.
+func WithExpiration(expiration time.Duration) MagicLinkOption {
+	return func(p *MagicLinkPlugin) {
+		p.tokenExpiration = expiration
+	}
 }
