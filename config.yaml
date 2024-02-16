@@ -65,3 +65,9 @@ auth:
     signingkey: helloworld
     # How magiclinks should should be active for.
     expiration: 15m
+
+  # Configuration for the google plugin, see:
+  # https://console.cloud.google.com/apis/credentials/oauthclient
+  google:
+    id: xxxx.apps.googleusercontent.com
+    secret: xxxxxxxxxx

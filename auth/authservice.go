@@ -44,7 +44,9 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 
 		if resp != nil && resp.RedirectUri != "" {
 			// Send a 302 redirect.
+			serverutil.SendStatusCode(ctx, 302)
 			serverutil.SendHeader(ctx, "location", resp.RedirectUri)
+			logging.Infow(ctx, "⤵️ Sending redirect", "redirectUri", resp.RedirectUri)
 		}
 
 		return resp, err

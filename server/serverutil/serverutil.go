@@ -3,6 +3,7 @@ package serverutil
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -30,12 +31,7 @@ func SendCookie(ctx context.Context, cookie *http.Cookie) error {
 	if err := cookie.Valid(); err != nil {
 		return err
 	}
-	if err := grpc.SetHeader(ctx, metadata.New(map[string]string{
-		"grpc-metadata-set-cookie": cookie.String(),
-	})); err != nil {
-		return err
-	}
-	return nil
+	return SendHeader(ctx, "set-cookie", cookie.String())
 }
 
 // SendHeader adds an http header to the outgoing GRPC metadata for forwarding.
@@ -46,4 +42,12 @@ func SendHeader(ctx context.Context, key, value string) error {
 		return err
 	}
 	return nil
+}
+
+// SendStatusCode adds an http status code header to the outgoing GRPC metadata.
+//
+// The GRPC Gateway will send this as the actual status code via the
+// `statusCodeForwarder` function.
+func SendStatusCode(ctx context.Context, code int) error {
+	return grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(code)))
 }

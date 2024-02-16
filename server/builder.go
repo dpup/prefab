@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dpup/prefab/logging"
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -84,6 +86,9 @@ func (b *builder) build() *Server {
 				EmitUnpopulated: true,
 			},
 		}),
+
+		// Forward custom HTTP status codes for GRPC responses.
+		runtime.WithForwardResponseOption(statusCodeForwarder),
 
 		// Patch error responses to include a codeName for easier client handling.
 		runtime.WithErrorHandler(gatewayErrorHandler),
@@ -371,6 +376,27 @@ func safeTLSConfig() *tls.Config {
 		MinVersion: tls.VersionTLS12,
 		MaxVersion: tls.VersionTLS13,
 	}
+}
+
+// Taken from example code here:
+// https://grpc-ecosystem.github.io/grpc-gateway/docs/mapping/customizing_your_gateway/#controlling-http-response-status-codes
+func statusCodeForwarder(ctx context.Context, w http.ResponseWriter, p proto.Message) error {
+	md, ok := runtime.ServerMetadataFromContext(ctx)
+	if !ok {
+		return nil
+	}
+
+	if values := md.HeaderMD.Get("x-http-code"); len(values) > 0 {
+		code, err := strconv.Atoi(values[0])
+		if err != nil {
+			return err
+		}
+		// Delete the headers to not expose any grpc-metadata in http response
+		delete(md.HeaderMD, "x-http-code")
+		delete(w.Header(), "Grpc-Metadata-X-Http-Code")
+		w.WriteHeader(code)
+	}
+	return nil
 }
 
 // OptionProvider can be implemented by plugins to augment the server at build
