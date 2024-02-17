@@ -50,7 +50,7 @@ func (p *TemplatePlugin) Name() string {
 
 // From plugin.InitializablePlugin
 func (p *TemplatePlugin) Init(ctx context.Context, r *plugin.Registry) error {
-	// TODO: Load templates.
+	// TODO: Load templates proactively?
 	return nil
 }
 

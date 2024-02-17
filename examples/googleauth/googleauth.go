@@ -29,6 +29,11 @@ func main() {
 	}
 }
 
+// Google auth task list:
+// TODO: Handler at /v1/auth/google/callback to manage authorization code.
+// TODO: Update login endpoint to accept id_token and decode it.
+// TODO: Add google SDK to this example, and use it to trigger a client side login flow.
+
 func homepage(res http.ResponseWriter, req *http.Request) {
 	res.Write([]byte(`
 		<!DOCTYPE html>
@@ -46,6 +51,7 @@ func homepage(res http.ResponseWriter, req *http.Request) {
 		<div class="bg-white p-6 rounded-lg shadow-lg">
 			<h1 class="text-2xl font-extrabold">Prefab Google Example</h1>
 			<p class="my-4 text-lg text-gray-500">This is a simple test server for demoing how google auth works.</p>
+			<p><a href="/v1/auth/login?provider=google">Login with google server side flow &raquo;</a></p>
 		</div>
 		<script>
 

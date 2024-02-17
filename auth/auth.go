@@ -13,7 +13,6 @@ import (
 	"github.com/dpup/prefab/server/serverutil"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -67,9 +66,8 @@ func (c *Claims) Validate() error {
 // SendIdentityCookie attaches the token to the outgoing GRPC metadata such
 // that it will be propagated as a `Set-Cookie` HTTP header by the Gateway.
 func SendIdentityCookie(ctx context.Context, token string) error {
-	// TODO: Can/should config be injected in via the context to avoid utility
-	// methods reaching into Viper?
-	isSecure := strings.HasPrefix(viper.GetString("address"), "https")
+	address := serverutil.AddressFromContext(ctx)
+	isSecure := strings.HasPrefix(address, "https")
 
 	return serverutil.SendCookie(ctx, &http.Cookie{
 		Name:     IdentityTokenCookieName,

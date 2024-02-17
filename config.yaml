@@ -32,9 +32,8 @@ server:
   #  - https://extension.thirdparty.com
 
   # Incoming headers that should be forwarded on to GRPC services.
-  # incomingheaders:
-  # - X-Requested-With
-  # - X-Delegated-User
+  incomingheaders:
+  - X-Requested-With
 
 # Template rendering configuration.
 templates:

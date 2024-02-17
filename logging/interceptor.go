@@ -20,7 +20,6 @@ var grpcLoggingInterceptor = grpc_logging.UnaryServerInterceptor(grpc_logging.Lo
 	for i := 0; i < len(fields); i += 2 {
 		key := fields[i].(string)
 		value := fields[i+1]
-		// TODO: This might be too inefficient.
 		logger = logger.With(key, value)
 	}
 

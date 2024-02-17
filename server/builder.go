@@ -161,7 +161,7 @@ func (b *builder) wrapHandler(h http.Handler) http.Handler {
 }
 
 func (b *builder) buildGRPCOpts() []grpc.ServerOption {
-	interceptors := append([]grpc.UnaryServerInterceptor{logging.Interceptor()}, b.interceptors...)
+	interceptors := append([]grpc.UnaryServerInterceptor{configInjector, logging.Interceptor()}, b.interceptors...)
 	opts := []grpc.ServerOption{grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(interceptors...))}
 	if b.isSecure() {
 		opts = append(opts, grpc.Creds(serverTLSFromFile(b.certFile, b.keyFile)))

@@ -29,10 +29,8 @@ func (r *Registry) Register(plugin Plugin) {
 	r.keys = append(r.keys, n)
 }
 
-// Init all plugins in the registry. Plugins will be visited , in dependency order.
+// Init all plugins in the registry. Plugins will be visited in dependency order.
 func (r *Registry) Init(ctx context.Context) error {
-	// TODO: Should this protect against being called twice?
-
 	if r.plugins == nil {
 		return nil
 	}

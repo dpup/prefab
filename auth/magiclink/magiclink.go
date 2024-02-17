@@ -39,6 +39,7 @@ import (
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/email"
 	"github.com/dpup/prefab/plugin"
+	"github.com/dpup/prefab/server/serverutil"
 	"github.com/dpup/prefab/templates"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -62,13 +63,6 @@ const (
 // MagicLinkOptions allow configuration of the MagicLinkPlugin.
 type MagicLinkOption func(*MagicLinkPlugin)
 
-// WithAddress sets the address to use when constructing magic links.
-func WithAddress(address string) MagicLinkOption {
-	return func(p *MagicLinkPlugin) {
-		p.address = address
-	}
-}
-
 // WithSigningKey sets the signing key to use when signing magic link tokens.
 func WithSigningKey(signingKey []byte) MagicLinkOption {
 	return func(p *MagicLinkPlugin) {
@@ -86,7 +80,6 @@ func WithExpiration(expiration time.Duration) MagicLinkOption {
 // Plugin for handling passwordless authentication via email.
 func Plugin(opts ...MagicLinkOption) *MagicLinkPlugin {
 	p := &MagicLinkPlugin{
-		address:         viper.GetString("address"),
 		signingKey:      []byte(viper.GetString("auth.magiclink.signingkey")),
 		tokenExpiration: viper.GetDuration("auth.magiclink.expiration"),
 	}
@@ -101,7 +94,6 @@ type MagicLinkPlugin struct {
 	emailer  *email.EmailPlugin
 	renderer *templates.TemplatePlugin
 
-	address         string
 	signingKey      []byte
 	tokenExpiration time.Duration
 }
@@ -118,9 +110,6 @@ func (p *MagicLinkPlugin) Deps() []string {
 
 // From plugin.InitializablePlugin.
 func (p *MagicLinkPlugin) Init(ctx context.Context, r *plugin.Registry) error {
-	if p.address == "" {
-		return status.Error(codes.InvalidArgument, "magiclink: config missing address")
-	}
 	if len(p.signingKey) == 0 {
 		return status.Error(codes.InvalidArgument, "magiclink: config missing signing key")
 	}
@@ -162,8 +151,9 @@ func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirec
 	} else if redirectUri != "" {
 		url = redirectUri + "?token=" + token
 	} else {
+		address := serverutil.AddressFromContext(ctx)
 		// TODO: this will break if gatewayprefix is overridden.
-		url = p.address + "/v1/auth/login?provider=magiclink&creds[token]=" + token
+		url = address + "/v1/auth/login?provider=magiclink&creds[token]=" + token
 	}
 
 	subject, err := p.renderer.Render(ctx, "auth_magiclink_subject", nil)

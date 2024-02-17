@@ -7,6 +7,8 @@ import (
 
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/plugin"
+	"github.com/dpup/prefab/server/serverutil"
+
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,13 +25,6 @@ const (
 // GoogleOptions allow configuration of the GooglePlugin.
 type GoogleOption func(*GooglePlugin)
 
-// WithAddress configures the GooglePlugin with the given server address.
-func WithAddress(address string) GoogleOption {
-	return func(p *GooglePlugin) {
-		p.address = address
-	}
-}
-
 // WithClient configures the GooglePlugin with the given client id and secret.
 func WithClient(id, secret string) GoogleOption {
 	return func(p *GooglePlugin) {
@@ -41,7 +36,6 @@ func WithClient(id, secret string) GoogleOption {
 // Plugin for handling Google authentication.
 func Plugin(opts ...GoogleOption) *GooglePlugin {
 	p := &GooglePlugin{
-		address:      viper.GetString("address"),
 		clientID:     viper.GetString("auth.google.id"),
 		clientSecret: viper.GetString("auth.google.secret"),
 	}
@@ -53,7 +47,6 @@ func Plugin(opts ...GoogleOption) *GooglePlugin {
 
 // GooglePlugin for handling Google authentication.
 type GooglePlugin struct {
-	address      string
 	clientID     string
 	clientSecret string
 }
@@ -105,14 +98,15 @@ func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) 
 // https://developers.google.com/identity/protocols/oauth2/web-server#httprest
 func (p *GooglePlugin) redirectToGoogle(ctx context.Context) (*auth.LoginResponse, error) {
 
-	// TODO:
-	// - Forward incoming redirectUri to google inside state param. Ppossibly wrap
-	//   state and then unwrap before returning to the real redirectUri. Or maybe
-	//   the client doesn't need state at all for this code path since it's all
-	//   server side.
+	// TODO: Forward incoming redirectUri to google inside state param. Possibly
+	//   wrap state and then unwrap before returning to the real redirectUri. Or
+	//   maybe the client doesn't need state at all for this code path since it's
+	//   all server side.
 	//
-	// - Create HTTP handler to handle the oauth callback and forward on to the
-	//   right login URL.
+	// TODO: Create HTTP handler to handle the oauth callback and forward on to the
+	// right login URL.
+
+	address := serverutil.AddressFromContext(ctx)
 
 	q := url.Values{}
 	q.Add("client_id", p.clientID)
@@ -120,7 +114,7 @@ func (p *GooglePlugin) redirectToGoogle(ctx context.Context) (*auth.LoginRespons
 	q.Add("response_type", "code")
 	q.Add("access_type", "online") // Refresh token not needed as token is ephemeral.
 	q.Add("prompt", "select_account")
-	q.Add("redirect_uri", p.address+"/v1/auth/google/callback")
+	q.Add("redirect_uri", address+"/v1/auth/google/callback")
 	q.Add("state", "some state") // TODO: propagate state.
 
 	u := url.URL{
