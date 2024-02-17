@@ -42,7 +42,6 @@ func New(opts ...ServerOption) *Server {
 	b := &builder{
 		host:            viper.GetString("server.host"),
 		port:            viper.GetInt("server.port"),
-		gatewayPrefix:   viper.GetString("server.gatewayprefix"),
 		corsOrigins:     viper.GetStringSlice("server.corsorigins"),
 		incomingHeaders: viper.GetStringSlice("server.incomingheaders"),
 		certFile:        viper.GetString("server.tls.certfile"),
@@ -62,7 +61,6 @@ type builder struct {
 	port            int
 	corsOrigins     []string
 	incomingHeaders []string
-	gatewayPrefix   string
 	certFile        string
 	keyFile         string
 	maxMsgSizeBytes int
@@ -128,7 +126,7 @@ func (b *builder) build() *Server {
 		fn(s)
 	}
 
-	s.httpMux.Handle(b.gatewayPrefix, b.wrapHandler(http.Handler(gateway)))
+	s.httpMux.Handle("/api/", b.wrapHandler(http.Handler(gateway)))
 	for _, h := range b.httpHandlers {
 		s.httpMux.Handle(h.prefix, b.wrapHandler(h.handler))
 	}
@@ -246,14 +244,6 @@ func WithTLS(certFile, keyFile string) ServerOption {
 func WithMaxRecvMsgSize(maxMsgSizeBytes int) ServerOption {
 	return func(b *builder) {
 		b.maxMsgSizeBytes = maxMsgSizeBytes
-	}
-}
-
-// WithGatewayPrefix sets the path prefix that the GRPC Gateway will be bound
-// to. Default is `/v1/`. Overrides value set in config file.
-func WithGatewayPrefix(prefix string) ServerOption {
-	return func(b *builder) {
-		b.gatewayPrefix = prefix
 	}
 }
 

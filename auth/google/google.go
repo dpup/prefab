@@ -114,7 +114,7 @@ func (p *GooglePlugin) redirectToGoogle(ctx context.Context) (*auth.LoginRespons
 	q.Add("response_type", "code")
 	q.Add("access_type", "online") // Refresh token not needed as token is ephemeral.
 	q.Add("prompt", "select_account")
-	q.Add("redirect_uri", address+"/v1/auth/google/callback")
+	q.Add("redirect_uri", address+"/api/auth/google/callback")
 	q.Add("state", "some state") // TODO: propagate state.
 
 	u := url.URL{

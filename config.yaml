@@ -13,9 +13,6 @@ server:
   host: localhost
   port: 8000
 
-  # Prefix used for all GRPC API endpoints.
-  gatewayprefix: /v1/
-
   # Optional server configuration:
 
   # Override the default GRPC max msg size.

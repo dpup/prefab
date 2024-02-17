@@ -9,14 +9,14 @@ service SimpleService {
   // Health returns information about the current server's health status.
   rpc Health(HealthRequest) returns (HealthResponse) {
     option (google.api.http) = {
-      get: "/v1/health"
+      get: "/api/health"
     };
   }
 
   // Echo responds with the same value as was in the request.
   rpc Echo(EchoRequest) returns (EchoResponse) {
     option (google.api.http) = {
-      get: "/v1/echo"
+      get: "/api/echo"
     };
   }
 }

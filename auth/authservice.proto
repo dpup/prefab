@@ -11,9 +11,9 @@ service AuthService {
   // credentials to be passed as GET.
   rpc Login(LoginRequest) returns (LoginResponse) {
     option (google.api.http) = {
-      get: "/v1/auth/login"
+      get: "/api/auth/login"
       additional_bindings {
-        post: "/v1/auth/login"
+        post: "/api/auth/login"
         body: "*"
       }
     };
@@ -22,7 +22,7 @@ service AuthService {
   // Identity returns information about the authenticated user.
   rpc Identity(IdentityRequest) returns (IdentityResponse) {
     option (google.api.http) = {
-      get: "/v1/auth/me"
+      get: "/api/auth/me"
     };
   }
 }

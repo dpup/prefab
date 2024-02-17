@@ -152,8 +152,7 @@ func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirec
 		url = redirectUri + "?token=" + token
 	} else {
 		address := serverutil.AddressFromContext(ctx)
-		// TODO: this will break if gatewayprefix is overridden.
-		url = address + "/v1/auth/login?provider=magiclink&creds[token]=" + token
+		url = address + "/api/auth/login?provider=magiclink&creds[token]=" + token
 	}
 
 	subject, err := p.renderer.Render(ctx, "auth_magiclink_subject", nil)

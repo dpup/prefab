@@ -28,7 +28,7 @@ func main() {
 	// Guidance for people who don't read the example code.
 	fmt.Println("")
 	fmt.Println("Try making a request to the echo endpoint:")
-	fmt.Println("curl 'http://0.0.0.0:8000/v1/echo?ping=hello+world'")
+	fmt.Println("curl 'http://0.0.0.0:8000/api/echo?ping=hello+world'")
 	fmt.Println("")
 	fmt.Println("Then note that the server logs contain a `req.ping` entry.")
 	fmt.Println("")

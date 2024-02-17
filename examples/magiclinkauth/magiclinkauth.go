@@ -28,7 +28,7 @@ func main() {
 
 	fmt.Println("")
 	fmt.Println("Request a magic link using:")
-	fmt.Println(`curl -X POST -d '{"provider":"magiclink", "creds":{"email": "me@me.com"}}' 'http://localhost:8000/v1/auth/login'`)
+	fmt.Println(`curl -X POST -d '{"provider":"magiclink", "creds":{"email": "me@me.com"}}' 'http://localhost:8000/api/auth/login'`)
 	fmt.Println("")
 	fmt.Println("Or visit http://localhost:8000/ in your browser")
 	fmt.Println("")
@@ -85,7 +85,7 @@ func homepage(res http.ResponseWriter, req *http.Request) {
 		const form = 0, sent = 1, error = 2, identity = 3;
 		function requestMagicLink() {
 			const email = document.getElementById('email').value;
-			fetch('/v1/auth/login', {
+			fetch('/api/auth/login', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -105,7 +105,7 @@ func homepage(res http.ResponseWriter, req *http.Request) {
 		}
 		function requestLogin(token) {
 			console.log('Token detected, logging in')
-			fetch('/v1/auth/login', {
+			fetch('/api/auth/login', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -128,7 +128,7 @@ func homepage(res http.ResponseWriter, req *http.Request) {
 			});
 		}
 		function requestAuthUser() {
-			fetch('/v1/auth/me', {
+			fetch('/api/auth/me', {
 				method: 'GET',
 				credentials: 'include'
 			})
