@@ -32,12 +32,6 @@ var (
 	// keys.
 	jwtSigningKey = []byte("In a world of prefab dreams, authenticity gleams.")
 
-	// Only allow tokens created by prefab.
-	jwtIssuer = "prefab"
-
-	// TODO: Make pluggable with hostname for server.
-	jwtAudience = "access"
-
 	// TODO: Customize token expiry.
 	identityExpiration = time.Hour * 24 * 30
 
@@ -82,13 +76,18 @@ func SendIdentityCookie(ctx context.Context, token string) error {
 
 // IdentityToken creates a signed JWT for the given identity.
 func IdentityToken(ctx context.Context, identity Identity) (string, error) {
+	// Both issuer and audience are set to the current server, indicating that the
+	// token was created by this server and is only intended to be used for this
+	// server.
+	address := serverutil.AddressFromContext(ctx)
+
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
-			Audience:  jwt.ClaimStrings{jwtAudience},
-			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(identityExpiration)),
+			Audience:  jwt.ClaimStrings{address},
+			Issuer:    address,
 			IssuedAt:  jwt.NewNumericDate(timeFunc()),
-			Issuer:    jwtIssuer,
+			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(identityExpiration)),
 			Subject:   identity.Subject,
 		},
 		Name:          identity.Name,
@@ -107,14 +106,16 @@ func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 // ParseIdentityToken takes a signed JWT, validates it, and returns the identity
 // information encoded within. Invalid and expired tokens will error.
 func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, error) {
+	address := serverutil.AddressFromContext(ctx)
+
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&Claims{},
 		func(token *jwt.Token) (interface{}, error) {
 			return jwtSigningKey, nil
 		},
-		jwt.WithIssuer(jwtIssuer),
-		jwt.WithAudience(jwtAudience),
+		jwt.WithIssuer(address), // TODO: Possibly relax to allow tokens created by other issuers.
+		jwt.WithAudience(address),
 		jwt.WithLeeway(5*time.Second),
 		jwt.WithTimeFunc(timeFunc),
 		jwt.WithIssuedAt(),
