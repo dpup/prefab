@@ -26,7 +26,10 @@ var (
 	ErrExpired = status.Error(codes.FailedPrecondition, "token has expired")
 
 	// The token was not signed correctly.
-	ErrInvalid = status.Error(codes.InvalidArgument, "token is invalid")
+	ErrInvalidToken = status.Error(codes.InvalidArgument, "token is invalid")
+
+	// Invalid authorization header.
+	ErrInvalidHeader = status.Error(codes.InvalidArgument, "bad authorization header")
 
 	// TODO: Move to pluggable configuration, support multiple registed signing
 	// keys.
@@ -134,7 +137,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		}, nil
 	}
 
-	return Identity{}, ErrInvalid
+	return Identity{}, ErrInvalidToken
 }
 
 // IdentityFromContext parses and verifies a JWT received from incoming GRPC
@@ -175,12 +178,12 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 		payload, _ := base64.StdEncoding.DecodeString(auth[1])
 		pair := strings.SplitN(string(payload), ":", 2)
 		if len(pair) != 2 || pair[1] != "" {
-			return Identity{}, ErrInvalid
+			return Identity{}, ErrInvalidHeader
 		}
 		return ParseIdentityToken(ctx, pair[0])
 
 	default:
-		return Identity{}, ErrInvalid
+		return Identity{}, ErrInvalidHeader
 	}
 }
 

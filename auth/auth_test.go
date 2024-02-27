@@ -68,6 +68,13 @@ func TestTokenSigning(t *testing.T) {
 	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = token signature is invalid: signature is invalid")
 }
 
+func TestIdentityFromEmptyContext(t *testing.T) {
+	ctx := context.Background()
+
+	_, err := IdentityFromContext(ctx)
+	assert.EqualError(t, err, "rpc error: code = NotFound desc = identity not found")
+}
+
 func TestIdentityFromCookie(t *testing.T) {
 	ctx := context.Background()
 
@@ -85,6 +92,25 @@ func TestIdentityFromCookie(t *testing.T) {
 	assert.Nil(t, err, "failed to extract identity: %v", err)
 
 	assert.Equal(t, expected, actual, "identity from cookie does not match")
+}
+
+func TestIdentityFromAuthHeader(t *testing.T) {
+	ctx := context.Background()
+
+	expected := Identity{
+		Subject:  "4",
+		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+	}
+	tokenString, err := IdentityToken(ctx, expected)
+	assert.Nil(t, err, "failed to issue token")
+
+	md := metadata.Pairs("authorization", tokenString)
+	ctx = metadata.NewIncomingContext(ctx, md)
+
+	actual, err := IdentityFromContext(ctx)
+	assert.Nil(t, err, "failed to extract identity")
+
+	assert.Equal(t, expected, actual, "identity from header does not match")
 }
 
 func TestIdentityFromBearerToken(t *testing.T) {
@@ -124,4 +150,40 @@ func TestIdentityFromBasicAuth(t *testing.T) {
 	assert.Nil(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from header does not match")
+}
+
+func TestIdentityFromBasicAuth_invalidBasicAuth(t *testing.T) {
+	ctx := context.Background()
+
+	expected := Identity{
+		Subject:  "4",
+		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+	}
+	tokenString, err := IdentityToken(ctx, expected)
+	assert.Nil(t, err, "failed to issue token")
+
+	basic := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:password", tokenString)))
+	md := metadata.Pairs("authorization", fmt.Sprintf("basic %s", basic))
+	ctx = metadata.NewIncomingContext(ctx, md)
+
+	_, err = IdentityFromContext(ctx)
+	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = bad authorization header")
+}
+
+func TestIdentityFromBasicAuth_invalidAuthorizationType(t *testing.T) {
+	ctx := context.Background()
+
+	expected := Identity{
+		Subject:  "4",
+		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+	}
+	tokenString, err := IdentityToken(ctx, expected)
+	assert.Nil(t, err, "failed to issue token")
+
+	basic := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:", tokenString)))
+	md := metadata.Pairs("authorization", fmt.Sprintf("xxxxx %s", basic))
+	ctx = metadata.NewIncomingContext(ctx, md)
+
+	_, err = IdentityFromContext(ctx)
+	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = bad authorization header")
 }

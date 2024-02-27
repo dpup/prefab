@@ -17,4 +17,11 @@
     ]
   },
   "cSpell.allowCompoundWords": true,
+  "go.coverOnSave": true,
+  "go.coverageDecorator": {
+      "type": "gutter",
+      "coveredGutterStyle": "blockgreen",
+      "uncoveredGutterStyle": "blockred"
+  },
+  "go.coverageOptions": "showUncoveredCodeOnly"
 }
