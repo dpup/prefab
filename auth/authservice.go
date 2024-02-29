@@ -33,11 +33,13 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 	logging.Track(ctx, "auth.provider", in.Provider)
 	logging.Track(ctx, "auth.issueToken", in.IssueToken)
 	logging.Track(ctx, "auth.redirectUri", in.RedirectUri)
-	logging.Info(ctx, "🔑  Login attempt")
+	logging.Info(ctx, "Login attempt")
 
 	if in.RedirectUri != "" && in.IssueToken {
 		return nil, status.Error(codes.InvalidArgument, "auth: `issue_token` not compatible with `redirect_uri`")
 	}
+
+	// TODO: Verify redirect_uri is a path or has a valid host.
 
 	if h, ok := s.handlers[in.Provider]; ok {
 		resp, err := h(ctx, in)
@@ -46,7 +48,7 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 			// Send a 302 redirect.
 			serverutil.SendStatusCode(ctx, 302)
 			serverutil.SendHeader(ctx, "location", resp.RedirectUri)
-			logging.Infow(ctx, "⤵️ Sending redirect", "redirectUri", resp.RedirectUri)
+			logging.Infow(ctx, "Sending redirect", "redirectUri", resp.RedirectUri)
 		}
 
 		return resp, err
