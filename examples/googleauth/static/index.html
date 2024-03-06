@@ -1,59 +1,168 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prefab Google Example</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-<style>
 
-</style>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prefab Google Example</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
 </head>
+
 <body class="flex items-center justify-center h-screen bg-gray-100">
-<div class="bg-white p-6 rounded-lg shadow-lg">
-  <h1 class="text-2xl font-extrabold">Prefab Google Example</h1>
-  <p class="my-4 text-lg text-gray-500">This is a simple test server for demoing how google auth works.</p>
-  <div id="buttons" class="hidden">
-    <p><a href="/api/auth/login?provider=google&redirect_uri=/">Login with google server side flow &raquo;</a></p>
+  <div class="bg-white p-6 rounded-lg shadow-lg max-w-lg">
+    <h1 class="text-2xl font-extrabold mb-6">Prefab Google Example</h1>
+    <div class="text-gray-500">
+      <div id="buttons" class="hidden text-sm text-grey-700 [&>p]:mb-6 [&>p]:text-justify [&>hr]:my-6">
+        <p>
+          Google Authentication can be implemented with a number of different
+          flows. This demo page demonstrates three of them.
+        </p>
+        <p>
+          The first flow is through full-page redirects, facilitated by the API
+          server. The client is redirected to google, which authenticates the user
+          and returns an authorization code. The server exchanges the authorization
+          code for an access token, which is then uses to request the user's
+          identity, sets cookies, and then redirects back to this page.
+        </p>
+        <p>
+          <a href="/api/auth/login?provider=google&redirect_uri=%2F"
+            class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
+            Continue with server side login &raquo;</a>
+        </p>
+        <hr />
+        <p>
+          The second flow uses the Google SDK to authenticate the user in a
+          popup, which returns an ID Token back to the page. The ID Token is
+          sent to the server in a JavaScript fetch request. The server validates
+          the token and sets cookies, which identifies the user on future
+          requests.
+        </p>
+        <div id="sdk_cookie_flow" class="mt-3"></div>
+        <hr />
+        <p>
+          The third flow is the same as the second flow, except instead of
+          setting cookies, the server returns an authorization token which can
+          be used to make requests. This can be useful in single-page
+          applications but authorization is not persisted across page loads.
+        </p>
+        <div id="sdk_token_flow" class="mt-3"></div>
+      </div>
+    </div>
+    <div id="identity" class="hidden bg-blue-100 border-t border-b border-blue-500 text-blue-700 px-4 py-3"
+      role="alert">
+      <p class="font-bold">Welcome back</p>
+      <p class="text-sm" id="identity_data"></p>
+    </div>
+    <div id="error" class="hidden bg-red-100 border-t border-b border-red-500 text-red-700 px-4 py-3" role="alert">
+      <p class="font-bold">An error occurred!</p>
+      <p class="text-sm">This is only a demo, so check the console and the server logs.</p>
+    </div>
   </div>
-  <div id="identity" class="hidden bg-blue-100 border-t border-b border-blue-500 text-blue-700 px-4 py-3" role="alert">
-    <p class="font-bold">Welcome back</p>
-    <p class="text-sm" id="identity_data"></p>
-  </div>
-</div>
-<script>
-const buttons = 0, identity = 2;
-function requestAuthUser() {
-  fetch('/api/auth/me', {
-    method: 'GET',
-    credentials: 'include'
-  })
-  .then(response => {
-    if (response.ok) {
-      return response.json().then(data => {
-        console.log('Identity loaded', data);
-        document.getElementById('identity_data').innerText = 'Logged in as ' + data.email;
-        setMode(identity);
-      });
-    } else {
-      console.log('Error response', response)
-      setMode(buttons);
+  <script>
+    const buttons = 0, identity = 2, error = 3;
+    let tokenFlow = false;
+
+    // See if the user is already logged in.
+    requestAuthUser();
+
+    fetch('/api/auth/google/client-id').then(response => {
+      if (response.ok) {
+        return response.json().then(data => {
+          google.accounts.id.initialize({
+            client_id: data.client_id,
+            callback: handleCredentialResponse,
+          });
+          google.accounts.id.renderButton(
+            document.getElementById("sdk_cookie_flow"),
+            {
+              theme: "filled_black",
+              size: "large",
+              text: "continue_with",
+              click_listener: () => tokenFlow = false,
+            }
+          );
+          google.accounts.id.renderButton(
+            document.getElementById("sdk_token_flow"),
+            {
+              theme: "filled_blue",
+              size: "large",
+              text: "continue_with",
+              click_listener: () => tokenFlow = true,
+            }
+          );
+          google.accounts.id.prompt();
+        });
+      } else {
+        console.log('Error response', response)
+      }
+    }).catch(error => {
+      console.log('Error', error)
+    });
+
+    // ---
+
+    function handleCredentialResponse({ credential }) {
+      console.log('ID token recieved, sending to server')
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          provider: 'google',
+          issue_token: tokenFlow,
+          creds: { idtoken: credential }
+        })
+      })
+        .then(response => response.json())
+        .then(response => requestAuthUser(response.token))
+        .catch(error => {
+          console.log('Error', error)
+          setMode(error)
+        });
     }
-  })
-  .catch(error => {
-    console.log('Error', error)
-    setMode(error)
-  });
-}
-function setMode(mode) {
-  console.log('Setting display mode', mode);
-  document.getElementById('buttons').style.display = showIf(mode === buttons);
-  document.getElementById('identity').style.display = showIf(mode === identity);
-}
-function showIf(state) {
-  return state ? 'block' : 'none';
-}
-requestAuthUser();
-</script>
+
+    async function requestAuthUser(opt_token) {
+      return fetch('/api/auth/me', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': opt_token ? ('bearer ' + opt_token) : '',
+        },
+      })
+        .then(response => {
+          if (response.ok) {
+            return response.json().then(data => {
+              console.log('Identity loaded', data);
+              document.getElementById('identity_data').innerText = 'Logged in as ' + data.email;
+              setMode(identity);
+            });
+          } else {
+            console.log('Error response', response)
+            setMode(buttons);
+          }
+        })
+        .catch(error => {
+          console.log('Error', error)
+          setMode(error)
+        });
+    }
+
+    function setMode(mode) {
+      console.log('Setting display mode', mode);
+      document.getElementById('buttons').style.display = showIf(mode === buttons);
+      document.getElementById('identity').style.display = showIf(mode === identity);
+      document.getElementById('error').style.display = showIf(mode === error);
+    }
+
+    function showIf(state) {
+      return state ? 'block' : 'none';
+    }
+
+  </script>
 </body>
+
 </html>

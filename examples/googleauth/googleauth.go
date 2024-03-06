@@ -32,7 +32,3 @@ func main() {
 		fmt.Println(err)
 	}
 }
-
-// Google auth task list:
-// TODO: Update login endpoint to accept id_token and decode it.
-// TODO: Add google SDK to this example, and use it to trigger a client side login flow.

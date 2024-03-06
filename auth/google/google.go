@@ -63,7 +63,6 @@ package google
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/url"
 	"time"
@@ -77,6 +76,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/idtoken"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -132,6 +132,7 @@ func (p *GooglePlugin) Deps() []string {
 func (p *GooglePlugin) ServerOptions() []server.ServerOption {
 	return []server.ServerOption{
 		server.WithHTTPHandlerFunc("/api/auth/google/callback", p.handleGoogleCallback),
+		server.WithHTTPHandlerFunc("/api/auth/google/client-id", p.handleGoogleClientID),
 	}
 }
 
@@ -154,20 +155,26 @@ func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) 
 		return nil, status.Error(codes.InvalidArgument, "google: login handler called for wrong provider")
 	}
 
+	var userInfo *UserInfo
+	var err error
 	if req.Creds["code"] != "" {
 		// Exchanges an authorization code for an access token, and sets up the
 		// identity cookies.
-		return p.handleAuthorizationCode(ctx, req.Creds["code"], req.RedirectUri, req.Creds["state"])
-	}
-	if req.Creds["idtoken"] != "" {
+		userInfo, err = p.handleAuthorizationCode(ctx, req.Creds["code"], req.Creds["state"])
+	} else if req.Creds["idtoken"] != "" {
 		// Verifies the id token and uses the claims to set up the identity cookies.
-		return p.handleIDToken(ctx, req.Creds["idtoken"])
-	}
-	if len(req.Creds) == 0 || req.Creds["state"] != "" {
+		userInfo, err = p.handleIDToken(ctx, req.Creds["idtoken"])
+	} else if len(req.Creds) == 0 || req.Creds["state"] != "" {
 		// Initiates a server side OAuth flow.
 		return p.redirectToGoogle(ctx, req.RedirectUri, req.Creds["state"])
+	} else {
+		return nil, status.Error(codes.InvalidArgument, "google: unexpected credentials, a `code` or an `idtoken` are required")
 	}
-	return nil, status.Error(codes.InvalidArgument, "google: unexpected credentials, a `code` or an `idtoken` are required")
+
+	if err != nil {
+		return nil, err
+	}
+	return p.authenticateUserInfo(ctx, userInfo, req)
 }
 
 // Trigger a redirect to google login. This will result in an authorization code
@@ -233,12 +240,19 @@ func (p *GooglePlugin) handleGoogleCallback(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(302)
 }
 
+// Exposes the client ID, so that frontends which use the Google SDK can use it
+// without it being baked into the build.
+func (p *GooglePlugin) handleGoogleClientID(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("content-type", "application/json")
+	w.Write([]byte(`{"client_id":"` + p.clientID + `"}`))
+}
+
 // Handle an OAuth2 authorization code retrieved from Google.
 //
 // This endpoint can either be called by a client who received the `code`
 // directly from Google, or it can be called via the HTTP callback handler
 // following the auth flow being triggered by `redirectToGoogle`.
-func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, redirectUri, rawState string) (*auth.LoginResponse, error) {
+func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawState string) (*UserInfo, error) {
 	_, err := p.parseState(rawState)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "google: failed to parse state: %s", err)
@@ -271,18 +285,30 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, redire
 	if resp.StatusCode != http.StatusOK {
 		return nil, status.Errorf(codes.Internal, "google: failed to get user info, status: %d", resp.StatusCode)
 	}
-	userInfo := &UserInfo{}
-	if err := json.NewDecoder(resp.Body).Decode(userInfo); err != nil {
-		return nil, status.Errorf(codes.Internal, "google: failed to decode user info: %s", err)
-	}
+	return UserInfoFromJSON(resp.Body)
+}
 
-	// Map user-info to a prefab identity record.
+// Handle an ID Token retrieved via a clientside login. See:
+// https://developers.google.com/identity/sign-in/web/backend-auth
+func (p *GooglePlugin) handleIDToken(ctx context.Context, token string) (*UserInfo, error) {
+	payload, err := idtoken.Validate(ctx, token, p.clientID)
+	if err != nil {
+		logging.Errorw(ctx, "google: failed to validate id token", "error", err)
+		return nil, status.Errorf(codes.InvalidArgument, "google: failed to validate id token: %s", err)
+	}
+	return UserInfoFromClaims(payload.Claims)
+}
+
+// Maps the Google UserInfo to a prefab Identity. Is req.IssueToken is true,
+// then the token is returned to the client. If not, then the token is set as a
+// cookie.
+func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserInfo, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	identity := auth.Identity{
 		AuthTime:      time.Now(),
 		Subject:       userInfo.ID,
 		Name:          userInfo.Name,
 		Email:         userInfo.Email,
-		EmailVerified: true, // Google only returns primary email.
+		EmailVerified: userInfo.IsConfirmed(),
 	}
 
 	// Create an identity token based and return it to the client..
@@ -290,22 +316,24 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, redire
 	if err != nil {
 		return nil, err
 	}
+
+	logging.Infow(ctx, "google: user authenticated", "subject", identity.Subject, "email", identity.Email)
+
+	if req.IssueToken {
+		return &auth.LoginResponse{
+			Issued: true,
+			Token:  idt,
+		}, nil
+	}
+
 	if err := auth.SendIdentityCookie(ctx, idt); err != nil {
 		return nil, err
 	}
+
 	return &auth.LoginResponse{
 		Issued:      true,
-		RedirectUri: redirectUri,
+		RedirectUri: req.RedirectUri,
 	}, nil
-}
-
-// Handle an ID Token retrieved via a clientside login. See:
-// https://developers.google.com/identity/sign-in/web/backend-auth
-func (p *GooglePlugin) handleIDToken(ctx context.Context, idToken string) (*auth.LoginResponse, error) {
-	// 1. Verify the ID token.
-	// 2. Create an identity token.
-	// 3. Return the identity token or set cookie.
-	return nil, status.Error(codes.Unimplemented, "google login not implemented")
 }
 
 func oauthCallback(ctx context.Context) string {
