@@ -14,15 +14,7 @@ import (
 // metadata and parses the contents.
 func CookiesFromIncomingContext(ctx context.Context) map[string]*http.Cookie {
 	md, _ := metadata.FromIncomingContext(ctx)
-	r := &http.Request{Header: http.Header{}}
-	for _, v := range md[runtime.MetadataPrefix+"cookie"] {
-		r.Header.Add("Cookie", v)
-	}
-	cookies := map[string]*http.Cookie{}
-	for _, c := range r.Cookies() {
-		cookies[c.Name] = c
-	}
-	return cookies
+	return ParseCookies(md[runtime.MetadataPrefix+"cookie"]...)
 }
 
 // SendCookie adds an http-set-cookie header for the provided cookie to the
@@ -50,4 +42,17 @@ func SendHeader(ctx context.Context, key, value string) error {
 // `statusCodeForwarder` function.
 func SendStatusCode(ctx context.Context, code int) error {
 	return grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.Itoa(code)))
+}
+
+// ParseCookies takes a cookie header string and returns a map of cookies.
+func ParseCookies(headers ...string) map[string]*http.Cookie {
+	r := &http.Request{Header: http.Header{}}
+	for _, h := range headers {
+		r.Header.Add("Cookie", h)
+	}
+	cookies := map[string]*http.Cookie{}
+	for _, c := range r.Cookies() {
+		cookies[c.Name] = c
+	}
+	return cookies
 }

@@ -66,36 +66,36 @@
     // See if the user is already logged in.
     requestAuthUser();
 
-    fetch('/api/auth/google/client-id').then(response => {
-      if (response.ok) {
-        return response.json().then(data => {
-          google.accounts.id.initialize({
-            client_id: data.client_id,
-            callback: handleCredentialResponse,
-          });
-          google.accounts.id.renderButton(
-            document.getElementById("sdk_cookie_flow"),
-            {
-              theme: "filled_black",
-              size: "large",
-              text: "continue_with",
-              click_listener: () => tokenFlow = false,
-            }
-          );
-          google.accounts.id.renderButton(
-            document.getElementById("sdk_token_flow"),
-            {
-              theme: "filled_blue",
-              size: "large",
-              text: "continue_with",
-              click_listener: () => tokenFlow = true,
-            }
-          );
-          google.accounts.id.prompt();
-        });
-      } else {
+    fetch('/api/meta/config').then(response => {
+      if (!response.ok) {
         console.log('Error response', response)
+        return;
       }
+      return response.json().then(data => {
+        google.accounts.id.initialize({
+          client_id: data.configs['auth.google.clientId'],
+          callback: handleCredentialResponse,
+        });
+        google.accounts.id.renderButton(
+          document.getElementById("sdk_cookie_flow"),
+          {
+            theme: "filled_black",
+            size: "large",
+            text: "continue_with",
+            click_listener: () => tokenFlow = false,
+          }
+        );
+        google.accounts.id.renderButton(
+          document.getElementById("sdk_token_flow"),
+          {
+            theme: "filled_blue",
+            size: "large",
+            text: "continue_with",
+            click_listener: () => tokenFlow = true,
+          }
+        );
+        google.accounts.id.prompt();
+      });
     }).catch(error => {
       console.log('Error', error)
     });
@@ -107,7 +107,8 @@
       fetch('/api/auth/login', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-CSRF-Protection': 1,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -129,8 +130,8 @@
         method: 'GET',
         credentials: 'include',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': opt_token ? ('bearer ' + opt_token) : '',
+          'X-CSRF-Protection': 1,
         },
       })
         .then(response => {

@@ -132,7 +132,7 @@ func (p *GooglePlugin) Deps() []string {
 func (p *GooglePlugin) ServerOptions() []server.ServerOption {
 	return []server.ServerOption{
 		server.WithHTTPHandlerFunc("/api/auth/google/callback", p.handleGoogleCallback),
-		server.WithHTTPHandlerFunc("/api/auth/google/client-id", p.handleGoogleClientID),
+		server.WithClientConfig("auth.google.clientId", p.clientID),
 	}
 }
 
@@ -147,6 +147,7 @@ func (p *GooglePlugin) Init(ctx context.Context, r *plugin.Registry) error {
 
 	ap := r.Get(auth.PluginName).(*auth.AuthPlugin)
 	ap.AddLoginHandler(ProviderName, p.handleLogin)
+
 	return nil
 }
 
@@ -238,13 +239,6 @@ func (p *GooglePlugin) handleGoogleCallback(w http.ResponseWriter, r *http.Reque
 	logging.Info(ctx, "Google Login: forwarding callback to GRPC handler")
 	w.Header().Add("location", u.String())
 	w.WriteHeader(302)
-}
-
-// Exposes the client ID, so that frontends which use the Google SDK can use it
-// without it being baked into the build.
-func (p *GooglePlugin) handleGoogleClientID(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("content-type", "application/json")
-	w.Write([]byte(`{"client_id":"` + p.clientID + `"}`))
 }
 
 // Handle an OAuth2 authorization code retrieved from Google.

@@ -13,6 +13,10 @@ server:
   host: localhost
   port: 8000
 
+  # Jey ysed to sign CSRF tokens. Changing this will invalidate any outstanding
+  # tokens.
+  csrfsigningkey: helloworld
+
   # Optional server configuration:
 
   # Override the default GRPC max msg size.

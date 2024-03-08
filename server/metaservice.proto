@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package prefab.server;
+option go_package = "github.com/dpup/prefab/server";
+
+import "google/api/annotations.proto";
+
+service MetaService {
+
+  // ClientConfig returns configuration information that is required for clients
+  // to interact with the server in various ways. All data is safe to be served
+  // to unauthenticatd clients.
+  rpc ClientConfig(ClientConfigRequest) returns (ClientConfigResponse) {
+    option (google.api.http) = {
+      get: "/api/meta/config"
+    };
+  }
+
+  // Could add healthchecks here.
+
+}
+
+// Empty request object.
+message ClientConfigRequest {}
+
+// Configuration information to help clients facilitate interactions with the
+// API server.
+message ClientConfigResponse {
+
+  // A map of key-value pairs configured by available plugins, for example
+  // auth.google.client_id.
+  map<string, string> configs = 1;
+
+  // Token that should be used in non-XHR requests to avoid cross-site request
+  // forgery attacks.
+  string csrf_token = 2;
+
+}

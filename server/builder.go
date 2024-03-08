@@ -26,7 +26,7 @@ import (
 const (
 	// GRPC Metadata prefix that is added to allowed headers specified with
 	// WithIncomingHeaders.
-	MetadataPrefix = "prefab-"
+	MetadataPrefix = "pf-header-"
 )
 
 // ServerOptions customize the configuration and operation of the GRPC server.
@@ -47,12 +47,14 @@ func New(opts ...ServerOption) *Server {
 		certFile:        viper.GetString("server.tls.certfile"),
 		keyFile:         viper.GetString("server.tls.keyfile"),
 		maxMsgSizeBytes: viper.GetInt("server.maxmsgsizebytes"),
+		csrfSigningKey:  []byte(viper.GetString("server.csrfsigningkey")),
 
 		plugins: &plugin.Registry{},
 	}
 	for _, opt := range opts {
 		opt(b)
 	}
+
 	return b.build()
 }
 
@@ -69,6 +71,8 @@ type builder struct {
 	interceptors    []grpc.UnaryServerInterceptor
 	plugins         *plugin.Registry
 	serverBuilders  []func(s *Server)
+	clientConfigs   map[string]string
+	csrfSigningKey  []byte
 }
 
 func (b *builder) build() *Server {
@@ -84,6 +88,9 @@ func (b *builder) build() *Server {
 				EmitUnpopulated: true,
 			},
 		}),
+
+		// Map CSRF query param to metadata.
+		runtime.WithMetadata(csrfMetadataAnnotator),
 
 		// Forward custom HTTP status codes for GRPC responses.
 		runtime.WithForwardResponseOption(statusCodeForwarder),
@@ -131,6 +138,11 @@ func (b *builder) build() *Server {
 		s.httpMux.Handle(h.prefix, b.wrapHandler(h.handler))
 	}
 
+	// Register the metaservice last so that it can see all the client configs.
+	m := &meta{configs: b.clientConfigs, csrfSigningKey: b.csrfSigningKey}
+	s.ServiceRegistrar().RegisterService(&MetaService_ServiceDesc, m)
+	_ = RegisterMetaServiceHandlerFromEndpoint(s.GatewayArgs())
+
 	return s
 }
 
@@ -159,7 +171,13 @@ func (b *builder) wrapHandler(h http.Handler) http.Handler {
 }
 
 func (b *builder) buildGRPCOpts() []grpc.ServerOption {
-	interceptors := append([]grpc.UnaryServerInterceptor{configInjector, logging.Interceptor()}, b.interceptors...)
+	interceptors := append(
+		[]grpc.UnaryServerInterceptor{
+			configInjector,
+			logging.Interceptor(),
+			csrfInterceptor(b.csrfSigningKey),
+		},
+		b.interceptors...)
 	opts := []grpc.ServerOption{grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(interceptors...))}
 	if b.isSecure() {
 		opts = append(opts, grpc.Creds(serverTLSFromFile(b.certFile, b.keyFile)))
@@ -329,6 +347,17 @@ func WithPlugin(p plugin.Plugin) ServerOption {
 			}
 		}
 		b.plugins.Register(p)
+	}
+}
+
+// WithClientConfig adds a key value pair which will be made available to the
+// client via the metaservice.
+func WithClientConfig(key, value string) ServerOption {
+	return func(b *builder) {
+		if b.clientConfigs == nil {
+			b.clientConfigs = map[string]string{}
+		}
+		b.clientConfigs[key] = value
 	}
 }
 

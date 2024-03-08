@@ -44,7 +44,7 @@ var (
 
 const (
 	// Cookie name used for storing the prefab identity token.
-	IdentityTokenCookieName = "pfid"
+	IdentityTokenCookieName = "pf-id"
 )
 
 type Claims struct {
@@ -152,7 +152,7 @@ func IdentityFromContext(ctx context.Context) (Identity, error) {
 
 func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
-	a, ok := md["authorization"] // GRPC Gateway forwards header without prefix.
+	a, ok := md["authorization"] // GRPC Gateway forwards this header without prefix.
 
 	if !ok || len(a) == 0 || a[0] == "" {
 		return Identity{}, ErrNotFound

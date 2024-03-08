@@ -59,7 +59,8 @@
       fetch('/api/auth/login', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-CSRF-Protection': 1,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -80,7 +81,8 @@
       fetch('/api/auth/login', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-CSRF-Protection': 1,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -103,7 +105,10 @@
     function requestAuthUser() {
       fetch('/api/auth/me', {
         method: 'GET',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'X-CSRF-Protection': 1,
+        }
       })
         .then(response => {
           if (response.ok) {
