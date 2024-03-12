@@ -40,7 +40,6 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 	}
 
 	// TODO: Verify redirect_uri is a path or has a valid host.
-	// TODO: If IssueToken is false, protect against CSRF attacks.
 
 	if h, ok := s.handlers[in.Provider]; ok {
 		resp, err := h(ctx, in)

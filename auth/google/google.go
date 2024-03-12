@@ -6,8 +6,19 @@
 //
 // ## Client side authentication
 //
-// TK: Add notes about how to install the SDK.
-// TK: Explain how to pass the id_token to the server for validation.
+// The client side flow uses the Google SDK to retrieve an identity token, which
+// is then passed to the server for validation.
+//
+// 1. The user clicks on the "Sign in with Google" button.
+// 2. The Google SDK opens a popup window.
+// 3. The user logs in and grants access to the app.
+// 4. The Google SDK returns an identity token to a javascript callback.
+// 5. The client passes the identity token to the server's login endpoint.
+// 6. The server validates the token and sets a cookie.
+// 7. Subsequent API requests are authenticated via the cookie.
+//
+// A non-cookie option is to pass `issue_token` in the login endpoint, which
+// will prompt the server to return an access token without setting cookies.
 //
 // ## Server side authentication
 //
@@ -45,11 +56,6 @@
 // 7. The server creates an identity token and sets a cookie.
 // 8. The server redirects the user to the destination specified in the original request.
 // 9. Subsequent API requests are authenticated via the cookie.
-//
-// ## Server side authentication without cookies
-//
-// TODO: Implement "IssueToken" flow, where the code is returned to the client,
-// which then needs to call the endpoint again to exchange for an identity token.
 //
 // ## Configuring Google OAuth App
 //
