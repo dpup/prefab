@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package prefab.server;
+option go_package = "github.com/dpup/prefab/server";
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MethodOptions {
+  // Whether CSRF verification should be handled by a GRPC Interceptor.
+  //
+  // Possible values are "on", "off", and "auto".
+  //
+  // "auto" will enable CSRF checks unless a safe HTTP method is detected (GET,
+  // HEAD, and OPTIONS) from the GRPC Gateway. If no HTTP method is detected, it
+  // is assumed that the request came via a non-browser client and CSRF checks
+  // are disabled.
+  //
+  // Defaults to "auto".
+  string csrf_mode = 50001;
+}

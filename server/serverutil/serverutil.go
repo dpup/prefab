@@ -4,10 +4,15 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 // CookiesFromIncomingContext reads a standard HTTP cookie header from the GRPC
@@ -55,4 +60,26 @@ func ParseCookies(headers ...string) map[string]*http.Cookie {
 		cookies[c.Name] = c
 	}
 	return cookies
+}
+
+// MethodOption queries the value of a proto option for a GRPC method.
+//
+// TODO: Consider creating an interceptor which injects the MethodDescriptor
+// into the context. Then use methods which query options from the context, such
+// that this can be used from both interceptors and handlers.
+//
+// Example:
+// ok, value, err := MethodOption(info, SomeProto.E_Option)
+func MethodOption(info *grpc.UnaryServerInfo, ext protoreflect.ExtensionType) (any, bool) {
+	name := strings.ReplaceAll(info.FullMethod, "/", ".")
+	name = strings.TrimPrefix(name, ".")
+	methodDesc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(name))
+	if err != nil {
+		panic("unexpected error accessing method descriptor for " + name + ": " + err.Error())
+	}
+	opts := methodDesc.Options().(*descriptorpb.MethodOptions)
+	if proto.HasExtension(opts, ext) {
+		return proto.GetExtension(opts, ext), true
+	}
+	return nil, false
 }

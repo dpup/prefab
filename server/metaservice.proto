@@ -4,6 +4,7 @@ package prefab.server;
 option go_package = "github.com/dpup/prefab/server";
 
 import "google/api/annotations.proto";
+import "server/server.proto";
 
 service MetaService {
 
@@ -11,6 +12,7 @@ service MetaService {
   // to interact with the server in various ways. All data is safe to be served
   // to unauthenticatd clients.
   rpc ClientConfig(ClientConfigRequest) returns (ClientConfigResponse) {
+    option (csrf_mode) = "off";
     option (google.api.http) = {
       get: "/api/meta/config"
     };

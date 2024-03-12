@@ -5,13 +5,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net/http"
-	"net/textproto"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
+	"github.com/dpup/prefab/server/serverutil"
 	"github.com/spf13/viper"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -21,12 +21,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-)
-
-const (
-	// GRPC Metadata prefix that is added to allowed headers specified with
-	// WithIncomingHeaders.
-	MetadataPrefix = "pf-header-"
 )
 
 // ServerOptions customize the configuration and operation of the GRPC server.
@@ -92,6 +86,9 @@ func (b *builder) build() *Server {
 		// Map CSRF query param to metadata.
 		runtime.WithMetadata(csrfMetadataAnnotator),
 
+		// Map request fields to metadata.
+		runtime.WithMetadata(serverutil.HttpMetadataAnnotator),
+
 		// Forward custom HTTP status codes for GRPC responses.
 		runtime.WithForwardResponseOption(statusCodeForwarder),
 
@@ -101,8 +98,8 @@ func (b *builder) build() *Server {
 		// TODO: Add support for form encoded data out of the box.
 		// runtime.WithMarshalerOption("application/x-www-form-urlencoded", &FormMarshaler{}),
 
-		// Support for standard headers plus propriety Productable headers.
-		runtime.WithIncomingHeaderMatcher(b.buildGatewayHeaderMatcher()),
+		// Support for standard headers plus propriety application headers.
+		runtime.WithIncomingHeaderMatcher(serverutil.HeaderMatcher(b.incomingHeaders)),
 
 		// By default standard headers and metadata prefixed with Grpc-Metadata-
 		// will be propagated over HTTP.
@@ -197,20 +194,6 @@ func (b *builder) buildGatewayOpts() []grpc.DialOption {
 	}
 	// TODO: Allow a local connection for testing.
 	return opts
-}
-
-func (b *builder) buildGatewayHeaderMatcher() func(string) (string, bool) {
-	headerMap := map[string]bool{}
-	for _, h := range b.incomingHeaders {
-		headerMap[h] = true
-	}
-	return func(key string) (string, bool) {
-		key = textproto.CanonicalMIMEHeaderKey(key)
-		if headerMap[key] {
-			return MetadataPrefix + key, true
-		}
-		return runtime.DefaultHeaderMatcher(key)
-	}
 }
 
 func (b *builder) isSecure() bool {

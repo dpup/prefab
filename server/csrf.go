@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/server/serverutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -64,12 +65,12 @@ func SendCSRFToken(ctx context.Context, signingKey []byte) string {
 // token in the query params and cookies, and verifies that they match. If the
 // token is missing or invalid, an error is returned.
 func VerifyCSRF(ctx context.Context, signingKey []byte) error {
-	md, _ := metadata.FromIncomingContext(ctx)
-	if v := md.Get(MetadataPrefix + csrfHeader); len(v) == 1 {
+	if h := serverutil.HttpHeader(ctx, csrfHeader); h != "" {
 		// Simply the presence of the header is enough.
 		return nil
 	}
 
+	md, _ := metadata.FromIncomingContext(ctx)
 	params := md.Get(csrfParam)
 	if len(params) == 0 || params[0] == "" {
 		return status.Errorf(codes.FailedPrecondition, "csrf: missing token in request")
@@ -94,16 +95,6 @@ func csrfTokenFromCookie(ctx context.Context) string {
 		return ""
 	}
 	return c.Value
-}
-
-// Maps the CSRF query-param to GRPC metadata.
-func csrfMetadataAnnotator(_ context.Context, r *http.Request) metadata.MD {
-	md := map[string]string{}
-	ct := r.URL.Query().Get(csrfParam)
-	if ct != "" {
-		md[csrfParam] = ct
-	}
-	return metadata.New(md)
 }
 
 func generateCSRFToken(signingKey []byte) string {
@@ -148,11 +139,49 @@ func verifyCSRFToken(token string, signingKey []byte) error {
 	return nil
 }
 
+// Gateway option that maps the CSRF query-param to incoming GRPC metadata.
+func csrfMetadataAnnotator(_ context.Context, r *http.Request) metadata.MD {
+	md := map[string]string{}
+	ct := r.URL.Query().Get(csrfParam)
+	if ct != "" {
+		md[csrfParam] = ct
+	}
+	return metadata.New(md)
+}
+
+// GRPC interceptor that handles CSRF checks.
 func csrfInterceptor(signingKey []byte) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		mode := "auto"
+		if v, ok := serverutil.MethodOption(info, E_CsrfMode); ok {
+			mode = strings.ToLower(v.(string))
+		}
+
+		if mode == "off" {
+			logging.Track(ctx, "server.csrf_mode", "off")
+			return handler(ctx, req)
+		}
+
+		if mode == "auto" {
+			if httpMethod := serverutil.HttpMethod(ctx); httpMethod == "" {
+				// If no HTTP method, assume non-browser client and skip checks.
+				logging.Track(ctx, "server.csrf_mode", "auto-off")
+				return handler(ctx, req)
+			} else if httpMethod == "GET" || httpMethod == "HEAD" || httpMethod == "OPTIONS" {
+				// None mutating requests, generally don't need protection.
+				logging.Track(ctx, "server.csrf_mode", "auto-off")
+				return handler(ctx, req)
+			}
+			logging.Track(ctx, "server.csrf_mode", "auto-on")
+		} else {
+			logging.Track(ctx, "server.csrf_mode", "on")
+		}
+
+		// If we're here, we need to verify the CSRF token.
 		if err := VerifyCSRF(ctx, signingKey); err != nil {
 			return nil, err
 		}
+
 		return handler(ctx, req)
 	}
 }
