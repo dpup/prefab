@@ -16,8 +16,64 @@
 
 ## Features
 
-- [CSRF Protection](#csrf-protection)
 - [Plugin Model](#plugin-model)
+- [Authentication](#authentication)
+- [CSRF Protection](#csrf-protection)
+
+### Plugin Model
+
+The base server is intended to have everything need to run a standalone service
+that multiplexes across a GRPC interface, a JSON/REST interface via the GRPC
+Gateway, and arbitrary HTTP handlers, for non-GRPC functionality. Additional
+functionality is exposed as plugins.
+
+Plugins are essentially server scoped singletons which add functionality to the
+base server, expose functionality for other plugins, or extend other plugins.
+
+As an example, the `Magic Link Plugin` extends the `Auth Plugin` to add
+authentication via email. It also depends on an `Email Plugin` for email sending,
+and a `Template Plugin` for rendering HTML emails.
+
+It is intended that plugins can be have interchangable implementations to allow
+customization at various parts of the stack.
+
+#### Plugin interfaces
+
+Plugins can implement a number of discrete interfaces:
+
+- `plugin.Plugin` : the required base interface which provides a name for each plugin.
+- `plugin.DependentPlugin` : allows plugins to specify other plugins which they need to use.
+- `plugin.InitializablePlugin` : plugins will be initialized in dependency order, allowing for more control of setup.
+- `server.OptionProvider` : used to change server behavior, add services, or handlers. See `server.Option` for full functionality.
+
+By convention, plugins should be created by a `Plugin` function. If the plugin
+is intended to be used by other plugins, it's name should be exported as
+`PluginName`. For example, `gpt.Plugin(...)` and `gpt.PluginName`.
+
+Explore the GoDoc and examples to learn how to use each plugin.
+
+### Authentication
+
+Prefab offers a number of authentication plugins that can speed up development
+of logged in experiences.
+
+Core functionality is provided by `auth.Plugin()`, however at least one auth
+provider should be registered. The following providers are currently included.
+
+- [Google SSO](./examples/googleauth/googleauth.go)
+- [Magiclink passwordless login](./examples/magiclinkauth/magiclinkauth.go)
+
+Login is initiated through the `auth.Login()` RPC or the `/api/auth/login`
+endpoint.
+
+Clients can access identity information through the `auth.Identity()` RPC or the
+`/api/auth/me` endpoint. 
+
+Authentication can be performed through bearer tokens or cookies.
+
+Importantly, the authentication plugins make an authenticated identity available,
+however, it does not handle authorization. That must be handled by application
+code.
 
 ### CSRF Protection
 
@@ -71,22 +127,3 @@ fetch('/api/users/154', {
 })
 ```
 
-### Plugin Model
-
-Plugins are essentially server scoped singletons.
-
-Plugins expose a `Name()` method which returns a string used for querying
-plugins and for dependency resolution.
-
-Plugins may expose a `Deps()` method which returns a list of names of plugins
-that should be initialized before hand.
-
-Plugins may expose a `ServerOptions()` method, which allows for the registration
-of HTTP handlers, GRPC handlers, and interceptors.
-
-Plugins may expose an `Init()` method, which is called when the server starts
-up, this can be used for getting references to other plugins.
-
-By convention, plugins should be created by a `Plugin` function. If the plugin
-is intended to be used by other plugins, it's name should be exported as
-`PluginName`. For example, `gpt.Plugin(...)` and `gpt.PluginName`.

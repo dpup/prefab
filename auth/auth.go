@@ -1,6 +1,18 @@
-// Package auth provides utilities for authenticating requests. It is intended
-// to be used in conjunction with identity providers and ACLs. On its own, it
-// should not be used for authorization of access to resources.
+// Package auth provides utilities for authenticating requests.
+//
+// Authentication is delegated to an identity provider, which is responsible for
+// verifying the identity of the client and returning an identity token. The
+// identity token is then signed and returned to the client as a JWT — either as
+// a cookie or in the response.
+//
+// The client then uses the cookie, or token, to authenticate future requests.
+//
+// Identity Providers should implement the LoginHandler interface, and register
+// it with AddLoginHandler. This will hook the provider into the Login endpoint
+// and allow it to handle login requests.
+//
+// Observe the google or magiclink example for a complete example of how to use
+// this package.
 package auth
 
 import (
