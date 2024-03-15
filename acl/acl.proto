@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package prefab.acl;
+option go_package = "github.com/dpup/prefab/acl";
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MethodOptions {
+  string action = 50011;
+  string object_key = 50012;
+  string default_effect = 50013;
+}
+
+extend google.protobuf.FieldOptions {
+  bool object_id = 50021;
+  bool domain_id = 50022;
+}
+

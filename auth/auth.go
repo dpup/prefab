@@ -212,3 +212,12 @@ func identityFromCookie(ctx context.Context) (Identity, error) {
 	}
 	return identity, nil
 }
+
+// ContextWithIdentityForTest creates a new context with the given identity
+// attached. This is useful for testing, where we want to simulate a request
+// with a given identity.
+func ContextWithIdentityForTest(ctx context.Context, identity Identity) context.Context {
+	tokenString, _ := IdentityToken(ctx, identity)
+	md := metadata.Pairs("authorization", tokenString)
+	return metadata.NewIncomingContext(ctx, md)
+}

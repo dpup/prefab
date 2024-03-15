@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package prefab.acl_test;
+option go_package = "github.com/dpup/prefab/acl/acltest";
+
+import "google/api/annotations.proto";
+import "acl/acl.proto";
+
+service AclTestService {
+
+  rpc NoACL(Request) returns (Response) {
+    option (google.api.http) = {
+      get: "/test/no-acl"
+    };
+  }
+
+
+  rpc ActionOnly(Request) returns (Response) {
+    option (prefab.acl.action) = "action_only";
+    option (google.api.http) = {
+      get: "/test/action-only"
+    };
+  }
+
+  // Demonstrates a standard deny ACL. All users are denied by default, and a
+  // policy can be used to allow certain roles to view the document.
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse) {
+    option (prefab.acl.action) = "documents.view";
+    option (prefab.acl.object_key) = "document";
+    option (prefab.acl.default_effect) = "deny";
+    
+    option (google.api.http) = {
+      get: "/test/{org_id}/docs/{document_id}"
+    };
+  }
+
+  // Another standard deny ACL, but with a different action.
+  rpc SaveDocument(GetDocumentRequest) returns (GetDocumentResponse) {
+    option (prefab.acl.action) = "documents.write";
+    option (prefab.acl.object_key) = "document";
+    option (prefab.acl.default_effect) = "deny";
+    
+    option (google.api.http) = {
+      put: "/test/{org_id}/docs/{document_id}"
+    };
+  }
+
+  // Demonstrates a default allow ACL. Policies can be used to restrict certain
+  // roles from viewing the title.
+  rpc GetDocumentTitle(GetDocumentRequest) returns (GetDocumentResponse) {
+    option (prefab.acl.action) = "documents.view_title";
+    option (prefab.acl.object_key) = "document";
+    option (prefab.acl.default_effect) = "allow";
+    
+    option (google.api.http) = {
+      get: "/test/{org_id}/docs/{document_id}/title"
+    };
+  }
+}
+
+message Request {
+  string field = 1;
+}
+
+message Response {
+  bool success = 1;
+}
+
+message GetDocumentRequest {
+  string org_id = 1 [(prefab.acl.domain_id) = true];
+  string document_id = 2 [(prefab.acl.object_id) = true];
+}
+
+message GetDocumentResponse {
+  bool success = 1;
+}

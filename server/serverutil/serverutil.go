@@ -83,3 +83,29 @@ func MethodOption(info *grpc.UnaryServerInfo, ext protoreflect.ExtensionType) (a
 	}
 	return nil, false
 }
+
+// FieldOption queries a request proto and returns all fields which have the
+// option set.
+func FieldOption(msg proto.Message, ext protoreflect.ExtensionType) ([]*FieldOptionValue, bool) {
+	var results []*FieldOptionValue
+	m := msg.ProtoReflect()
+	fields := m.Descriptor().Fields()
+	for i := 0; i < fields.Len(); i++ {
+		fd := fields.Get(i)
+		opts := fd.Options().(*descriptorpb.FieldOptions)
+		if proto.HasExtension(opts, ext) {
+			results = append(results, &FieldOptionValue{
+				FieldName:   string(fd.Name()),
+				FieldValue:  m.Get(fd).Interface(),
+				OptionValue: proto.GetExtension(opts, ext),
+			})
+		}
+	}
+	return results, len(results) > 0
+}
+
+type FieldOptionValue struct {
+	FieldName   string
+	FieldValue  any
+	OptionValue any
+}
