@@ -12,12 +12,40 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Constant name for identifying the core acl plugin
+// Constant name for identifying the core ACL plugin
 const PluginName = "acl"
 
+// Configuration options for the ACL Plugin.
+type AclOption func(*AclPlugin)
+
 // Plugin returns a new AclPlugin.
-func Plugin() *AclPlugin {
-	return &AclPlugin{}
+func Plugin(opts ...AclOption) *AclPlugin {
+	ap := &AclPlugin{}
+	for _, opt := range opts {
+		opt(ap)
+	}
+	return ap
+}
+
+// WithPolicy adds an ACL policy to the plugin.
+func WithPolicy(effect Effect, role Role, action Action) AclOption {
+	return func(ap *AclPlugin) {
+		ap.DefinePolicy(effect, role, action)
+	}
+}
+
+// WithRoleDescriber adds a role describer to the plugin.
+func WithObjectFetcher(objectKey string, fn ObjectFetcher) AclOption {
+	return func(ap *AclPlugin) {
+		ap.RegisterObjectFetcher(objectKey, fn)
+	}
+}
+
+// WithRoleDescriber adds a role describer to the plugin.
+func WithRoleDescriber(objectKey string, fn RoleDescriber) AclOption {
+	return func(ap *AclPlugin) {
+		ap.RegisterRoleDescriber(objectKey, fn)
+	}
 }
 
 // AclPlugin provides functionality for authorizing requests and access to resources.

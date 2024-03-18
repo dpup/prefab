@@ -82,10 +82,10 @@ func TestAclPlugin_determineEffect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ap := &acl.AclPlugin{}
-			ap.DefinePolicy(acl.Allow, acl.Role("admin"), acl.Action("write"))
-			ap.DefinePolicy(acl.Deny, acl.Role("nyc-employee"), acl.Action("write"))
-
+			ap := acl.Plugin(
+				acl.WithPolicy(acl.Allow, acl.Role("admin"), acl.Action("write")),
+				acl.WithPolicy(acl.Deny, acl.Role("nyc-employee"), acl.Action("write")),
+			)
 			if got := ap.DetermineEffect(tt.args.action, tt.args.roles, tt.args.defaultEffect); got != tt.want {
 				t.Errorf("AclPlugin.determineEffect() = %v, want %v", got, tt.want)
 			}
@@ -101,31 +101,32 @@ type testDocument struct {
 }
 
 func TestInterceptor(t *testing.T) {
-	ap := acl.AclPlugin{}
-	ap.DefinePolicy(acl.Allow, acl.Role("admin"), acl.Action("documents.write"))
-	ap.DefinePolicy(acl.Allow, acl.Role("admin"), acl.Action("documents.view"))
-	ap.DefinePolicy(acl.Allow, acl.Role("standard"), acl.Action("documents.view"))
-	ap.DefinePolicy(acl.Deny, acl.Role("nyc-employee"), acl.Action("documents.write"))
-	ap.RegisterObjectFetcher("document", func(ctx context.Context, key any) (any, error) {
-		switch key.(string) {
-		case "1":
-			return &testDocument{id: "1", author: "bob@test.com", title: "Test Document", body: "This is a test document."}, nil
-		case "2":
-			return &testDocument{id: "2", author: "betty@test.com", title: "Another Document", body: "This is another test document."}, nil
-		default:
-			return nil, status.Errorf(codes.NotFound, "document not found")
-		}
-	})
-	ap.RegisterRoleDescriber("document", func(ctx context.Context, subject auth.Identity, object any, domain acl.Domain) ([]acl.Role, error) {
-		doc := object.(*testDocument)
-		if subject.Email == doc.author {
-			return []acl.Role{"admin"}, nil
-		} else if subject.Email != "" {
-			return []acl.Role{"standard"}, nil
-		} else {
-			return []acl.Role{}, nil
-		}
-	})
+	ap := acl.Plugin(
+		acl.WithPolicy(acl.Allow, acl.Role("admin"), acl.Action("documents.write")),
+		acl.WithPolicy(acl.Allow, acl.Role("admin"), acl.Action("documents.view")),
+		acl.WithPolicy(acl.Allow, acl.Role("standard"), acl.Action("documents.view")),
+		acl.WithPolicy(acl.Deny, acl.Role("nyc-employee"), acl.Action("documents.write")),
+		acl.WithObjectFetcher("document", func(ctx context.Context, key any) (any, error) {
+			switch key.(string) {
+			case "1":
+				return &testDocument{id: "1", author: "bob@test.com", title: "Test Document", body: "This is a test document."}, nil
+			case "2":
+				return &testDocument{id: "2", author: "betty@test.com", title: "Another Document", body: "This is another test document."}, nil
+			default:
+				return nil, status.Errorf(codes.NotFound, "document not found")
+			}
+		}),
+		acl.WithRoleDescriber("document", func(ctx context.Context, subject auth.Identity, object any, domain acl.Domain) ([]acl.Role, error) {
+			doc := object.(*testDocument)
+			if subject.Email == doc.author {
+				return []acl.Role{"admin"}, nil
+			} else if subject.Email != "" {
+				return []acl.Role{"standard"}, nil
+			} else {
+				return []acl.Role{}, nil
+			}
+		}),
+	)
 
 	type args struct {
 		identity auth.Identity
