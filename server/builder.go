@@ -95,8 +95,8 @@ func (b *builder) build() *Server {
 		// Patch error responses to include a codeName for easier client handling.
 		runtime.WithErrorHandler(gatewayErrorHandler),
 
-		// TODO: Add support for form encoded data out of the box.
-		// runtime.WithMarshalerOption("application/x-www-form-urlencoded", &FormMarshaler{}),
+		// Support form encoded payloads.
+		runtime.WithMarshalerOption("application/x-www-form-urlencoded", &formDecoder{}),
 
 		// Support for standard headers plus propriety application headers.
 		runtime.WithIncomingHeaderMatcher(serverutil.HeaderMatcher(b.incomingHeaders)),

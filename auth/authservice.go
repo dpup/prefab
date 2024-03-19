@@ -44,6 +44,10 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 	if h, ok := s.handlers[in.Provider]; ok {
 		resp, err := h(ctx, in)
 
+		// TODO: If the handler returns an error we may still want to send to the
+		// redirect_uri with an error message, so the user doesn't end on a raw JSON
+		// response.
+
 		if resp != nil && resp.RedirectUri != "" {
 			// Send a 302 redirect.
 			serverutil.SendStatusCode(ctx, 302)

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-white">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prefab Password Auth Example</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+</head>
+
+<body class="h-full">
+
+  <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+    <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+      <h2 class="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
+        Prefab Password Auth Example
+      </h2>
+    </div>
+
+    <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+      <div>
+        <div class="px-4 sm:px-0">
+          <h3 class="text-base font-semibold leading-7 text-gray-900">Current identity</h3>
+        </div>
+        <div class="mt-6 border-t border-gray-100">
+          <dl class="divide-y divide-gray-100">
+            <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+              <dt class="text-sm font-medium leading-6 text-gray-900">ID</dt>
+              <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0" id="id">Unauthenticated</dd>
+            </div>
+            <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+              <dt class="text-sm font-medium leading-6 text-gray-900">Email</dt>
+              <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0" id="email">Unauthenticated</dd>
+            </div>
+            <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+              <dt class="text-sm font-medium leading-6 text-gray-900">Full name</dt>
+              <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0" id="name">Unauthenticated</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    fetch('/api/auth/me', {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'X-CSRF-Protection': 1,
+      },
+    })
+      .then(response => {
+        if (response.ok) {
+          return response.json().then(data => {
+            document.getElementById('name').innerText = data.name;
+            document.getElementById('email').innerText = data.email;
+            document.getElementById('id').innerText = data.subject;
+          });
+        } else {
+          console.log('Error response', response)
+        }
+      })
+      .catch(error => {
+        console.log('Error', error)
+      });
+  </script>
+</body>
+
+</html>

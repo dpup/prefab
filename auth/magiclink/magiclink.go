@@ -125,7 +125,6 @@ func (p *MagicLinkPlugin) Init(ctx context.Context, r *plugin.Registry) error {
 	return nil
 }
 
-// LoginHandler processes magiclink login requests.
 func (p *MagicLinkPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	if req.Provider != ProviderName {
 		return nil, status.Error(codes.InvalidArgument, "magiclink login handler called for wrong provider")
