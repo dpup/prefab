@@ -175,14 +175,14 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 		return nil, err
 	}
 
-	if len(roles) == 0 {
-		return nil, status.Errorf(codes.PermissionDenied, "you are not authorized to perform this action")
-	}
-
-	logging.Track(ctx, "acl.roles", roles)
 	logging.Track(ctx, "acl.action", action)
 	logging.Track(ctx, "acl.object", objectID)
 	logging.Track(ctx, "acl.domain", domainID)
+	logging.Track(ctx, "acl.roles", roles)
+
+	if len(roles) == 0 {
+		return nil, status.Errorf(codes.PermissionDenied, "you are not authorized to perform this action")
+	}
 
 	if ap.DetermineEffect(action, roles, defaultEffect) == Allow {
 		return handler(ctx, req)

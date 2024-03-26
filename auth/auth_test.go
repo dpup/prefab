@@ -49,7 +49,7 @@ func TestTokenExpiration(t *testing.T) {
 	}()
 
 	_, err = ParseIdentityToken(ctx, tokenString)
-	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = token has invalid claims: token is expired")
+	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = token has invalid claims: token is expired")
 }
 
 func TestTokenSigning(t *testing.T) {
@@ -65,14 +65,14 @@ func TestTokenSigning(t *testing.T) {
 	jwtSigningKey = originalKey
 
 	_, err = ParseIdentityToken(ctx, tokenString)
-	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = token signature is invalid: signature is invalid")
+	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = token signature is invalid: signature is invalid")
 }
 
 func TestIdentityFromEmptyContext(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := IdentityFromContext(ctx)
-	assert.EqualError(t, err, "rpc error: code = NotFound desc = identity not found")
+	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = identity not found")
 }
 
 func TestIdentityFromCookie(t *testing.T) {

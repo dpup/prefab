@@ -49,6 +49,9 @@ func New(opts ...ServerOption) *Server {
 		opt(b)
 	}
 
+	// Add the CSRF header to the safe-list.
+	b.incomingHeaders = append(b.incomingHeaders, csrfHeader)
+
 	return b.build()
 }
 

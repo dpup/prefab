@@ -32,10 +32,10 @@ import (
 
 var (
 	// No identity was found within the incoming context.
-	ErrNotFound = status.Error(codes.NotFound, "identity not found")
+	ErrNotFound = status.Error(codes.Unauthenticated, "identity not found")
 
 	// The token's expiration date was in the past.
-	ErrExpired = status.Error(codes.FailedPrecondition, "token has expired")
+	ErrExpired = status.Error(codes.Unauthenticated, "token has expired")
 
 	// The token was not signed correctly.
 	ErrInvalidToken = status.Error(codes.InvalidArgument, "token is invalid")
@@ -136,7 +136,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		jwt.WithIssuedAt(),
 	)
 	if err != nil {
-		return Identity{}, status.Error(codes.InvalidArgument, err.Error())
+		return Identity{}, status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {

@@ -56,7 +56,7 @@ func Test_methodOptions(t *testing.T) {
 				info: &grpc.UnaryServerInfo{FullMethod: acltest.AclTestService_GetDocumentTitle_FullMethodName},
 			},
 			wantObjectKey:     "document",
-			wantAction:        "documents.view_title",
+			wantAction:        "documents.view_meta",
 			wantDefaultEffect: acl.Allow,
 		},
 	}
