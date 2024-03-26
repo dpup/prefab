@@ -13,11 +13,9 @@ server:
   host: localhost
   port: 8000
 
-  # Jey ysed to sign CSRF tokens. Changing this will invalidate any outstanding
+  # Key used to sign CSRF tokens. Changing this will invalidate any outstanding
   # tokens.
   csrfsigningkey: helloworld
-
-  # Optional server configuration:
 
   # Override the default GRPC max msg size.
   # maxmsgsizebytes: 10485760 # 10MB
@@ -58,10 +56,15 @@ email:
 
 # Authentication configuration.
 auth:
+  # Signing key for identity tokens.
+  signingkey: helloworld
+  # How long identity tokens should be valid for.
+  expiration: 30d
 
   # Configuration for the magiclink plugin which allows for passwordless auth.
   magiclink:
-    # JWT signing key. Changing this will invalidate any outstanding tokens.
+    # JWT signing key for magic links. Changing this will invalidate any
+    # outstanding links.
     signingkey: helloworld
     # How magiclinks should should be active for.
     expiration: 15m

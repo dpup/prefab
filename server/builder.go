@@ -63,13 +63,16 @@ type builder struct {
 	certFile        string
 	keyFile         string
 	maxMsgSizeBytes int
+	csrfSigningKey  []byte
+
+	plugins *plugin.Registry
+
 	logger          logging.Logger
 	httpHandlers    []handler
 	interceptors    []grpc.UnaryServerInterceptor
-	plugins         *plugin.Registry
 	serverBuilders  []func(s *Server)
+	configInjectors []ConfigInjector
 	clientConfigs   map[string]string
-	csrfSigningKey  []byte
 }
 
 func (b *builder) build() *Server {
@@ -173,7 +176,7 @@ func (b *builder) wrapHandler(h http.Handler) http.Handler {
 func (b *builder) buildGRPCOpts() []grpc.ServerOption {
 	interceptors := append(
 		[]grpc.UnaryServerInterceptor{
-			configInjector,
+			configInterceptor(b.configInjectors),
 			logging.Interceptor(),
 			csrfInterceptor(b.csrfSigningKey),
 		},
@@ -344,6 +347,15 @@ func WithClientConfig(key, value string) ServerOption {
 			b.clientConfigs = map[string]string{}
 		}
 		b.clientConfigs[key] = value
+	}
+}
+
+// WithRequestConfig adds a ConfigInjector to the server. The injector will be
+// called for every request and can be used to inject request scoped
+// configuration into the context.
+func WithRequestConfig(injector ConfigInjector) ServerOption {
+	return func(b *builder) {
+		b.configInjectors = append(b.configInjectors, injector)
 	}
 }
 

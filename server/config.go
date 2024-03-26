@@ -24,9 +24,16 @@ func LoadDefaultConfig() {
 	}
 }
 
-func configInjector(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	// TODO: For now the address is considered global, but could be request
-	// specific in the future. I also don't love these stringly typed configs.
-	ctx = serverutil.WithAddress(ctx, viper.GetString("address"))
-	return handler(ctx, req)
+// Injects request scoped configuration from plugins.
+func configInterceptor(injectors []ConfigInjector) func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		ctx = serverutil.WithAddress(ctx, viper.GetString("address"))
+		for _, injector := range injectors {
+			ctx = injector(ctx)
+		}
+		return handler(ctx, req)
+	}
 }
+
+// ConfigInjector is a function that injects configuration into a context.
+type ConfigInjector func(context.Context) context.Context

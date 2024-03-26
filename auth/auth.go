@@ -43,13 +43,6 @@ var (
 	// Invalid authorization header.
 	ErrInvalidHeader = status.Error(codes.InvalidArgument, "bad authorization header")
 
-	// TODO: Move to pluggable configuration, support multiple registed signing
-	// keys.
-	jwtSigningKey = []byte("In a world of prefab dreams, authenticity gleams.")
-
-	// TODO: Customize token expiry.
-	identityExpiration = time.Hour * 24 * 30
-
 	// Allows for time to be stubbed in tests.
 	timeFunc = time.Now
 )
@@ -77,14 +70,13 @@ func (c *Claims) Validate() error {
 func SendIdentityCookie(ctx context.Context, token string) error {
 	address := serverutil.AddressFromContext(ctx)
 	isSecure := strings.HasPrefix(address, "https")
-
 	return serverutil.SendCookie(ctx, &http.Cookie{
 		Name:     IdentityTokenCookieName,
 		Value:    token,
 		Path:     "/",
 		Secure:   isSecure,
 		HttpOnly: true,
-		Expires:  time.Now().Add(identityExpiration),
+		Expires:  time.Now().Add(expirationFromContext(ctx)),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -102,7 +94,7 @@ func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 			Audience:  jwt.ClaimStrings{address},
 			Issuer:    address,
 			IssuedAt:  jwt.NewNumericDate(timeFunc()),
-			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(identityExpiration)),
+			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(expirationFromContext(ctx))),
 			Subject:   identity.Subject,
 		},
 		Name:          identity.Name,
@@ -111,7 +103,7 @@ func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 		AuthTime:      jwt.NewNumericDate(identity.AuthTime),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString(jwtSigningKey)
+	ss, err := token.SignedString(signingKeyFromContext(ctx))
 	if err != nil {
 		return "", err
 	}
@@ -127,7 +119,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		tokenString,
 		&Claims{},
 		func(token *jwt.Token) (interface{}, error) {
-			return jwtSigningKey, nil
+			return signingKeyFromContext(ctx), nil
 		},
 		jwt.WithIssuer(address), // TODO: Possibly relax to allow tokens created by other issuers.
 		jwt.WithAudience(address),

@@ -56,15 +56,10 @@ func TestTokenSigning(t *testing.T) {
 	ctx := context.Background()
 	identity := Identity{Subject: "2"}
 
-	originalKey := jwtSigningKey
-	jwtSigningKey = []byte("sneaky")
-
-	tokenString, err := IdentityToken(ctx, identity)
+	tokenString, err := IdentityToken(injectSigningKey("evil")(ctx), identity)
 	assert.Nil(t, err, "failed to issue token")
 
-	jwtSigningKey = originalKey
-
-	_, err = ParseIdentityToken(ctx, tokenString)
+	_, err = ParseIdentityToken(injectSigningKey("actual")(ctx), tokenString)
 	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = token signature is invalid: signature is invalid")
 }
 
