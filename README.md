@@ -1,24 +1,47 @@
 
-## Open design questions
+# Prefabricated gRPC Server and JSON/REST Gateway
 
-### Configuration
+**Prefab** is a library designed to streamline the setup of gRPC servers with a
+gRPC Gateway. It provides sensible defaults to get your server up and running
+with minimal boilerplate, while also offering configuration via environment
+variables, config files, or programmatic options.
 
-Currently Viper is used to allow configs to be derived from multiple sources.
-Within the code constructors often reach directly into viper to get the values
-via a string key, e.g:
+Furthermore, Prefab includes a suite of plugins, adding capabilities such as
+authentication, templating, and ACLs without adding bloat.
+
+## Features
+
+- **Quick setup:** A production ready GRPC server in 6 lines of code.
+- **Auth Plugin:** Authenticate users with Google, Magic Links, or Email/Password.
+- **ACLs:** Use proto options to define access rules for RPC endpoints.
+- **Security:** CSRF protection built in and options for configuring CORS.
+- **Logging:** Pluggable logging with request scoped field tracking.
+
+
+## Quick Start
+
+Given a GRPC service implementation, the following snippet will start a running
+server on `localhost:4321` serving both GRPC requests and JSON rest, with the
+only constraint that the GRPC path bindings must be prefixed with `/api/`.
 
 ```go
-func Plugin() *AuthPlugin {
-  return &AuthPlugin{
-    authService:   &impl{},
-    jwtSigningKey: viper.GetString("auth.signingkey"),
-    jwtExpiration: viper.GetDuration("auth.expiration"),
-  }
+package main
+
+import (
+  "fmt"
+  "github.com/dpup/prefab/server"
+)
+
+func main() {
+	s := server.New()
+	RegisterFooBarHandlerFromEndpoint(s.GatewayArgs())
+	RegisterFooBarServer(s.ServiceRegistrar(), &foobarImpl{})
+	if err := s.Start(); err != nil {
+		fmt.Println(err)
+	}
 }
 ```
 
-I don't like that this places a hard dependency on external configuration or
-that it uses stringly typed values.
 
 ## Opinions
 
@@ -35,13 +58,13 @@ that it uses stringly typed values.
 - Gomail for sending emails, defaults to SMTP but can be customized.
 - [TK] for templating. (e.g. for default login page)
 
-## Features
+## Plugins
 
-- [Plugin Model](#plugin-model)
+- [Plugin Model Overview](#plugin-model-overview)
 - [Authentication](#authentication)
 - [CSRF Protection](#csrf-protection)
 
-### Plugin Model
+### Plugin Model Overview
 
 The base server is intended to have everything need to run a standalone service
 that multiplexes across a GRPC interface, a JSON/REST interface via the GRPC

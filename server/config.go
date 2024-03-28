@@ -37,3 +37,17 @@ func configInterceptor(injectors []ConfigInjector) func(ctx context.Context, req
 
 // ConfigInjector is a function that injects configuration into a context.
 type ConfigInjector func(context.Context) context.Context
+
+func configString(key, d string) string {
+	if v := viper.GetString(key); v != "" {
+		return v
+	}
+	return d
+}
+
+func configInt(key string, d int) int {
+	if v := viper.GetInt(key); v != 0 {
+		return v
+	}
+	return d
+}

@@ -34,8 +34,8 @@ type handler struct {
 // New returns a new server.
 func New(opts ...ServerOption) *Server {
 	b := &builder{
-		host:            viper.GetString("server.host"),
-		port:            viper.GetInt("server.port"),
+		host:            configString("server.host", "localhost"),
+		port:            configInt("server.port", 4321),
 		corsOrigins:     viper.GetStringSlice("server.corsorigins"),
 		incomingHeaders: viper.GetStringSlice("server.incomingheaders"),
 		certFile:        viper.GetString("server.tls.certfile"),
