@@ -3,9 +3,9 @@ package acl
 import (
 	"context"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -65,10 +65,10 @@ func (ap *AclPlugin) Deps() []string {
 	return []string{auth.PluginName}
 }
 
-// From server.OptionProvider, registers an additional interceptor.
-func (ap *AclPlugin) ServerOptions() []server.ServerOption {
-	return []server.ServerOption{
-		server.WithGRPCInterceptor(ap.Interceptor),
+// From prefab.OptionProvider, registers an additional interceptor.
+func (ap *AclPlugin) ServerOptions() []prefab.ServerOption {
+	return []prefab.ServerOption{
+		prefab.WithGRPCInterceptor(ap.Interceptor),
 	}
 }
 

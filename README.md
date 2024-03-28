@@ -29,11 +29,11 @@ package main
 
 import (
   "fmt"
-  "github.com/dpup/prefab/server"
+  "github.com/dpup/prefab"
 )
 
 func main() {
-	s := server.New()
+	s := prefab.New()
 	RegisterFooBarHandlerFromEndpoint(s.GatewayArgs())
 	RegisterFooBarServer(s.ServiceRegistrar(), &foobarImpl{})
 	if err := s.Start(); err != nil {
@@ -88,7 +88,7 @@ Plugins can implement a number of discrete interfaces:
 - `plugin.Plugin` : the required base interface which provides a name for each plugin.
 - `plugin.DependentPlugin` : allows plugins to specify other plugins which they need to use.
 - `plugin.InitializablePlugin` : plugins will be initialized in dependency order, allowing for more control of setup.
-- `server.OptionProvider` : used to change server behavior, add services, or handlers. See `server.Option` for full functionality.
+- `prefab.OptionProvider` : used to change server behavior, add services, or handlers. See `prefab.Option` for full functionality.
 
 By convention, plugins should be created by a `Plugin` function. If the plugin
 is intended to be used by other plugins, it's name should be exported as
@@ -152,7 +152,7 @@ a `csrf-token` query param.
 
 The token can also be found in the `pf-ct` cookie. If you are using the cookie
 instead of requesting the token from the config endpoint then your server code
-will need to call `server.SendCSRFToken(ctx, signingKey)` at somepoint in the
+will need to call `prefab.SendCSRFToken(ctx, signingKey)` at somepoint in the
 user journey to ensure the cookie is set.
 
 Example XHR:

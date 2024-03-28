@@ -31,11 +31,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/acl"
 	"github.com/dpup/prefab/acl/acltest"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/pwdauth"
-	"github.com/dpup/prefab/server"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -58,13 +58,13 @@ type document struct {
 }
 
 func main() {
-	server.LoadDefaultConfig()
+	prefab.LoadDefaultConfig()
 
-	s := server.New(
+	s := prefab.New(
 		// Use basic email/password auth so that we can demonstrate different users
 		// seeing different results.
-		server.WithPlugin(auth.Plugin()),
-		server.WithPlugin(pwdauth.Plugin(
+		prefab.WithPlugin(auth.Plugin()),
+		prefab.WithPlugin(pwdauth.Plugin(
 			pwdauth.WithAccountFinder(accountStore{}), // Static user data.
 			pwdauth.WithHasher(pwdauth.TestHasher),    // Doesn't hash passwords.
 		)),
@@ -75,7 +75,7 @@ func main() {
 		// - Only the owner can write to a document.
 		// - For this example, roles will be additive. All authenticated users will
 		//   have the "standard" role. Then optionally "admin" and/or "owner".
-		server.WithPlugin(acl.Plugin(
+		prefab.WithPlugin(acl.Plugin(
 			acl.WithPolicy(acl.Allow, roleStandard, acl.Action("documents.view_meta")),
 			acl.WithPolicy(acl.Allow, roleStandard, acl.Action("documents.list")),
 			acl.WithPolicy(acl.Allow, roleDocOwner, acl.Action("documents.view")),

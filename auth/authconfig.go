@@ -4,20 +4,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/dpup/prefab/server"
+	"github.com/dpup/prefab"
 )
 
 type signingKey struct{}
 
 type tokenExpiration struct{}
 
-func injectSigningKey(b string) server.ConfigInjector {
+func injectSigningKey(b string) prefab.ConfigInjector {
 	return func(ctx context.Context) context.Context {
 		return context.WithValue(ctx, signingKey{}, b)
 	}
 }
 
-func injectExpiration(d time.Duration) server.ConfigInjector {
+func injectExpiration(d time.Duration) prefab.ConfigInjector {
 	return func(ctx context.Context) context.Context {
 		return context.WithValue(ctx, tokenExpiration{}, d)
 	}

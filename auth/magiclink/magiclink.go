@@ -39,7 +39,7 @@ import (
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/email"
 	"github.com/dpup/prefab/plugin"
-	"github.com/dpup/prefab/server/serverutil"
+	"github.com/dpup/prefab/serverutil"
 	"github.com/dpup/prefab/templates"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

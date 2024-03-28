@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/server/serverutil"
+	"github.com/dpup/prefab/serverutil"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

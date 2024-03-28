@@ -1,4 +1,4 @@
-package server
+package prefab
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
-	"github.com/dpup/prefab/server/serverutil"
+	"github.com/dpup/prefab/serverutil"
 	"github.com/spf13/viper"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"

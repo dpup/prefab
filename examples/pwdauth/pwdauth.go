@@ -7,23 +7,23 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/pwdauth"
-	"github.com/dpup/prefab/server"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func main() {
-	server.LoadDefaultConfig()
+	prefab.LoadDefaultConfig()
 
-	s := server.New(
-		server.WithPlugin(auth.Plugin()),
-		server.WithPlugin(pwdauth.Plugin(
+	s := prefab.New(
+		prefab.WithPlugin(auth.Plugin()),
+		prefab.WithPlugin(pwdauth.Plugin(
 			pwdauth.WithAccountFinder(accountStore{}),
 			pwdauth.WithHasher(pwdauth.TestHasher), // Doesn't hash passwords.
 		)),
-		server.WithStaticFiles("/", "./examples/pwdauth/static/"),
+		prefab.WithStaticFiles("/", "./examples/pwdauth/static/"),
 	)
 
 	fmt.Println("")

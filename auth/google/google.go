@@ -73,11 +73,11 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
-	"github.com/dpup/prefab/server"
-	"github.com/dpup/prefab/server/serverutil"
+	"github.com/dpup/prefab/serverutil"
 
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
@@ -134,11 +134,11 @@ func (p *GooglePlugin) Deps() []string {
 	return []string{auth.PluginName}
 }
 
-// From server.OptionProvider
-func (p *GooglePlugin) ServerOptions() []server.ServerOption {
-	return []server.ServerOption{
-		server.WithHTTPHandlerFunc("/api/auth/google/callback", p.handleGoogleCallback),
-		server.WithClientConfig("auth.google.clientId", p.clientID),
+// From prefab.OptionProvider
+func (p *GooglePlugin) ServerOptions() []prefab.ServerOption {
+	return []prefab.ServerOption{
+		prefab.WithHTTPHandlerFunc("/api/auth/google/callback", p.handleGoogleCallback),
+		prefab.WithClientConfig("auth.google.clientId", p.clientID),
 	}
 }
 

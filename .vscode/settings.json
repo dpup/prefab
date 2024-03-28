@@ -17,11 +17,16 @@
     ]
   },
   "cSpell.allowCompoundWords": true,
+  "cSpell.minWordLength": 4,
+  "cSpell.flagWords": ["hte"],
   "go.coverOnSave": true,
   "go.coverageDecorator": {
       "type": "gutter",
       "coveredGutterStyle": "blockgreen",
       "uncoveredGutterStyle": "blockred"
   },
-  "go.coverageOptions": "showUncoveredCodeOnly"
+  "go.coverageOptions": "showUncoveredCodeOnly",
+  "files.exclude": {
+    "*.touchfile": true
+  }
 }

@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/server"
 )
 
 func main() {
-	s := server.New(
-		server.WithHTTPHandler("/", http.HandlerFunc(ack)),
+	s := prefab.New(
+		prefab.WithHTTPHandler("/", http.HandlerFunc(ack)),
 	)
 
 	simpleservice.RegisterSimpleServiceHandlerFromEndpoint(s.GatewayArgs())

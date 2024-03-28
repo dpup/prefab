@@ -34,7 +34,7 @@ import (
 	"context"
 
 	"github.com/dpup/prefab/auth"
-	"github.com/dpup/prefab/server/serverutil"
+	"github.com/dpup/prefab/serverutil"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

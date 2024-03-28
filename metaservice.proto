@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package prefab.server;
-option go_package = "github.com/dpup/prefab/server";
+package prefab;
+option go_package = "github.com/dpup/prefab";
 
 import "google/api/annotations.proto";
-import "server/server.proto";
+import "server.proto";
 
 service MetaService {
 

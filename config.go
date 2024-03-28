@@ -1,11 +1,11 @@
-package server
+package prefab
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	"github.com/dpup/prefab/server/serverutil"
+	"github.com/dpup/prefab/serverutil"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )

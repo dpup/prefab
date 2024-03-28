@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
-	"github.com/dpup/prefab/server"
 	"github.com/dpup/prefab/storage"
 	"github.com/dpup/prefab/storage/memorystore"
 	"google.golang.org/grpc"
@@ -16,9 +16,9 @@ import (
 
 func main() {
 	// Initialize the server with the sample plugin and a memory store.
-	s := server.New(
-		server.WithPlugin(&samplePlugin{}),
-		server.WithPlugin(storage.Plugin(memorystore.New())),
+	s := prefab.New(
+		prefab.WithPlugin(&samplePlugin{}),
+		prefab.WithPlugin(storage.Plugin(memorystore.New())),
 	)
 
 	// Register the GRPC service handlers from the other example.
@@ -54,10 +54,10 @@ func (s *samplePlugin) Deps() []string {
 	return []string{storage.PluginName}
 }
 
-// From server.OptionProvider, registers an additional interceptor.
-func (s *samplePlugin) ServerOptions() []server.ServerOption {
-	return []server.ServerOption{
-		server.WithGRPCInterceptor(s.interceptor),
+// From prefab.OptionProvider, registers an additional interceptor.
+func (s *samplePlugin) ServerOptions() []prefab.ServerOption {
+	return []prefab.ServerOption{
+		prefab.WithGRPCInterceptor(s.interceptor),
 	}
 }
 

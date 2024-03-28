@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package prefab.server;
-option go_package = "github.com/dpup/prefab/server";
+package prefab;
+option go_package = "github.com/dpup/prefab";
 
 import "google/protobuf/descriptor.proto";
 

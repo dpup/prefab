@@ -9,25 +9,25 @@ package main
 import (
 	"fmt"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/magiclink"
 	"github.com/dpup/prefab/email"
-	"github.com/dpup/prefab/server"
 	"github.com/dpup/prefab/templates"
 )
 
 func main() {
-	server.LoadDefaultConfig()
+	prefab.LoadDefaultConfig()
 
 	// Initialize the server with the auth, email, and magiclink plugins, this
 	// should be enough to request a magic link and authenticate a client as that
 	// email account. There is no application logic or persistance.
-	s := server.New(
-		server.WithPlugin(auth.Plugin()),
-		server.WithPlugin(email.Plugin()),
-		server.WithPlugin(templates.Plugin()),
-		server.WithPlugin(magiclink.Plugin()),
-		server.WithStaticFiles("/", "./examples/magiclinkauth/static/"),
+	s := prefab.New(
+		prefab.WithPlugin(auth.Plugin()),
+		prefab.WithPlugin(email.Plugin()),
+		prefab.WithPlugin(templates.Plugin()),
+		prefab.WithPlugin(magiclink.Plugin()),
+		prefab.WithStaticFiles("/", "./examples/magiclinkauth/static/"),
 	)
 
 	fmt.Println("")

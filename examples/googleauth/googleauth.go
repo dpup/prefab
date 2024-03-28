@@ -9,18 +9,18 @@ package main
 import (
 	"fmt"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/google"
-	"github.com/dpup/prefab/server"
 )
 
 func main() {
-	server.LoadDefaultConfig()
+	prefab.LoadDefaultConfig()
 
-	s := server.New(
-		server.WithPlugin(auth.Plugin()),
-		server.WithPlugin(google.Plugin()),
-		server.WithStaticFiles("/", "./examples/googleauth/static/"),
+	s := prefab.New(
+		prefab.WithPlugin(auth.Plugin()),
+		prefab.WithPlugin(google.Plugin()),
+		prefab.WithStaticFiles("/", "./examples/googleauth/static/"),
 	)
 
 	fmt.Println("")

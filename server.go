@@ -1,7 +1,4 @@
-// Package server provides common helpers to streamline the initialization
-// and configuration of a typical hybrid web server, which can handle GRPC
-// JSON RPC, and regular HTTP handlers.
-package server
+package prefab
 
 import (
 	"context"
@@ -28,7 +25,7 @@ import (
 //
 // Usage:
 //
-//	server := grpcserver.New(opts...)
+//	server := server.New(opts...)
 //	debugservice.RegisterDebugServiceHandlerFromEndpoint(server.GatewayArgs())
 //	debugservice.RegisterDebugServiceServer(server.ServiceRegistrar(), &impl{})
 //	server.Start()

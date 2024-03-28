@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	"github.com/dpup/prefab/server"
+	"github.com/dpup/prefab"
 	"github.com/spf13/viper"
 )
 
@@ -54,13 +54,13 @@ func (ap *AuthPlugin) Name() string {
 	return PluginName
 }
 
-// From server.OptionProvider
-func (ap *AuthPlugin) ServerOptions() []server.ServerOption {
-	return []server.ServerOption{
-		server.WithGRPCService(&AuthService_ServiceDesc, ap.authService),
-		server.WithGRPCGateway(RegisterAuthServiceHandlerFromEndpoint),
-		server.WithRequestConfig(injectSigningKey(ap.jwtSigningKey)),
-		server.WithRequestConfig(injectExpiration(ap.jwtExpiration)),
+// From prefab.OptionProvider
+func (ap *AuthPlugin) ServerOptions() []prefab.ServerOption {
+	return []prefab.ServerOption{
+		prefab.WithGRPCService(&AuthService_ServiceDesc, ap.authService),
+		prefab.WithGRPCGateway(RegisterAuthServiceHandlerFromEndpoint),
+		prefab.WithRequestConfig(injectSigningKey(ap.jwtSigningKey)),
+		prefab.WithRequestConfig(injectExpiration(ap.jwtExpiration)),
 	}
 }
 
