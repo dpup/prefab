@@ -79,7 +79,6 @@ import (
 	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/serverutil"
 
-	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/idtoken"
@@ -109,8 +108,8 @@ func WithClient(id, secret string) GoogleOption {
 // Plugin for handling Google authentication.
 func Plugin(opts ...GoogleOption) *GooglePlugin {
 	p := &GooglePlugin{
-		clientID:     viper.GetString("auth.google.id"),
-		clientSecret: viper.GetString("auth.google.secret"),
+		clientID:     prefab.Config.String("auth.google.id"),
+		clientSecret: prefab.Config.String("auth.google.secret"),
 	}
 	for _, opt := range opts {
 		opt(p)

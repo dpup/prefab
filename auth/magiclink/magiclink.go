@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/email"
 	"github.com/dpup/prefab/plugin"
@@ -43,7 +44,6 @@ import (
 	"github.com/dpup/prefab/templates"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/gomail.v2"
@@ -80,8 +80,8 @@ func WithExpiration(expiration time.Duration) MagicLinkOption {
 // Plugin for handling passwordless authentication via email.
 func Plugin(opts ...MagicLinkOption) *MagicLinkPlugin {
 	p := &MagicLinkPlugin{
-		signingKey:      []byte(viper.GetString("auth.magiclink.signingkey")),
-		tokenExpiration: viper.GetDuration("auth.magiclink.expiration"),
+		signingKey:      prefab.Config.Bytes("auth.magiclink.signingKey"),
+		tokenExpiration: prefab.Config.Duration("auth.magiclink.expiration"),
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -171,7 +171,7 @@ func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirec
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
 	if err := p.emailer.Send(ctx, m); err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "magiclink: email sending failed: %v", err)
 	}
 
 	return &auth.LoginResponse{

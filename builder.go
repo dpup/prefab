@@ -12,7 +12,6 @@ import (
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/serverutil"
-	"github.com/spf13/viper"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -34,14 +33,14 @@ type handler struct {
 // New returns a new server.
 func New(opts ...ServerOption) *Server {
 	b := &builder{
-		host:            configString("server.host", "localhost"),
-		port:            configInt("server.port", 4321),
-		corsOrigins:     viper.GetStringSlice("server.corsorigins"),
-		incomingHeaders: viper.GetStringSlice("server.incomingheaders"),
-		certFile:        viper.GetString("server.tls.certfile"),
-		keyFile:         viper.GetString("server.tls.keyfile"),
-		maxMsgSizeBytes: viper.GetInt("server.maxmsgsizebytes"),
-		csrfSigningKey:  []byte(viper.GetString("server.csrfsigningkey")),
+		host:            Config.String("server.host"),
+		port:            Config.Int("server.port"),
+		corsOrigins:     Config.Strings("server.corsOrigins"),
+		incomingHeaders: Config.Strings("server.incomingHeaders"),
+		certFile:        Config.String("server.tls.certFile"),
+		keyFile:         Config.String("server.tls.keyFile"),
+		maxMsgSizeBytes: Config.Int("server.maxMsgSizeBytes"),
+		csrfSigningKey:  []byte(Config.String("server.csrfSigningKey")),
 
 		plugins: &plugin.Registry{},
 	}

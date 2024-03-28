@@ -1,7 +1,7 @@
 // Package email provides an interface for plugins and application code to send
 // email. [Gomail](gopkg.in/gomail.v2) is used with SMTP as the default.
 //
-// SMTP can be configured using the Viper configuration, either as ENV or from
+// SMTP can be configured using global configuration, either as ENV or from
 // a configuration file.
 //
 // |---------------------|---------------------|
@@ -18,9 +18,9 @@ package email
 import (
 	"context"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/gomail.v2"
@@ -52,12 +52,13 @@ func WithFrom(from string) EmailOption {
 // Plugin returns a new EmailPlugin.
 func Plugin(opts ...EmailOption) *EmailPlugin {
 	// TODO: Make smtp optional and allow a gomail.SendFunc to be configured.
+	cfg := prefab.Config
 	p := &EmailPlugin{
-		from:         viper.GetString("email.from"),
-		smtpHost:     viper.GetString("email.smtp.host"),
-		smtpPort:     viper.GetInt("email.smtp.port"),
-		smtpUsername: viper.GetString("email.smtp.username"),
-		smtpPassword: viper.GetString("email.smtp.password"),
+		from:         cfg.String("email.from"),
+		smtpHost:     cfg.String("email.smtp.host"),
+		smtpPort:     cfg.Int("email.smtp.port"),
+		smtpUsername: cfg.String("email.smtp.username"),
+		smtpPassword: cfg.String("email.smtp.password"),
 	}
 	for _, opt := range opts {
 		opt(p)

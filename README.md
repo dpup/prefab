@@ -16,7 +16,7 @@ authentication, templating, and ACLs without adding bloat.
 - **ACLs:** Use proto options to define access rules for RPC endpoints.
 - **Security:** CSRF protection built in and options for configuring CORS.
 - **Logging:** Pluggable logging with request scoped field tracking.
-
+- **File or env config:** via [Koanf](https://github.com/knadh/koanf)
 
 ## Quick Start
 

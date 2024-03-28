@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/dpup/prefab"
-	"github.com/spf13/viper"
 )
 
 // Constant name for identifying the core auth plugin
@@ -31,8 +30,8 @@ func WithExpiration(expiration time.Duration) AuthOption {
 func Plugin(opts ...AuthOption) *AuthPlugin {
 	ap := &AuthPlugin{
 		authService:   &impl{},
-		jwtSigningKey: viper.GetString("auth.signingkey"),
-		jwtExpiration: viper.GetDuration("auth.expiration"),
+		jwtSigningKey: prefab.Config.String("auth.signingKey"),
+		jwtExpiration: prefab.Config.MustDuration("auth.expiration"),
 	}
 	for _, opt := range opts {
 		opt(ap)

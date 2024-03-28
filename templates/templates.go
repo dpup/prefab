@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/plugin"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -30,8 +30,8 @@ const PluginName = "templates"
 // Plugin returns a new TemplatePlugin.
 func Plugin() *TemplatePlugin {
 	p := &TemplatePlugin{
-		alwaysParse: viper.GetBool("templates.alwaysparse"),
-		dirs:        viper.GetStringSlice("templates.dirs"),
+		alwaysParse: prefab.Config.Bool("templates.alwaysParse"),
+		dirs:        prefab.Config.Strings("templates.dirs"),
 	}
 	return p
 }
@@ -50,8 +50,8 @@ func (p *TemplatePlugin) Name() string {
 
 // From plugin.InitializablePlugin
 func (p *TemplatePlugin) Init(ctx context.Context, r *plugin.Registry) error {
-	// TODO: Load templates proactively?
-	return nil
+	// Parse templates on initialization.
+	return p.parseAll()
 }
 
 // Load templates (*.tmpl) contained within the provided directory and all
@@ -80,7 +80,7 @@ func (p *TemplatePlugin) Render(ctx context.Context, name string, data interface
 	}
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
-	err := p.templates.ExecuteTemplate(w, name, TemplateData{Data: data, Config: viper.AllSettings()})
+	err := p.templates.ExecuteTemplate(w, name, TemplateData{Data: data, Config: prefab.Config.All()})
 	if err != nil {
 		w.Flush()
 		return "", err
