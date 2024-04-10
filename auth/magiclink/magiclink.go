@@ -23,10 +23,10 @@
 // Variation:
 //   - If the original login request has a `redirect_uri` parameter, then the
 //     magic link is constructed using the redirect URI. Once the user clicks
-//     through to the destination, the token can be exchanged for an identity
-//     token by using the login endpoint with an `issue_token` param.
+//     through to the destination, the application can use the token to exchange
+//     for an identity token by using the login endpoint with an `issue_token`
+//     param.
 //
-// TODO: validate redirect URI matches a configured set of prefixes.
 // TODO: Provide a way to prevent replay of magic links.
 // TODO: Provide a way to rate-limit and/or block login requests.
 package magiclink

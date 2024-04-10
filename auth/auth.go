@@ -191,7 +191,6 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 	}
 }
 
-// TODO: Should we support multiple identities from cookies?
 func identityFromCookie(ctx context.Context) (Identity, error) {
 	cookies := serverutil.CookiesFromIncomingContext(ctx)
 	c, ok := cookies[IdentityTokenCookieName]

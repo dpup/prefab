@@ -2,6 +2,8 @@ package prefab
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +18,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Config is a global koanf instance used to pass application configuration.
+// Config is a global koanf instance used to access application level
+// configuration options.
 var Config = koanf.New(".")
 
 func Init() {
@@ -27,7 +30,7 @@ func Init() {
 		"server.host":     "localhost",
 		"server.port":     5678,
 		"auth.expiration": "24h",
-		"auth.signingKey": "secret", // TODO: Change this to a random value.
+		"auth.signingKey": randomString(32), // Tokens will break with each restart.
 	}, "."), nil)
 }
 
@@ -98,4 +101,12 @@ func capitalize(s string) string {
 	r := []rune(s)
 	r[0] = unicode.ToUpper(r[0])
 	return string(r)
+}
+
+func randomString(keySize int) string {
+	key := make([]byte, keySize)
+	if _, err := rand.Read(key); err != nil {
+		panic(err) // Generation failed
+	}
+	return hex.EncodeToString(key)
 }
