@@ -119,6 +119,32 @@ Importantly, the authentication plugins make an authenticated identity available
 however, it does not handle authorization. That must be handled by application
 code.
 
+## Invalidation
+
+By default, Prefab's identity tokens are valid until they expire. Logging out
+will clear the cookie, but if the token was copied or compromised it can still
+be used to identify the user. If the token is used for accessing sensitive
+resources, then it is recommended that a short lifetime be configured via the
+`auth.expiration` config or `auth.WithExpiration` option.
+
+If you wish to utilize long-lived identity tokens, but need a way to ensure they
+are revoked, then you can initialize the Auth Plugin with a blocklist. Everytime
+a token is validated, the blocklist will be checked, which will introduce some
+latency.
+
+A simple blocklist implementation is included. You will need to configure the
+implementation to persist tokens to your datastore of choice.
+
+```go
+s := prefab.New(
+  ...
+  prefab.WithPlugin(auth.Plugin(
+    auth.WithBlocklist(auth.NewBlocklist(store)),
+  )),
+  ...
+)
+```
+
 ### CSRF Protection
 
 CSRF Protection is handled by middleware and is controlled by an option on the
