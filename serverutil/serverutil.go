@@ -1,3 +1,4 @@
+// TODO: Rename or/and break this package.
 package serverutil
 
 import (

@@ -243,6 +243,7 @@ func (p *MagicLinkPlugin) parseToken(tokenString string) (auth.Identity, error) 
 
 	claims := token.Claims.(*Claims)
 	return auth.Identity{
+		SessionID:     claims.ID,
 		AuthTime:      time.Now(),
 		Subject:       claims.Email,
 		Email:         claims.Email,

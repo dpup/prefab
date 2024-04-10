@@ -24,7 +24,6 @@ import (
 
 	"github.com/dpup/prefab/serverutil"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -42,6 +41,9 @@ var (
 
 	// Invalid authorization header.
 	ErrInvalidHeader = status.Error(codes.InvalidArgument, "bad authorization header")
+
+	// Identity token has been revoked or blocked.
+	ErrRevoked = status.Error(codes.Unauthenticated, "token has been revoked")
 
 	// Allows for time to be stubbed in tests.
 	timeFunc = time.Now
@@ -90,7 +92,7 @@ func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        uuid.NewString(),
+			ID:        identity.SessionID,
 			Audience:  jwt.ClaimStrings{address},
 			Issuer:    address,
 			IssuedAt:  jwt.NewNumericDate(timeFunc()),
@@ -132,7 +134,16 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		// Check to see if the token has been revoked or blocked.
+		if blocked, err := IsBlocked(ctx, claims.ID); blocked || err != nil {
+			if err != nil {
+				return Identity{}, err
+			}
+			return Identity{}, ErrRevoked
+		}
+
 		return Identity{
+			SessionID:     claims.ID,
 			AuthTime:      claims.AuthTime.Time,
 			Subject:       claims.Subject,
 			Email:         claims.Email,

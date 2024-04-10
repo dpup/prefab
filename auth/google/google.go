@@ -78,6 +78,7 @@ import (
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/serverutil"
+	"github.com/google/uuid"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -303,6 +304,7 @@ func (p *GooglePlugin) handleIDToken(ctx context.Context, token string) (*UserIn
 // cookie.
 func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserInfo, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	identity := auth.Identity{
+		SessionID:     uuid.NewString(),
 		AuthTime:      time.Now(),
 		Subject:       userInfo.ID,
 		Name:          userInfo.Name,

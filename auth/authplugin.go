@@ -26,6 +26,16 @@ func WithExpiration(expiration time.Duration) AuthOption {
 	}
 }
 
+// WithBlockist configures the blocklist to use for token revocation. Tokens
+// can be revoked by application code and will be revoked during Logout. The
+// blocklist is checked during token validation.
+func WithBlocklist(bl Blocklist) AuthOption {
+	return func(p *AuthPlugin) {
+		p.blocklist = bl
+		p.authService.blocklist = bl
+	}
+}
+
 // Plugin returns a new AuthPlugin.
 func Plugin(opts ...AuthOption) *AuthPlugin {
 	ap := &AuthPlugin{
@@ -46,6 +56,7 @@ type AuthPlugin struct {
 
 	jwtSigningKey string
 	jwtExpiration time.Duration
+	blocklist     Blocklist
 }
 
 // From plugin.Plugin
@@ -60,6 +71,7 @@ func (ap *AuthPlugin) ServerOptions() []prefab.ServerOption {
 		prefab.WithGRPCGateway(RegisterAuthServiceHandlerFromEndpoint),
 		prefab.WithRequestConfig(injectSigningKey(ap.jwtSigningKey)),
 		prefab.WithRequestConfig(injectExpiration(ap.jwtExpiration)),
+		prefab.WithRequestConfig(injectBlocklist(ap.blocklist)),
 	}
 }
 

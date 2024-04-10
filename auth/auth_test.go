@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dpup/prefab/storage/memorystore"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/metadata"
@@ -125,6 +126,28 @@ func TestIdentityFromBearerToken(t *testing.T) {
 	assert.Nil(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from header does not match")
+}
+
+func TestIdentityFromBearerToken_blocked(t *testing.T) {
+	blocklist := NewBlocklist(memorystore.New())
+	blocklist.Block("12345")
+
+	ctx := WithBlockist(context.Background(), blocklist)
+
+	idt := Identity{
+		SessionID: "12345",
+		Subject:   "4",
+		AuthTime:  jwt.NewNumericDate(time.Now()).Time,
+	}
+	tokenString, err := IdentityToken(ctx, idt)
+	assert.Nil(t, err, "failed to issue token")
+
+	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", tokenString))
+	ctx = metadata.NewIncomingContext(ctx, md)
+
+	actual, err := IdentityFromContext(ctx)
+	assert.Equal(t, Identity{}, actual, "expected zero Identity")
+	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = token has been revoked")
 }
 
 func TestIdentityFromBasicAuth(t *testing.T) {

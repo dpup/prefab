@@ -19,6 +19,19 @@ service AuthService {
     };
   }
 
+  // Logout clears the prefab id cookie. It should be noted that by default the
+  // identity token will remain valid until its expiry. Token invalidatation is
+  // supported via the addition of a blocklist.
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      get: "/api/auth/logout"
+      additional_bindings {
+        post: "/api/auth/logout"
+        body: "*"
+      }
+    };
+  }
+
   // Config returns auth related configuration information that is safe for
   // unauthenticated users to access.
   rpc Config(ConfigRequest) returns (ConfigResponse) {
@@ -70,6 +83,20 @@ message LoginResponse {
   // the RPC is called via the GRPC Gateway. Not compatible with `issue_token`
   // set to true.
   string redirect_uri = 3;
+}
+
+// The login response.
+message LogoutRequest {
+  // The URL where the user should be redirected after a successful logout.
+  string redirect_uri = 4;
+}
+
+// The logout response.
+message LogoutResponse {
+  // Destination where the client should be redirected to, if applicable. HTTP
+  // headers will be added to GRPC metadata which will cause a 302 redirect if
+  // the RPC is called via the GRPC Gateway.
+  string redirect_uri = 1;
 }
 
 // Empty request object.

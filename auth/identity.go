@@ -3,6 +3,11 @@ package auth
 import "time"
 
 type Identity struct {
+
+	// Unique identifier for the session that authenticated the identity. Maps to
+	// the `jti` JWT claim.
+	SessionID string
+
 	// The time at which the identity was authenticated. Maps to `auth_time` JWT
 	// claim. May differ from IssuedAt if a token is refreshed.
 	AuthTime time.Time

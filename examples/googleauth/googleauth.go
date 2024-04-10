@@ -12,13 +12,16 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/google"
+	"github.com/dpup/prefab/storage/memorystore"
 )
 
 func main() {
 	prefab.LoadDefaultConfig()
 
 	s := prefab.New(
-		prefab.WithPlugin(auth.Plugin()),
+		prefab.WithPlugin(auth.Plugin(
+			auth.WithBlocklist(auth.NewBlocklist(memorystore.New())), // Keep track of revoked tokens.
+		)),
 		prefab.WithPlugin(google.Plugin()),
 		prefab.WithStaticFiles("/", "./examples/googleauth/static/"),
 	)

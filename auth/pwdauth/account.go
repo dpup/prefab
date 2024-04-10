@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dpup/prefab/auth"
+	"github.com/google/uuid"
 )
 
 type AccountFinder interface {
@@ -25,6 +26,7 @@ type Account struct {
 
 func identityFromAccount(a *Account) auth.Identity {
 	return auth.Identity{
+		SessionID:     uuid.NewString(),
 		AuthTime:      time.Now(),
 		Subject:       a.ID,
 		Email:         a.Email,

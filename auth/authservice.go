@@ -2,6 +2,9 @@ package auth
 
 import (
 	"context"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/serverutil"
@@ -19,7 +22,8 @@ func New() AuthServiceServer {
 // Implements AuthServiceServer and Plugin interfaces.
 type impl struct {
 	UnimplementedAuthServiceServer
-	handlers map[string]LoginHandler
+	handlers  map[string]LoginHandler
+	blocklist Blocklist
 }
 
 func (s *impl) AddLoginHandler(provider string, h LoginHandler) {
@@ -59,6 +63,50 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 	}
 
 	return nil, status.Error(codes.InvalidArgument, "auth: unknown or unregistered provider")
+}
+
+func (s *impl) Logout(ctx context.Context, in *LogoutRequest) (*LogoutResponse, error) {
+	id, err := identityFromCookie(ctx)
+	if err != nil {
+		// TODO: Should double logout be idempotent?
+		return nil, err
+	}
+
+	if s.blocklist != nil {
+		if err := s.blocklist.Block(id.SessionID); err != nil {
+			return nil, err
+		}
+	}
+
+	address := serverutil.AddressFromContext(ctx)
+	isSecure := strings.HasPrefix(address, "https")
+
+	// Try to clear the cookie.
+	if err := serverutil.SendCookie(ctx, &http.Cookie{
+		Name:     IdentityTokenCookieName,
+		Value:    "[invalidated]",
+		Path:     "/",
+		Secure:   isSecure,
+		HttpOnly: true,
+		Expires:  time.Now().Add(-24 * time.Hour),
+		SameSite: http.SameSiteLaxMode,
+	}); err != nil {
+		return nil, err
+	}
+
+	r := in.RedirectUri
+	if r == "" {
+		r = address
+	}
+
+	// For gateway requests, send the HTTP headers.
+	serverutil.SendStatusCode(ctx, 302)
+	serverutil.SendHeader(ctx, "location", r)
+	logging.Infow(ctx, "Sending logout redirect", "redirectUri", r)
+
+	return &LogoutResponse{
+		RedirectUri: r,
+	}, nil
 }
 
 func (s *impl) Identity(ctx context.Context, in *IdentityRequest) (*IdentityResponse, error) {
