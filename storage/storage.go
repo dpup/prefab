@@ -1,10 +1,8 @@
 // Package storage contains an extensible interface for providing persistence
-// to other prefab plugins.
-package storage
-
-import "github.com/dpup/prefab/plugin"
-
-// PluginName can be used to query the storage plugin.
+// to simple applications and other prefab plugins.
+//
+// Stores provides simple create, read, update, delete, and list operations.
+// Models are represented as structs and should have a `PK() string` method.
 //
 // Examples:
 //
@@ -13,6 +11,11 @@ import "github.com/dpup/prefab/plugin"
 //	 func (m *MyPlugin) Init(r *plugin.Registry) error {
 //	   m.store = r.Get(storage.PluginName)
 //	 }
+package storage
+
+import "github.com/dpup/prefab/plugin"
+
+// PluginName can be used to query the storage plugin.
 const PluginName = "storage"
 
 // Plugin wraps a storage implementation for registration.

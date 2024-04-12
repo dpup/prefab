@@ -24,9 +24,19 @@ type store struct {
 	mu   sync.RWMutex
 }
 
-func (s *store) Put(models ...storage.Model) error {
+func (s *store) Create(models ...storage.Model) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Check that no conflicting model exists.
+	for _, m := range models {
+		n := storage.Name(m)
+		if s.data[n] != nil && s.data[n][m.PK()] != nil {
+			return storage.ErrAlreadyExists
+		}
+	}
+
+	// Update the memory store.
 	for _, m := range models {
 		n := storage.Name(m)
 		if s.data[n] == nil {
@@ -41,7 +51,7 @@ func (s *store) Put(models ...storage.Model) error {
 	return nil
 }
 
-func (s *store) Get(id string, model storage.Model) error {
+func (s *store) Read(id string, model storage.Model) error {
 	if model == nil || (reflect.ValueOf(model).Kind() == reflect.Ptr && reflect.ValueOf(model).IsNil()) {
 		return fmt.Errorf("uninitialized pointer passed as model")
 	}
@@ -63,18 +73,52 @@ func (s *store) Get(id string, model storage.Model) error {
 	return nil
 }
 
-func (s *store) Exists(id string, model storage.Model) (bool, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *store) Update(models ...storage.Model) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	n := storage.Name(model)
-	if s.data[n] == nil {
-		return false, nil
+	// Check that all models exist.
+	for _, m := range models {
+		n := storage.Name(m)
+		if s.data[n] == nil {
+			return storage.ErrNotFound
+		}
+		if s.data[n][m.PK()] == nil {
+			return storage.ErrNotFound
+		}
 	}
-	if s.data[n][id] == nil {
-		return false, nil
+
+	// Update the memory store.
+	for _, m := range models {
+		n := storage.Name(m)
+		if s.data[n] == nil {
+			s.data[n] = map[string][]byte{}
+		}
+		jsonBytes, err := json.Marshal(m)
+		if err != nil {
+			return err
+		}
+		s.data[n][m.PK()] = jsonBytes
 	}
-	return true, nil
+
+	return nil
+}
+
+func (s *store) Upsert(models ...storage.Model) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range models {
+		n := storage.Name(m)
+		if s.data[n] == nil {
+			s.data[n] = map[string][]byte{}
+		}
+		jsonBytes, err := json.Marshal(m)
+		if err != nil {
+			return err
+		}
+		s.data[n][m.PK()] = jsonBytes
+	}
+	return nil
 }
 
 func (s *store) Delete(model storage.Model) error {
@@ -127,7 +171,7 @@ func (s *store) List(models interface{}, filter storage.Model) error {
 	for _, pk := range pks {
 		newElemPtr := reflect.New(elemType)
 		newElem := newElemPtr.Elem()
-		if err := s.Get(pk, newElemPtr.Interface().(storage.Model)); err != nil {
+		if err := s.Read(pk, newElemPtr.Interface().(storage.Model)); err != nil {
 			return err
 		}
 		// Skip if any non-zero field in filter differs from the corresponding field in model.
@@ -148,6 +192,20 @@ func (s *store) List(models interface{}, filter storage.Model) error {
 	}
 
 	return nil
+}
+
+func (s *store) Exists(id string, model storage.Model) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	n := storage.Name(model)
+	if s.data[n] == nil {
+		return false, nil
+	}
+	if s.data[n][id] == nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 // shouldFilter returns true for non-zero values and non-nil pointers.

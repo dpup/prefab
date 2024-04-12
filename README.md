@@ -62,6 +62,7 @@ func main() {
 
 - [Plugin Model Overview](#plugin-model-overview)
 - [Authentication](#authentication)
+- [Storage](#storage)
 - [CSRF Protection](#csrf-protection)
 
 ### Plugin Model Overview
@@ -144,6 +145,17 @@ s := prefab.New(
   ...
 )
 ```
+
+### Storage
+
+Prefab includes a simple Storage interface, primarily for use within plugins,
+but also for simple applications. The interface exposes Create, Read, Update,
+Upsert, Delete, List, and Exists (CRUUDLE) methods and can be backed by a memory
+store, filesystems, RDS, or NoSQL databases.
+
+Included impelementations:
+
+- [Ephemeral in-memory store](./storage/memorystore/)
 
 ### CSRF Protection
 

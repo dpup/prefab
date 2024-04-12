@@ -42,6 +42,8 @@ func injectBlocklist(bl Blocklist) prefab.ConfigInjector {
 
 // NewBlocklist creates a basic implementation of the blocklist interface,
 // backed via a storage.Store.
+//
+// TODO: Should the store be initialized via the plugin interface?
 func NewBlocklist(store storage.Store) Blocklist {
 	return &basicBlocklist{store: store}
 }
@@ -55,7 +57,11 @@ func (b *basicBlocklist) IsBlocked(key string) (bool, error) {
 }
 
 func (b *basicBlocklist) Block(key string) error {
-	return b.store.Put(&BlockedToken{Key: key})
+	err := b.store.Create(&BlockedToken{Key: key})
+	if err != nil && err != storage.ErrAlreadyExists {
+		return err
+	}
+	return nil
 }
 
 // BlockedToken is a model for storing blocked tokens.

@@ -43,7 +43,7 @@ func pint(i int) *int {
 	return &i
 }
 
-func TestSaveGetRoundTrip(t *testing.T) {
+func TestSaveReadRoundTrip(t *testing.T) {
 	apple := Fruit{
 		ID:    "1",
 		Name:  "Apple",
@@ -59,19 +59,51 @@ func TestSaveGetRoundTrip(t *testing.T) {
 	banana2 := Fruit{}
 
 	store := New()
-	err := store.Put(apple, banana)
+	err := store.Create(apple, banana)
 	require.Nil(t, err, "unexpected error putting records")
 
-	err = store.Get("1", &apple2)
+	err = store.Read("1", &apple2)
 	require.Nil(t, err, "unexpected error getting apple")
 	assert.Equal(t, apple, apple2)
 
-	err = store.Get("2", &banana2)
+	err = store.Read("2", &banana2)
 	require.Nil(t, err, "unexpected error getting banana")
 	assert.Equal(t, banana, banana2)
 }
 
-func TestGetWithNilPointer(t *testing.T) {
+func TestCreateConflict(t *testing.T) {
+	apple := Fruit{
+		ID:    "1",
+		Name:  "Apple",
+		Color: ColorGreen,
+	}
+	apple2 := Fruit{
+		ID:    "1",
+		Name:  "Apple",
+		Color: ColorRed,
+	}
+
+	store := New()
+	err := store.Create(apple)
+	require.Nil(t, err, "unexpected error putting records")
+
+	err = store.Create(apple2)
+	assert.Equal(t, storage.ErrAlreadyExists, err)
+}
+
+func TestReadNotFound(t *testing.T) {
+	store := New()
+	err := store.Read("1", &Fruit{})
+	assert.Equal(t, storage.ErrNotFound, err)
+
+	err = store.Create(&Fruit{ID: "1", Name: "Apple"})
+	require.Nil(t, err, "unexpected error creating records")
+
+	err = store.Read("2", &Fruit{})
+	assert.Equal(t, storage.ErrNotFound, err)
+}
+
+func TestReadWithNilPointer(t *testing.T) {
 	apple := Fruit{
 		ID:    "1",
 		Name:  "Apple",
@@ -81,30 +113,82 @@ func TestGetWithNilPointer(t *testing.T) {
 	var apple2 *Fruit
 
 	store := New()
-	err := store.Put(apple)
+	err := store.Create(apple)
 	require.Nil(t, err, "unexpected error putting records")
 
-	err = store.Get("1", apple2)
+	err = store.Read("1", apple2)
 	assert.EqualError(t, err, "uninitialized pointer passed as model")
 }
 
-func TestExists(t *testing.T) {
+func TestUpdate(t *testing.T) {
+	apple := Fruit{
+		ID:    "1",
+		Name:  "Apple",
+		Color: ColorGreen,
+	}
+
+	apple2 := Fruit{}
+
 	store := New()
-	exists, err := store.Exists("3", &Fruit{})
-	assert.False(t, exists)
-	assert.Nil(t, err)
+	err := store.Create(apple)
+	require.Nil(t, err, "unexpected error putting records")
 
-	err = store.Put(&Fruit{ID: "3", Name: "Mango"})
-	assert.Nil(t, err)
+	err = store.Read("1", &apple2)
+	require.Nil(t, err, "unexpected error getting apple")
+	assert.Equal(t, apple, apple2)
 
-	exists, err = store.Exists("3", &Fruit{})
-	assert.True(t, exists)
-	assert.Nil(t, err)
+	apple.Color = ColorRed
+	err = store.Update(apple)
+	require.Nil(t, err, "unexpected error updating apple")
+
+	err = store.Read("1", &apple2)
+	require.Nil(t, err, "unexpected error getting apple")
+	assert.Equal(t, apple, apple2)
+}
+
+func TestUpdateNotExists(t *testing.T) {
+	apple := Fruit{
+		ID:    "1",
+		Name:  "Apple",
+		Color: ColorGreen,
+	}
+
+	store := New()
+	err := store.Update(apple)
+	assert.Equal(t, storage.ErrNotFound, err)
+}
+
+func TestUpsert(t *testing.T) {
+	apple := Fruit{
+		ID:    "1",
+		Name:  "Apple",
+		Color: ColorGreen,
+	}
+
+	apple2 := Fruit{}
+	banana2 := Fruit{}
+
+	store := New()
+	err := store.Create(apple)
+	require.Nil(t, err, "unexpected error putting records")
+
+	apple.Color = ColorRed
+	banana := Fruit{ID: "2", Name: "Banana", Color: ColorYellow}
+	err = store.Upsert(apple, banana)
+	require.Nil(t, err, "unexpected error updating apple")
+
+	err = store.Read("1", &apple2)
+	require.Nil(t, err, "unexpected error getting apple")
+	assert.Equal(t, apple, apple2)
+
+	err = store.Read("2", &banana2)
+	require.Nil(t, err, "unexpected error getting banana")
+	assert.Equal(t, banana, banana2)
 }
 
 func TestDelete(t *testing.T) {
 	store := New()
-	err := store.Put(&Fruit{ID: "4", Name: "Mellon"})
+	err := store.Create(&Fruit{ID: "4", Name: "Mellon"})
 	assert.Nil(t, err)
 
 	exists, err := store.Exists("4", &Fruit{})
@@ -150,7 +234,7 @@ func TestListErrorCases(t *testing.T) {
 func TestList(t *testing.T) {
 
 	store := New()
-	err := store.Put(
+	err := store.Create(
 		Fruit{"1", "Apple", ColorGreen, nil},
 		Fruit{"2", "Banana", ColorYellow, nil},
 		Fruit{"3", "Mango", ColorOrange, nil},
@@ -173,7 +257,7 @@ func TestList(t *testing.T) {
 func TestListFilter(t *testing.T) {
 
 	store := New()
-	err := store.Put(
+	err := store.Create(
 		Fruit{"1", "Apple", ColorGreen, nil},
 		Fruit{"2", "Banana", ColorYellow, nil},
 		Fruit{"3", "Mango", ColorOrange, nil},
@@ -200,7 +284,7 @@ func TestListFilter(t *testing.T) {
 func TestListFilterZero(t *testing.T) {
 
 	store := New()
-	err := store.Put(
+	err := store.Create(
 		Fruit{"1", "Apple", ColorGreen, pint(4)},
 		Fruit{"2", "Banana", ColorYellow, pint(3)},
 		Fruit{"3", "Mango", ColorOrange, pint(0)},
@@ -219,4 +303,18 @@ func TestListFilterZero(t *testing.T) {
 	}
 
 	assert.Equal(t, expected, actual)
+}
+
+func TestExists(t *testing.T) {
+	store := New()
+	exists, err := store.Exists("3", &Fruit{})
+	assert.False(t, exists)
+	assert.Nil(t, err)
+
+	err = store.Create(&Fruit{ID: "3", Name: "Mango"})
+	assert.Nil(t, err)
+
+	exists, err = store.Exists("3", &Fruit{})
+	assert.True(t, exists)
+	assert.Nil(t, err)
 }
