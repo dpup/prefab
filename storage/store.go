@@ -1,21 +1,28 @@
 package storage
 
 import (
-	"errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
 	// Returned when a record does not exist.
-	ErrNotFound = errors.New("record not found")
+	ErrNotFound = status.Error(codes.NotFound, "record not found")
 
 	// Returned when a record conficts with an existing key.
-	ErrAlreadyExists = errors.New("primary key already exists")
+	ErrAlreadyExists = status.Error(codes.AlreadyExists, "primary key already exists")
 
 	// Returned when List is called with a non-slice.
-	ErrSliceRequired = errors.New("pointer slice required")
+	ErrSliceRequired = status.Error(codes.InvalidArgument, "pointer slice required")
+
+	// Returned when a store can not marshal/unmarshal a model.
+	ErrInvalidModel = status.Error(codes.InvalidArgument, "invalid model")
 
 	// Returned when List is called with a filter and slice of mismatching types.
-	ErrTypeMismatch = errors.New("type mismatch")
+	ErrTypeMismatch = status.Error(codes.InvalidArgument, "type mismatch")
+
+	// Returned when a store is passed an uninitialized pointer.
+	ErrNilModel = status.Error(codes.InvalidArgument, "uninitialized pointer passed as model")
 )
 
 // Store offers a basic CRUUDLE (Create Read Update Upsert Delete List Exists)

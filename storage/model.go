@@ -44,3 +44,11 @@ func Name(m any) string {
 		return n
 	}
 }
+
+// ValidateReceiver returns an error if the model is nil or uninitialized.
+func ValidateReceiver(model Model) error {
+	if model == nil || (reflect.ValueOf(model).Kind() == reflect.Ptr && reflect.ValueOf(model).IsNil()) {
+		return ErrNilModel
+	}
+	return nil
+}

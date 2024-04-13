@@ -153,9 +153,14 @@ but also for simple applications. The interface exposes Create, Read, Update,
 Upsert, Delete, List, and Exists (CRUUDLE) methods and can be backed by a memory
 store, filesystems, RDS, or NoSQL databases.
 
-Included impelementations:
+Entities are modeled as Go structs which expose a `PK()` method. The internal
+storage representation is implementation specific, however JSON is a common
+default, and as such `List` operations may not be performant for many situations.
 
-- [Ephemeral in-memory store](./storage/memorystore/)
+Included implementations:
+
+- [In-memory](./storage/memorystore/)
+- [SQLite3](./storage/sqlitestore/)
 
 ### CSRF Protection
 

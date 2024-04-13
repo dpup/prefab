@@ -44,7 +44,7 @@ func (s *store) Create(models ...storage.Model) error {
 		}
 		jsonBytes, err := json.Marshal(m)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w : %s", storage.ErrInvalidModel, err)
 		}
 		s.data[n][m.PK()] = jsonBytes
 	}
@@ -52,8 +52,8 @@ func (s *store) Create(models ...storage.Model) error {
 }
 
 func (s *store) Read(id string, model storage.Model) error {
-	if model == nil || (reflect.ValueOf(model).Kind() == reflect.Ptr && reflect.ValueOf(model).IsNil()) {
-		return fmt.Errorf("uninitialized pointer passed as model")
+	if err := storage.ValidateReceiver(model); err != nil {
+		return err
 	}
 
 	s.mu.RLock()
@@ -77,6 +77,19 @@ func (s *store) Update(models ...storage.Model) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Try to serialize models first, to keep error cases consistent.
+	records := map[string]map[string][]byte{}
+	for _, m := range models {
+		jsonBytes, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("%w : %s", storage.ErrInvalidModel, err)
+		}
+		if records[storage.Name(m)] == nil {
+			records[storage.Name(m)] = map[string][]byte{}
+		}
+		records[storage.Name(m)][m.PK()] = jsonBytes
+	}
+
 	// Check that all models exist.
 	for _, m := range models {
 		n := storage.Name(m)
@@ -89,16 +102,10 @@ func (s *store) Update(models ...storage.Model) error {
 	}
 
 	// Update the memory store.
-	for _, m := range models {
-		n := storage.Name(m)
-		if s.data[n] == nil {
-			s.data[n] = map[string][]byte{}
+	for n, r := range records {
+		for id, jsonBytes := range r {
+			s.data[n][id] = jsonBytes
 		}
-		jsonBytes, err := json.Marshal(m)
-		if err != nil {
-			return err
-		}
-		s.data[n][m.PK()] = jsonBytes
 	}
 
 	return nil
@@ -114,7 +121,7 @@ func (s *store) Upsert(models ...storage.Model) error {
 		}
 		jsonBytes, err := json.Marshal(m)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w : %s", storage.ErrInvalidModel, err)
 		}
 		s.data[n][m.PK()] = jsonBytes
 	}
