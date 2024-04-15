@@ -178,8 +178,15 @@ default, and as such `List` operations may not be performant for many situations
 
 Included implementations:
 
-- [In-memory](./storage/memorystore/)
-- [SQLite3](./storage/sqlitestore/)
+#### [In-memory](./storage/memorystore/)
+
+Stores data in simple Go maps.
+
+#### [SQLite3](./storage/sqlitestore/)
+
+SQLite backed storage. Explicitly initialized models are stored in their own
+table, with a `prefab_` prefix. Uninitialized models are stored in
+`prefab_default` indexed by `ID` and `EntityType`.
 
 ## 🔐  Security
 
