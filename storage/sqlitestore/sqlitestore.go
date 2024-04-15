@@ -26,10 +26,10 @@ import (
 // Option is a functional option for configuring the store.
 type Option func(*store)
 
-// WithTableName overides the default table name of "prefab_store".
-func WithTableName(tableName string) Option {
+// WithPrefix overides the default prefix for table names.
+func WithPrefix(prefix string) Option {
 	return func(s *store) {
-		s.tableName = tableName
+		s.prefix = prefix
 	}
 }
 
@@ -42,20 +42,28 @@ func New(conn string, opts ...Option) storage.Store {
 		panic("failed to open sqlite connection: " + err.Error())
 	}
 	s := &store{
-		db:        db,
-		tableName: "prefab_store",
+		db:     db,
+		prefix: "prefab_",
+		tables: map[string]bool{},
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
-	s.ensureTable()
+	s.ensureDefaultTable()
 	return s
 }
 
 type store struct {
-	db *sql.DB
+	db     *sql.DB
+	prefix string
+	tables map[string]bool
+}
 
-	tableName string
+// From ModelInitializer interface. Sets up dedicated for the model.
+func (s *store) InitModel(model storage.Model) error {
+	name := storage.Name(model)
+	s.tables[name] = true
+	return s.ensureTable(name)
 }
 
 func (s *store) Create(models ...storage.Model) error {
@@ -63,13 +71,6 @@ func (s *store) Create(models ...storage.Model) error {
 	if err != nil {
 		return translateError(err)
 	}
-
-	stmt, err := tx.Prepare("INSERT INTO " + s.tableName + " (id, entity_type, value) VALUES (?, ?, ?)")
-	if err != nil {
-		tx.Rollback()
-		return translateError(err)
-	}
-	defer stmt.Close()
 
 	for _, model := range models {
 		id := model.PK()
@@ -79,7 +80,16 @@ func (s *store) Create(models ...storage.Model) error {
 			tx.Rollback()
 			return fmt.Errorf("%w: %s", storage.ErrInvalidModel, err)
 		}
-		_, err = stmt.Exec(id, entityType, value)
+
+		if tableName, isDefault := s.tableName(model); isDefault {
+			_, err = prepareAndExec(tx,
+				"INSERT INTO "+tableName+" (id, entity_type, value) VALUES (?, ?, ?)",
+				id, entityType, value)
+		} else {
+			_, err = prepareAndExec(tx,
+				"INSERT INTO "+tableName+" (id, value) VALUES (?, ?)",
+				id, value)
+		}
 		if err != nil {
 			tx.Rollback()
 			return translateError(err)
@@ -99,7 +109,12 @@ func (s *store) Read(id string, model storage.Model) error {
 		return err
 	}
 
-	query := "SELECT value FROM " + s.tableName + " WHERE id = ? AND entity_type = ?"
+	var query string
+	if tableName, isDefault := s.tableName(model); isDefault {
+		query = "SELECT value FROM " + tableName + " WHERE id = ? AND entity_type = ?"
+	} else {
+		query = "SELECT value FROM " + tableName + " WHERE id = ?"
+	}
 	row := s.db.QueryRow(query, id, storage.Name(model))
 
 	var value []byte
@@ -117,22 +132,25 @@ func (s *store) Update(models ...storage.Model) error {
 		return err
 	}
 
-	stmt, err := tx.Prepare("UPDATE " + s.tableName + " SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND entity_type = ?")
-	if err != nil {
-		tx.Rollback()
-		return translateError(err)
-	}
-	defer stmt.Close()
-
 	for _, model := range models {
+		id := model.PK()
+		entityType := storage.Name(model)
 		value, err := json.Marshal(model)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("%w: %s", storage.ErrInvalidModel, err)
 		}
-		id := model.PK()
-		entityType := storage.Name(model)
-		res, err := stmt.Exec(value, id, entityType)
+
+		var res sql.Result
+		if tableName, isDefault := s.tableName(model); isDefault {
+			res, err = prepareAndExec(tx,
+				"UPDATE "+tableName+" SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND entity_type = ?",
+				value, id, entityType)
+		} else {
+			res, err = prepareAndExec(tx,
+				"UPDATE "+tableName+" SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+				value, id)
+		}
 		if err != nil {
 			tx.Rollback()
 			return translateError(err)
@@ -157,17 +175,6 @@ func (s *store) Upsert(models ...storage.Model) error {
 		return translateError(err)
 	}
 
-	stmt, err := tx.Prepare(
-		`INSERT INTO ` + s.tableName + ` (id, entity_type, value, created_at, updated_at) 
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-		ON CONFLICT(id, entity_type) DO UPDATE SET 
-		value = excluded.value, updated_at = CURRENT_TIMESTAMP`)
-	if err != nil {
-		tx.Rollback()
-		return translateError(err)
-	}
-	defer stmt.Close()
-
 	for _, model := range models {
 		id := model.PK()
 		entityType := storage.Name(model)
@@ -177,13 +184,26 @@ func (s *store) Upsert(models ...storage.Model) error {
 			return fmt.Errorf("%w: %s", storage.ErrInvalidModel, err)
 		}
 
-		_, err = stmt.Exec(id, entityType, value)
+		if tableName, isDefault := s.tableName(model); isDefault {
+			_, err = prepareAndExec(tx,
+				`INSERT INTO `+tableName+` (id, entity_type, value, created_at, updated_at) 
+				VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+				ON CONFLICT(id, entity_type) DO UPDATE SET 
+				value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
+				id, entityType, value)
+		} else {
+			_, err = prepareAndExec(tx,
+				`INSERT INTO `+tableName+` (id, value, created_at, updated_at) 
+				VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+				ON CONFLICT(id) DO UPDATE SET 
+				value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
+				id, value)
+		}
 		if err != nil {
 			tx.Rollback()
 			return translateError(err)
 		}
 	}
-
 	if err := tx.Commit(); err != nil {
 		tx.Rollback()
 		return translateError(err)
@@ -193,16 +213,22 @@ func (s *store) Upsert(models ...storage.Model) error {
 }
 
 func (s *store) Delete(model storage.Model) error {
-	id := model.PK()
-	entityType := storage.Name(model)
-
-	stmt, err := s.db.Prepare("DELETE FROM " + s.tableName + " WHERE id = ? AND entity_type = ?")
+	var params []any
+	var stmt *sql.Stmt
+	var err error
+	if tableName, isDefault := s.tableName(model); isDefault {
+		stmt, err = s.db.Prepare("DELETE FROM " + tableName + " WHERE id = ? AND entity_type = ?")
+		params = []any{model.PK(), storage.Name(model)}
+	} else {
+		stmt, err = s.db.Prepare("DELETE FROM " + tableName + " WHERE id = ?")
+		params = []any{model.PK()}
+	}
 	if err != nil {
 		return translateError(err)
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(id, entityType)
+	res, err := stmt.Exec(params...)
 	if err != nil {
 		return translateError(err)
 	}
@@ -240,7 +266,7 @@ func (s *store) List(models any, filter storage.Model) error {
 		newElem := newElemPtr.Elem()
 		err := json.Unmarshal([]byte(value), newElem.Addr().Interface())
 		if err != nil {
-			return fmt.Errorf("%w: %s", storage.ErrInvalidModel, err)
+			return fmt.Errorf("%w: %s <%s>", storage.ErrInvalidModel, err, value)
 		}
 
 		sliceVal.Set(reflect.Append(sliceVal, newElem))
@@ -254,7 +280,13 @@ func (s *store) List(models any, filter storage.Model) error {
 }
 
 func (s *store) Exists(id string, model storage.Model) (bool, error) {
-	query := "SELECT COUNT(*) FROM " + s.tableName + " WHERE id = ? AND entity_type = ?"
+	var query string
+	if tableName, isDefault := s.tableName(model); isDefault {
+		query = "SELECT COUNT(*) FROM " + tableName + " WHERE id = ? AND entity_type = ?"
+	} else {
+		query = "SELECT COUNT(*) FROM " + tableName + " WHERE id = ?"
+	}
+
 	var value int
 	err := s.db.QueryRow(query, id, storage.Name(model)).Scan(&value)
 	if err != nil {
@@ -263,8 +295,16 @@ func (s *store) Exists(id string, model storage.Model) (bool, error) {
 	return value > 0, nil
 }
 
-func (s *store) ensureTable() {
-	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.tableName + ` (
+func (s *store) tableName(model storage.Model) (string, bool) {
+	name := storage.Name(model)
+	if _, ok := s.tables[name]; !ok {
+		return s.prefix + "default", true
+	}
+	return s.prefix + name, false
+}
+
+func (s *store) ensureDefaultTable() {
+	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.prefix + `default (
 		id TEXT,
 		entity_type TEXT,
 		value BLOB,
@@ -273,18 +313,35 @@ func (s *store) ensureTable() {
 		PRIMARY KEY (id, entity_type)
 	);`)
 	if err != nil {
-		panic("failed to create table: " + err.Error())
+		panic("failed to create default table: " + err.Error())
 	}
 }
 
+func (s *store) ensureTable(tableName string) error {
+	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.prefix + tableName + ` (
+		id TEXT,
+		value BLOB,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (id)
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create table [%s]: %w", tableName, err)
+	}
+	return nil
+}
+
 func (s *store) buildListQuery(model storage.Model) (string, []any) {
+	tableName, isDefault := s.tableName(model)
 	filterValue := reflect.ValueOf(model)
 
 	var whereClauses []string
 	var params []interface{}
-	entityType := storage.Name(model)
-	whereClauses = append(whereClauses, "entity_type = ?")
-	params = append(params, entityType)
+
+	if isDefault {
+		whereClauses = append(whereClauses, "entity_type = ?")
+		params = append(params, storage.Name(model))
+	}
 
 	for i := 0; i < filterValue.NumField(); i++ {
 		field := filterValue.Field(i)
@@ -298,8 +355,10 @@ func (s *store) buildListQuery(model storage.Model) (string, []any) {
 		}
 	}
 
-	whereClause := "WHERE " + strings.Join(whereClauses, " AND ")
-	query := fmt.Sprintf("SELECT value FROM %s %s", s.tableName, whereClause)
+	query := "SELECT value FROM " + tableName
+	if len(whereClauses) > 0 {
+		query += " WHERE " + strings.Join(whereClauses, " AND ")
+	}
 	return query, params
 }
 
@@ -316,4 +375,13 @@ func translateError(err error) error {
 		}
 	}
 	return err
+}
+
+func prepareAndExec(tx *sql.Tx, query string, params ...any) (sql.Result, error) {
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+	return stmt.Exec(params...)
 }

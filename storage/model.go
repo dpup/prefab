@@ -25,8 +25,8 @@ type Namer interface {
 	Name() string
 }
 
-// Name returns a model's name, either derived from the struct or from the
-// `Namer` interface.
+// Name returns a pluralied version of the model's name, either derived from the
+// struct or from the `Namer` interface.
 func Name(m any) string {
 	if n, ok := m.(Namer); ok {
 		return n.Name()
