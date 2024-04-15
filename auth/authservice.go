@@ -22,8 +22,7 @@ func New() AuthServiceServer {
 // Implements AuthServiceServer and Plugin interfaces.
 type impl struct {
 	UnimplementedAuthServiceServer
-	handlers  map[string]LoginHandler
-	blocklist Blocklist
+	handlers map[string]LoginHandler
 }
 
 func (s *impl) AddLoginHandler(provider string, h LoginHandler) {
@@ -72,11 +71,8 @@ func (s *impl) Logout(ctx context.Context, in *LogoutRequest) (*LogoutResponse, 
 		return nil, err
 	}
 
-	if s.blocklist != nil {
-		if err := s.blocklist.Block(id.SessionID); err != nil {
-			return nil, err
-		}
-	}
+	// If enabled, block this token from future use.
+	MaybeBlock(ctx, id.SessionID)
 
 	address := serverutil.AddressFromContext(ctx)
 	isSecure := strings.HasPrefix(address, "https")

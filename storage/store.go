@@ -53,3 +53,12 @@ type Store interface {
 	// Exists returns true if a record with the given id exists.
 	Exists(id string, model Model) (bool, error)
 }
+
+// Optional interface that stores can implement in order to support per-model
+// configuration — for example table per model in SQL databases.
+type ModelInitializer interface {
+	// InitModel is called by a plugin or application to initialize a model
+	// before it is used. Stores will still work, without initialization, however
+	// data will be stored in a shared table.
+	InitModel(model Model) error
+}

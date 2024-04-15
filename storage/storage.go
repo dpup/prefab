@@ -20,13 +20,25 @@ const PluginName = "storage"
 
 // Plugin wraps a storage implementation for registration.
 func Plugin(impl Store) plugin.Plugin {
-	return &wrapper{Store: impl}
+	return &StoragePlugin{Store: impl}
 }
 
-type wrapper struct {
+// StoragePlugin exposes a Plugin interface for persisting data.
+type StoragePlugin struct {
 	Store
 }
 
-func (p *wrapper) Name() string {
+// From plugin.Plugin
+func (p *StoragePlugin) Name() string {
 	return PluginName
+}
+
+// InitModel can be called by a plugin or application to perform per model
+// initialization. Stores that do not implement ModelInitializer should still
+// function correctly, but may store data in a shared table.
+func (p *StoragePlugin) InitModel(m Model) error {
+	if i, ok := p.Store.(ModelInitializer); ok {
+		return i.InitModel(m)
+	}
+	return nil
 }

@@ -1,9 +1,14 @@
 package auth
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/dpup/prefab"
+	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/plugin"
+	"github.com/dpup/prefab/storage"
 )
 
 // Constant name for identifying the core auth plugin
@@ -26,13 +31,12 @@ func WithExpiration(expiration time.Duration) AuthOption {
 	}
 }
 
-// WithBlockist configures the blocklist to use for token revocation. Tokens
-// can be revoked by application code and will be revoked during Logout. The
-// blocklist is checked during token validation.
+// WithBlockist configures a custom blocklist to use for token revocation.
+// Tokens can be revoked by application code and will be revoked during Logout.
+// The blocklist is checked during token validation.
 func WithBlocklist(bl Blocklist) AuthOption {
 	return func(p *AuthPlugin) {
 		p.blocklist = bl
-		p.authService.blocklist = bl
 	}
 }
 
@@ -64,6 +68,29 @@ func (ap *AuthPlugin) Name() string {
 	return PluginName
 }
 
+// From plugin.OptionalDependentPlugin
+func (ap *AuthPlugin) OptDeps() []string {
+	return []string{storage.PluginName}
+}
+
+// From plugin.InitializablePlugin
+func (ap *AuthPlugin) Init(ctx context.Context, r *plugin.Registry) error {
+	// If a blocklist hasn't been configured, and a storage plugin is registered,
+	// then create a default blocklist for revoked tokens.
+	if ap.blocklist == nil {
+		sp := r.Get(storage.PluginName)
+		if sp != nil {
+			logging.Info(ctx, "auth: initializing blocklist")
+			store := sp.(*storage.StoragePlugin)
+			if err := store.InitModel(&BlockedToken{}); err != nil {
+				return fmt.Errorf("auth: failed to initialize blocklist model: %w", err)
+			}
+			ap.blocklist = NewBlocklist(store)
+		}
+	}
+	return nil
+}
+
 // From prefab.OptionProvider
 func (ap *AuthPlugin) ServerOptions() []prefab.ServerOption {
 	return []prefab.ServerOption{
@@ -71,11 +98,18 @@ func (ap *AuthPlugin) ServerOptions() []prefab.ServerOption {
 		prefab.WithGRPCGateway(RegisterAuthServiceHandlerFromEndpoint),
 		prefab.WithRequestConfig(injectSigningKey(ap.jwtSigningKey)),
 		prefab.WithRequestConfig(injectExpiration(ap.jwtExpiration)),
-		prefab.WithRequestConfig(injectBlocklist(ap.blocklist)),
+		prefab.WithRequestConfig(ap.injectBlocklist),
 	}
 }
 
 // AddLoginHandler can be called by other plugins to register login handlers.
 func (ap *AuthPlugin) AddLoginHandler(provider string, h LoginHandler) {
 	ap.authService.AddLoginHandler(provider, h)
+}
+
+func (ap *AuthPlugin) injectBlocklist(ctx context.Context) context.Context {
+	if ap.blocklist == nil {
+		return ctx
+	}
+	return WithBlockist(ctx, ap.blocklist)
 }

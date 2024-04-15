@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 
-	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/storage"
 )
 
@@ -34,16 +33,17 @@ func WithBlockist(ctx context.Context, bl Blocklist) context.Context {
 	return context.WithValue(ctx, blocklistKey{}, bl)
 }
 
-func injectBlocklist(bl Blocklist) prefab.ConfigInjector {
-	return func(ctx context.Context) context.Context {
-		return WithBlockist(ctx, bl)
+// MaybeBlock adds a token to the blocklist if a blocklist is present in the
+// context.
+func MaybeBlock(ctx context.Context, key string) error {
+	if bl, ok := ctx.Value(blocklistKey{}).(Blocklist); ok {
+		return bl.Block(key)
 	}
+	return nil
 }
 
 // NewBlocklist creates a basic implementation of the blocklist interface,
 // backed via a storage.Store.
-//
-// TODO: Should the store be initialized via the plugin interface?
 func NewBlocklist(store storage.Store) Blocklist {
 	return &basicBlocklist{store: store}
 }

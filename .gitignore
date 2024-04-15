@@ -6,3 +6,6 @@ tools/bin
 *.touchfile
 *.pb.go
 *.pb.gw.go
+
+# Ignore any sqlite databases used for testing.
+*.s3db

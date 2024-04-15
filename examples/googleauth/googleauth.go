@@ -12,17 +12,18 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/google"
-	"github.com/dpup/prefab/storage/memorystore"
+	"github.com/dpup/prefab/storage"
+	"github.com/dpup/prefab/storage/sqlitestore"
 )
 
 func main() {
 	prefab.LoadDefaultConfig()
 
 	s := prefab.New(
-		prefab.WithPlugin(auth.Plugin(
-			auth.WithBlocklist(auth.NewBlocklist(memorystore.New())), // Keep track of revoked tokens.
-		)),
+		prefab.WithPlugin(auth.Plugin()),
 		prefab.WithPlugin(google.Plugin()),
+		// Register an SQLite store to persist revoked tokens.
+		prefab.WithPlugin(storage.Plugin(sqlitestore.New("example_googleauth.s3db"))),
 		prefab.WithStaticFiles("/", "./examples/googleauth/static/"),
 	)
 

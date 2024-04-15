@@ -38,7 +38,7 @@ func (r *Registry) Init(ctx context.Context) error {
 	// Validate dependency graph first.
 	visiting := make(map[string]bool)
 	for _, key := range r.keys {
-		if err := r.validateDeps(key, visiting); err != nil {
+		if err := r.validateDeps(key, visiting, true); err != nil {
 			return err
 		}
 	}
@@ -54,15 +54,18 @@ func (r *Registry) Init(ctx context.Context) error {
 	return nil
 }
 
-// Walks the plugin dependency graph and ensures deps are registered and that
+// Walks the plugin dependency graph and ensures that deps are registered and that
 // there are no cycles.
-func (r *Registry) validateDeps(key string, visiting map[string]bool) error {
+func (r *Registry) validateDeps(key string, visiting map[string]bool, required bool) error {
 	if visiting[key] {
 		return fmt.Errorf("plugin: dependency cycle detected involving '%v'", key)
 	}
 
 	plugin, ok := r.plugins[key]
 	if !ok {
+		if !required {
+			return nil
+		}
 		// TODO: Add call graph to error message.
 		return fmt.Errorf("plugin: missing dependency, '%v' not registered", key)
 	}
@@ -70,7 +73,17 @@ func (r *Registry) validateDeps(key string, visiting map[string]bool) error {
 	if d, ok := plugin.(DependentPlugin); ok {
 		visiting[key] = true
 		for _, dep := range d.Deps() {
-			if err := r.validateDeps(dep, visiting); err != nil {
+			if err := r.validateDeps(dep, visiting, true); err != nil {
+				return err
+			}
+		}
+		delete(visiting, key)
+	}
+
+	if d, ok := plugin.(OptionalDependentPlugin); ok {
+		visiting[key] = true
+		for _, dep := range d.OptDeps() {
+			if err := r.validateDeps(dep, visiting, false); err != nil {
 				return err
 			}
 		}
