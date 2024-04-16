@@ -45,18 +45,11 @@ func (u formDecoder) NewDecoder(r io.Reader) runtime.Decoder {
 			return err
 		}
 
-		fmt.Println("frm data", string(formData))
-
-		fmt.Println("values", values)
-
 		filter := &utilities.DoubleArray{}
-
 		err = runtime.PopulateQueryParameters(msg, values, filter)
-
 		if err != nil {
 			return err
 		}
-
 		return nil
 	})
 }
