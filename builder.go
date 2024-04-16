@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/serverutil"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -42,7 +41,7 @@ func New(opts ...ServerOption) *Server {
 		maxMsgSizeBytes: Config.Int("server.maxMsgSizeBytes"),
 		csrfSigningKey:  []byte(Config.String("server.csrfSigningKey")),
 
-		plugins: &plugin.Registry{},
+		plugins: &Registry{},
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -64,7 +63,7 @@ type builder struct {
 	maxMsgSizeBytes int
 	csrfSigningKey  []byte
 
-	plugins *plugin.Registry
+	plugins *Registry
 
 	logger          logging.Logger
 	httpHandlers    []handler
@@ -327,7 +326,7 @@ func WithLogger(logger logging.Logger) ServerOption {
 // WithPlugin registers a plugin with the server's registry. Plugins will be
 // initialized at server start. If the Plugin implements `OptionProvider` then
 // additional server options can be configured for the server.
-func WithPlugin(p plugin.Plugin) ServerOption {
+func WithPlugin(p Plugin) ServerOption {
 	return func(b *builder) {
 		if so, ok := p.(OptionProvider); ok {
 			for _, opt := range so.ServerOptions() {

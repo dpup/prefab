@@ -14,7 +14,6 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/plugin"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -63,7 +62,7 @@ type Server struct {
 	gatewayOpts []grpc.DialOption
 
 	// Plugins tied to the lifecycle of the server.
-	plugins *plugin.Registry
+	plugins *Registry
 }
 
 // GRPCServer returns the GRPC Service Registrar for use with service

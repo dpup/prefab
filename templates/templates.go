@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/dpup/prefab"
-	"github.com/dpup/prefab/plugin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -43,13 +42,13 @@ type TemplatePlugin struct {
 	templates   *template.Template
 }
 
-// From plugin.Plugin
+// From prefab.Plugin
 func (p *TemplatePlugin) Name() string {
 	return PluginName
 }
 
-// From plugin.InitializablePlugin
-func (p *TemplatePlugin) Init(ctx context.Context, r *plugin.Registry) error {
+// From prefab.InitializablePlugin
+func (p *TemplatePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	// Parse templates on initialization.
 	return p.parseAll()
 }

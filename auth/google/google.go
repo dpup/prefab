@@ -76,7 +76,6 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/serverutil"
 	"github.com/google/uuid"
 
@@ -124,12 +123,12 @@ type GooglePlugin struct {
 	clientSecret string
 }
 
-// From plugin.Plugin
+// From prefab.Plugin
 func (p *GooglePlugin) Name() string {
 	return PluginName
 }
 
-// From plugin.DependentPlugin
+// From prefab.DependentPlugin
 func (p *GooglePlugin) Deps() []string {
 	return []string{auth.PluginName}
 }
@@ -142,8 +141,8 @@ func (p *GooglePlugin) ServerOptions() []prefab.ServerOption {
 	}
 }
 
-// From plugin.Plugin
-func (p *GooglePlugin) Init(ctx context.Context, r *plugin.Registry) error {
+// From prefab.Plugin
+func (p *GooglePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.clientID == "" {
 		return status.Error(codes.InvalidArgument, "google: config missing client id")
 	}

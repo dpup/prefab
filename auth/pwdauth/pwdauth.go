@@ -5,8 +5,8 @@ package pwdauth
 import (
 	"context"
 
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
-	"github.com/dpup/prefab/plugin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -57,18 +57,18 @@ type PwdAuthPlugin struct {
 	accountFinder AccountFinder
 }
 
-// From plugin.Plugin
+// From prefab.Plugin
 func (p *PwdAuthPlugin) Name() string {
 	return PluginName
 }
 
-// From plugin.DependentPlugin
+// From prefab.DependentPlugin
 func (p *PwdAuthPlugin) Deps() []string {
 	return []string{auth.PluginName}
 }
 
-// From plugin.InitializablePlugin.
-func (p *PwdAuthPlugin) Init(ctx context.Context, r *plugin.Registry) error {
+// From prefab.InitializablePlugin.
+func (p *PwdAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.accountFinder == nil {
 		return status.Error(codes.FailedPrecondition, "pwdauth: plugin requires an account finder")
 	}

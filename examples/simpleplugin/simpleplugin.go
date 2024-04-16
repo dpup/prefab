@@ -7,7 +7,6 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/storage"
 	"github.com/dpup/prefab/storage/memorystore"
 	"google.golang.org/grpc"
@@ -43,13 +42,13 @@ type samplePlugin struct {
 	store storage.Store
 }
 
-// From plugin.Plugin, provides the plugin name for querying and dependency
+// From prefab.Plugin, provides the plugin name for querying and dependency
 // resolution.
 func (s *samplePlugin) Name() string {
 	return "sample"
 }
 
-// From plugin.DependentPlugin, ensures dependencies are registered in order.
+// From prefab.DependentPlugin, ensures dependencies are registered in order.
 func (s *samplePlugin) Deps() []string {
 	return []string{storage.PluginName}
 }
@@ -61,9 +60,9 @@ func (s *samplePlugin) ServerOptions() []prefab.ServerOption {
 	}
 }
 
-// From plugin.InitializablePlugin, stores a reference to the storage plugin for
+// From prefab.InitializablePlugin, stores a reference to the storage plugin for
 // use by the interceptor.
-func (s *samplePlugin) Init(ctx context.Context, r *plugin.Registry) error {
+func (s *samplePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	s.store = r.Get(storage.PluginName).(storage.Store)
 	logging.Info(ctx, "Sample Plugin initialized!")
 	return nil

@@ -39,7 +39,6 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/email"
-	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/serverutil"
 	"github.com/dpup/prefab/templates"
 	"github.com/golang-jwt/jwt/v5"
@@ -98,18 +97,18 @@ type MagicLinkPlugin struct {
 	tokenExpiration time.Duration
 }
 
-// From plugin.Plugin
+// From prefab.Plugin
 func (p *MagicLinkPlugin) Name() string {
 	return PluginName
 }
 
-// From plugin.DependentPlugin
+// From prefab.DependentPlugin
 func (p *MagicLinkPlugin) Deps() []string {
 	return []string{auth.PluginName, email.PluginName, templates.PluginName}
 }
 
-// From plugin.InitializablePlugin.
-func (p *MagicLinkPlugin) Init(ctx context.Context, r *plugin.Registry) error {
+// From prefab.InitializablePlugin.
+func (p *MagicLinkPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if len(p.signingKey) == 0 {
 		return status.Error(codes.InvalidArgument, "magiclink: config missing signing key")
 	}

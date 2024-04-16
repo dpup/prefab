@@ -6,20 +6,20 @@
 //
 // Examples:
 //
-//		plugin.Register(storage.Plugin(memorystore.New()))
+//		prefab.Register(storage.Plugin(memorystore.New()))
 //
-//	 func (m *MyPlugin) Init(r *plugin.Registry) error {
+//	 func (m *MyPlugin) Init(r *prefab.Registry) error {
 //	   m.store = r.Get(storage.PluginName)
 //	 }
 package storage
 
-import "github.com/dpup/prefab/plugin"
+import "github.com/dpup/prefab"
 
 // PluginName can be used to query the storage plugin.
 const PluginName = "storage"
 
 // Plugin wraps a storage implementation for registration.
-func Plugin(impl Store) plugin.Plugin {
+func Plugin(impl Store) prefab.Plugin {
 	return &StoragePlugin{Store: impl}
 }
 
@@ -28,7 +28,7 @@ type StoragePlugin struct {
 	Store
 }
 
-// From plugin.Plugin
+// From prefab.Plugin
 func (p *StoragePlugin) Name() string {
 	return PluginName
 }

@@ -7,7 +7,6 @@ import (
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/plugin"
 	"github.com/dpup/prefab/storage"
 )
 
@@ -63,18 +62,18 @@ type AuthPlugin struct {
 	blocklist     Blocklist
 }
 
-// From plugin.Plugin
+// From prefab.Plugin
 func (ap *AuthPlugin) Name() string {
 	return PluginName
 }
 
-// From plugin.OptionalDependentPlugin
+// From prefab.OptionalDependentPlugin
 func (ap *AuthPlugin) OptDeps() []string {
 	return []string{storage.PluginName}
 }
 
-// From plugin.InitializablePlugin
-func (ap *AuthPlugin) Init(ctx context.Context, r *plugin.Registry) error {
+// From prefab.InitializablePlugin
+func (ap *AuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	// If a blocklist hasn't been configured, and a storage plugin is registered,
 	// then create a default blocklist for revoked tokens.
 	if ap.blocklist == nil {

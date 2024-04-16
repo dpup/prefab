@@ -20,7 +20,6 @@ import (
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/plugin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/gomail.v2"
@@ -75,13 +74,13 @@ type EmailPlugin struct {
 	smtpPassword string
 }
 
-// From plugin.Plugin
+// From prefab.Plugin
 func (p *EmailPlugin) Name() string {
 	return PluginName
 }
 
-// From plugin.InitializablePlugin
-func (p *EmailPlugin) Init(ctx context.Context, r *plugin.Registry) error {
+// From prefab.InitializablePlugin
+func (p *EmailPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.from == "" {
 		return status.Error(codes.InvalidArgument, "email: config missing from adddress")
 	}
