@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/serverutil"
@@ -34,12 +33,23 @@ func New(opts ...ServerOption) *Server {
 	b := &builder{
 		host:            Config.String("server.host"),
 		port:            Config.Int("server.port"),
-		corsOrigins:     Config.Strings("server.corsOrigins"),
 		incomingHeaders: Config.Strings("server.incomingHeaders"),
 		certFile:        Config.String("server.tls.certFile"),
 		keyFile:         Config.String("server.tls.keyFile"),
 		maxMsgSizeBytes: Config.Int("server.maxMsgSizeBytes"),
 		csrfSigningKey:  []byte(Config.String("server.csrfSigningKey")),
+		securityHeaders: &SecurityHeaders{
+			XFramesOptions:        XFramesOptions(Config.String("server.security.xFramesOptions")),
+			HSTSExpiration:        Config.Duration("server.security.hstsExpiration"),
+			HSTSIncludeSubdomains: Config.Bool("server.security.hstsIncludeSubdomains"),
+			HSTSPreload:           Config.Bool("server.security.hstsPreload"),
+			CORSOrigins:           Config.Strings("server.security.corsOrigins"),
+			CORSAllowMethods:      Config.Strings("server.security.corsAllowMethods"),
+			CORSAllowHeaders:      Config.Strings("server.security.corsAllowHeaders"),
+			CORSExposeHeaders:     Config.Strings("server.security.corsExposeHeaders"),
+			CORSAllowCredentials:  Config.Bool("server.security.corsAllowCredentials"),
+			CORSMaxAge:            Config.Duration("server.security.corsMaxAge"),
+		},
 
 		plugins: &Registry{},
 	}
@@ -47,8 +57,11 @@ func New(opts ...ServerOption) *Server {
 		opt(b)
 	}
 
-	// Add the CSRF header to the safe-list.
+	// Add the CSRF header to the safe-lists.
 	b.incomingHeaders = append(b.incomingHeaders, csrfHeader)
+
+	// Add headers from CORS allow-list to propagate to the gRPC server. (Dupes don't matter)
+	b.incomingHeaders = append(b.incomingHeaders, b.securityHeaders.CORSAllowHeaders...)
 
 	return b.build()
 }
@@ -56,12 +69,12 @@ func New(opts ...ServerOption) *Server {
 type builder struct {
 	host            string
 	port            int
-	corsOrigins     []string
 	incomingHeaders []string
 	certFile        string
 	keyFile         string
 	maxMsgSizeBytes int
 	csrfSigningKey  []byte
+	securityHeaders *SecurityHeaders
 
 	plugins *Registry
 
@@ -148,26 +161,13 @@ func (b *builder) build() *Server {
 }
 
 func (b *builder) wrapHandler(h http.Handler) http.Handler {
-	if len(b.corsOrigins) == 0 {
-		// If there are no allowed origins configured, disable CORS headers completely.
-		return h
-	}
-	allowed := map[string]bool{}
-	for _, origin := range b.corsOrigins {
-		allowed[origin] = true
-	}
-	allowedHeaders := strings.Join(b.incomingHeaders, ", ")
+	sh := b.securityHeaders
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if allowed[r.Header.Get("Origin")] {
-			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
-			w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
-		}
+		sh.Apply(w, r)
 		if r.Method == "OPTIONS" {
-			return // Just the headers.
+			return // Only send headers on OPTIONS requests.
 		}
-		h.ServeHTTP(w, r) // Handle the request.
+		h.ServeHTTP(w, r)
 	})
 }
 
@@ -204,32 +204,30 @@ func (b *builder) isSecure() bool {
 	return b.certFile != "" && b.keyFile != ""
 }
 
-// WithHost configures the hostname or IP the server will listen on. Overrides
-// value set in config file.
+// WithHost configures the hostname or IP the server will listen on.
+//
+// Config key: `server.host`
 func WithHost(host string) ServerOption {
 	return func(b *builder) {
 		b.host = host
 	}
 }
 
-// WithPort configures the port the server will listen on. Overrides
-// value set in config file.
+// WithPort configures the port the server will listen on.
+//
+// Config key: `server.port`
 func WithPort(port int) ServerOption {
 	return func(b *builder) {
 		b.port = port
 	}
 }
 
-// WithCORSAllowedOrigins specifies origins that are allowed to make requests.
-// See https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
-func WithCORSAllowedOrigins(origins ...string) ServerOption {
-	return func(b *builder) {
-		b.corsOrigins = append(b.corsOrigins, origins...)
-	}
-}
-
 // WithIncomingHeaders specifies a safe-list of headers that can be forwarded
-// via CORS and made available in as GRPC metadata with the `prefab` prefix.
+// via gRPC metadata with the `prefab` prefix. Headers that are allowed by
+// the CORS security config are automatically added to this list,
+// see WithSecurityHeaders.
+//
+// Config key: `server.incomingHeaders`
 func WithIncomingHeaders(headers ...string) ServerOption {
 	return func(b *builder) {
 		b.incomingHeaders = append(b.incomingHeaders, headers...)
@@ -238,6 +236,8 @@ func WithIncomingHeaders(headers ...string) ServerOption {
 
 // WithTLS configures the server to allow traffic via TLS using the provided
 // cert. If not called server will use HTTP/H2C.
+//
+// Config keys: `server.tls.certFile`, `server.tls.keyFile`
 func WithTLS(certFile, keyFile string) ServerOption {
 	return func(b *builder) {
 		b.certFile = certFile
@@ -246,9 +246,40 @@ func WithTLS(certFile, keyFile string) ServerOption {
 }
 
 // WithMaxRecvMsgSize sets the maximum GRPC message size. Default is 4Mb.
+//
+// Config key: `server.maxMsgSizeBytes`
 func WithMaxRecvMsgSize(maxMsgSizeBytes int) ServerOption {
 	return func(b *builder) {
 		b.maxMsgSizeBytes = maxMsgSizeBytes
+	}
+}
+
+// WithCRSFSigningKey sets the key used to sign CSRF tokens.
+//
+// Config key: `server.csrfSigningKey`
+func WithCRSFSigningKey(signingKey string) ServerOption {
+	return func(b *builder) {
+		b.csrfSigningKey = []byte(signingKey)
+	}
+}
+
+// WithSecurityHeaders sets the security headers that should be set on HTTP
+// responses.
+//
+// Config keys:
+// - `server.security.xFramesOptions`
+// - `server.security.hstsExpiration`
+// - `server.security.hstsIncludeSubdomains`
+// - `server.security.hstsPreload`
+// - `server.security.corsOrigins`
+// - `server.security.corsAllowMethods`
+// - `server.security.corsAllowHeaders`
+// - `server.security.corsExposeHeaders`
+// - `server.security.corsAllowCredentials`
+// - `server.security.corsMaxAge`
+func WithSecurityHeaders(headers *SecurityHeaders) ServerOption {
+	return func(b *builder) {
+		b.securityHeaders = headers
 	}
 }
 

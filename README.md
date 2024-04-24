@@ -188,8 +188,8 @@ table, with a `prefab_` prefix. Uninitialized models are stored in
 
 ## 🔐 Security
 
-- CORS
-- [CSRF Protection](#csrf-protection)
+- [**CSRF Protection**](#csrf-protection): header for XHR and double submit cookies for form posts.
+- **Security headers**: `X-Frames-Options`, HTTP Strict Transport Security (HSTS), Cross origin requests (CORS), Referrer Policy etc.
 
 ### CSRF Protection
 
@@ -241,4 +241,36 @@ fetch("/api/users/154", {
     name: "Frodo Baggins",
   }),
 });
+```
+
+### Security Headers
+
+XFrameOptions, HSTS, and CORS can be configured via the config file or using
+`prefab.WithSecurityHeaders`.
+
+Example configuration that force HTTPS and allows cross-origin requests:
+
+```yaml
+server:
+  security:
+    # Prevent iframing.
+    xFrameOptions: DENY
+
+    # Force HTTPS
+    hstsExpiration: 31536000s
+    hstsIncludeSubdomains: true
+    hstsPreload: true
+
+    # Allow CORS from a static app and a single 3rd party site.
+    corsOrigins:
+    - https://app.example.com
+    - https://plugin.vendor.com
+    corsAllowedMethods:
+    - GET
+    - POST
+    - PUT
+    corsAllowedHeaders:
+    - x-csrf-protection
+    corsAllowCredentials: true
+    corsMaxAge: 72h
 ```

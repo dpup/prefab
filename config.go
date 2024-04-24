@@ -25,10 +25,10 @@ var Config = koanf.New(".")
 func Init() {
 	// Provide fallbacks for cases when no configuration is loaded at all.
 	Config.Load(confmap.Provider(map[string]interface{}{
-		"name":            "Prefab Demo Server",
-		"address":         "http://localhost:5678",
+		"name":            "Prefab Server",
+		"address":         "http://localhost:8000",
 		"server.host":     "localhost",
-		"server.port":     5678,
+		"server.port":     8000,
 		"auth.expiration": "24h",
 		"auth.signingKey": randomString(32), // Tokens will break with each restart.
 	}, "."), nil)

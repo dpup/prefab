@@ -1,6 +1,6 @@
 
 # User facing name that identifies the service.
-name: Prefab
+name: Prefab Server
 
 # How the server should be addressed externally when constructing URLs. In
 # development, this is likely the hostname and port configured during server
@@ -18,17 +18,32 @@ server:
   csrfSigningKey: helloworld
 
   # Override the default GRPC max msg size.
-  # maxMsgSizeBytes: 10485760 # 10MB
+  maxMsgSizeBytes: 10485760 # 10MB
 
   # If configured, the server will listen on TLS.
   # tls:
   #   certFile: './certs/cert.pem'
   #   keyFile: './certs/key.pem'
 
-  # Whether to allow cross-origin requests.
-  # corsOrigins:
-  #  - https://www.somesite.com
-  #  - https://extension.thirdparty.com
+  # Security headers to set on all responses.
+  security:
+    xFrameOptions: DENY
+    hstsExpiration: 0
+    hstsIncludeSubdomains: false
+    hstsPreload: false
+    corsOrigins:
+    - http://localhost:3000
+    - http://localhost:8000
+    corsAllowedMethods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    corsAllowedHeaders:
+    - x-requested-with
+    - x-csrf-protection
+    corsAllowCredentials: true
+    corsMaxAge: 24h
 
   # Incoming headers that should be forwarded on to GRPC services.
   incomingHeaders:
