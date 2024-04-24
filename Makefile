@@ -40,7 +40,8 @@ gen-proto.touchfile: $(GEN_OUT)/openapiv2 $(PROTO_FILES) tools.touchfile
 		--grpc_out=$(GOPATH)src/ \
 		--grpc-gateway_out $(GOPATH)src \
 		--grpc-gateway_opt logtostderr=true \
-		--grpc-gateway_opt generate_unbound_methods=true \
+		--grpc-gateway_opt generate_unbound_methods=false \
+		--grpc-gateway_opt omit_package_doc=true \
 		--openapiv2_out $(GEN_OUT)/openapiv2 \
 		--openapiv2_opt logtostderr=true \
 		--openapiv2_opt use_go_templates=true \
