@@ -1,7 +1,6 @@
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 GEN_OUT := $(ROOT_DIR)/out
-GO_SRC := $(ROOT_DIR)/
 
 PROTO_FILES := $(shell find $(ROOT_DIR) -name "*.proto" -not -path "*/third_party/*")
 
@@ -25,11 +24,18 @@ test-vet:
 test-staticcheck:
 	@staticcheck ./...
 
+.PHONY: clean-proto
+clean-proto:
+	@rm -f gen-proto.touchfile
+	@find . -name "*.pb.go" -type f -delete
+	@find . -name "*.pb.gw.go" -type f -delete
+	@echo "👷🏽‍♀️ Generated proto files removed"
+
 .PHONY: gen-proto
 gen-proto: gen-proto.touchfile
 gen-proto.touchfile: $(GEN_OUT)/openapiv2 $(PROTO_FILES) tools.touchfile
-	@protoc -I$(GO_SRC) \
-		-I$(ROOT_DIR)/third_party/googleapis \
+	@protoc -I$(ROOT_DIR)/proto \
+		-I$(ROOT_DIR)/proto/third_party/googleapis \
 		--go_out=$(GOPATH)src/ \
 		--grpc_out=$(GOPATH)src/ \
 		--grpc-gateway_out $(GOPATH)src \

@@ -7,8 +7,8 @@
   },
   "protoc": {
     "options": [
-      "--proto_path=${workspaceRoot}",
-      "--proto_path=${workspaceRoot}/third_party/googleapis",
+      "--proto_path=${workspaceRoot}/proto",
+      "--proto_path=${workspaceRoot}/proto/third_party/googleapis",
       "--grpc-gateway_out=${env.GOPATH}/src",
       "--grpc-gateway_opt=logtostderr=true",
       "--grpc_out=${env.GOPATH}/src",
