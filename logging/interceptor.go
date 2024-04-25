@@ -2,21 +2,60 @@ package logging
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 
+	"github.com/dpup/prefab/errors"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 )
 
 // Interceptor returns a GRPC Logging interceptor configured to log using
 // the prefab logging adapter.
 func Interceptor() grpc.UnaryServerInterceptor {
-	return grpc_middleware.ChainUnaryServer(scopingInterceptor, grpcLoggingInterceptor)
+	return grpc_middleware.ChainUnaryServer(scopingInterceptor, grpcLoggingInterceptor, errorInterceptor)
+}
+
+// Creates a new logging scope for each request, adding the RPC method name as
+// the logger name. This ensures logging.Track works as expected.
+func scopingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return handler(With(ctx, FromContext(ctx).Named(info.FullMethod)), req)
+}
+
+// Adds extra error fields to the logging context.
+func errorInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	resp, err := handler(ctx, req)
+	if err != nil {
+		Track(ctx, "error.type", reflect.TypeOf(err))
+		Track(ctx, "error.http_status", errors.HTTPStatusCode(err))
+
+		// Add a minimalist stack trace to the log.
+		if e, ok := err.(*errors.Error); ok {
+			frames := e.StackFrames()
+			trace := []string{}
+			for i := 0; i < len(frames) && i < 5; i++ {
+				trace = append(trace, fmt.Sprintf("%s:%d", frames[i].File, frames[i].LineNumber))
+			}
+			Track(ctx, "error.stack_trace", trace)
+		}
+	}
+	return resp, err
 }
 
 // Standard interceptor from the GRPC Logging middleware.
 var grpcLoggingInterceptor = grpc_logging.UnaryServerInterceptor(grpc_logging.LoggerFunc(func(ctx context.Context, lvl grpc_logging.Level, msg string, fields ...any) {
 	logger := FromContext(ctx)
+
+	if z, ok := logger.(*ZapLogger); ok {
+		// Disable zap's stack trace for all but panic level, because it's not very
+		// helpful to have the stacktrace of the logger interceptor. Errors that
+		// have stack traces will be added as fields, by the errorLoggingInterceptor.
+		z.z = z.z.Desugar().WithOptions(zap.AddStacktrace(zapcore.PanicLevel)).Sugar()
+	}
+
 	for i := 0; i < len(fields); i += 2 {
 		key := fields[i].(string)
 		value := fields[i+1]
@@ -36,9 +75,3 @@ var grpcLoggingInterceptor = grpc_logging.UnaryServerInterceptor(grpc_logging.Lo
 		logger.Panicf("unknown log level %v", lvl)
 	}
 }))
-
-// Creates a new logging scope for each request, adding the RPC method name as
-// the logger name. This ensures logging.Track works as expected.
-func scopingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	return handler(With(ctx, FromContext(ctx).Named(info.FullMethod)), req)
-}

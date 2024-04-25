@@ -163,6 +163,32 @@ func WrapPrefix(e interface{}, prefix string, skip int) *Error {
 	}
 }
 
+// Mark takes an error and sets the stack trace from the point it was called,
+// overriding any previous stack trace that may have been set. The skip parameter
+// indicates how far up the stack to start the stacktrace. 0 is from the current
+// call, 1 from its caller, etc.
+func Mark(e interface{}, skip int) *Error {
+	if e == nil {
+		return nil
+	}
+	if err, ok := e.(*Error); ok {
+		stack := make([]uintptr, MaxStackDepth)
+		length := runtime.Callers(2+skip, stack[:])
+		return &Error{
+			Err:            err.Err,
+			stack:          stack[:length],
+			code:           err.code,
+			details:        err.details,
+			httpStatusCode: err.httpStatusCode,
+			publicMessage:  err.publicMessage,
+			prefix:         err.prefix,
+		}
+	}
+
+	// If the error is not an `Error`, we can just use wrap.
+	return Wrap(e, 1+skip)
+}
+
 // WithPublicMessage takes an error message and adds a public message to it. If
 // the error is not already an `Error`, it will be wrapped in one.
 func WithPublicMessage(err error, publicMessage string) *Error {

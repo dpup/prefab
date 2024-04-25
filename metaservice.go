@@ -1,6 +1,8 @@
 package prefab
 
-import "context"
+import (
+	"context"
+)
 
 // Implements MetaServiceServer.
 type meta struct {
