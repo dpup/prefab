@@ -22,7 +22,7 @@ import (
 // configuration options.
 var Config = koanf.New(".")
 
-func Init() {
+func init() {
 	// Provide fallbacks for cases when no configuration is loaded at all.
 	Config.Load(confmap.Provider(map[string]interface{}{
 		"name":            "Prefab Server",
