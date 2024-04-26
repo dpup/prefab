@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const userInfoEndpoint = "https://www.googleapis.com/oauth2/v3/userinfo"
@@ -48,7 +48,7 @@ func claimsString(key string, c map[string]interface{}, required bool) (string, 
 	if !required {
 		return "", nil
 	}
-	return "", status.Errorf(codes.Internal, "google: failed to decode claims: missing '%s'", key)
+	return "", errors.Codef(codes.Internal, "google: failed to decode claims: missing '%s'", key)
 }
 
 // UserInfoFromJSON returns a UserInfo struct from the JSON data. If the JSON is
@@ -56,7 +56,7 @@ func claimsString(key string, c map[string]interface{}, required bool) (string, 
 func UserInfoFromJSON(data io.Reader) (*UserInfo, error) {
 	userInfo := &UserInfo{}
 	if err := json.NewDecoder(data).Decode(userInfo); err != nil {
-		return nil, status.Errorf(codes.Internal, "google: failed to decode user info: %s", err)
+		return nil, errors.Codef(codes.Internal, "google: failed to decode user info: %s", err)
 	}
 	return userInfo, nil
 }

@@ -22,28 +22,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/serverutil"
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 var (
 	// No identity was found within the incoming context.
-	ErrNotFound = status.Error(codes.Unauthenticated, "identity not found")
+	ErrNotFound = errors.NewC("identity not found", codes.Unauthenticated)
 
 	// The token's expiration date was in the past.
-	ErrExpired = status.Error(codes.Unauthenticated, "token has expired")
+	ErrExpired = errors.NewC("token has expired", codes.Unauthenticated)
 
 	// The token was not signed correctly.
-	ErrInvalidToken = status.Error(codes.InvalidArgument, "token is invalid")
+	ErrInvalidToken = errors.NewC("token is invalid", codes.InvalidArgument)
 
 	// Invalid authorization header.
-	ErrInvalidHeader = status.Error(codes.InvalidArgument, "bad authorization header")
+	ErrInvalidHeader = errors.NewC("bad authorization header", codes.InvalidArgument)
 
 	// Identity token has been revoked or blocked.
-	ErrRevoked = status.Error(codes.Unauthenticated, "token has been revoked")
+	ErrRevoked = errors.NewC("token has been revoked", codes.Unauthenticated)
 
 	// Allows for time to be stubbed in tests.
 	timeFunc = time.Now
@@ -107,7 +107,7 @@ func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	ss, err := token.SignedString(signingKeyFromContext(ctx))
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, 0).WithCode(codes.Unauthenticated)
 	}
 	return ss, nil
 }
@@ -130,7 +130,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		jwt.WithIssuedAt(),
 	)
 	if err != nil {
-		return Identity{}, status.Error(codes.Unauthenticated, err.Error())
+		return Identity{}, errors.Wrap(err, 0).WithCode(codes.Unauthenticated)
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
@@ -152,14 +152,14 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		}, nil
 	}
 
-	return Identity{}, ErrInvalidToken
+	return Identity{}, errors.Mark(ErrInvalidToken, 0)
 }
 
 // IdentityFromContext parses and verifies a JWT received from incoming GRPC
 // metadata. An `Authorization` header will take precedence over a `Cookie`,
 func IdentityFromContext(ctx context.Context) (Identity, error) {
 	i, err := identityFromAuthHeader(ctx)
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		return i, err
 	}
 	return identityFromCookie(ctx)
@@ -170,7 +170,7 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 	a, ok := md["authorization"] // GRPC Gateway forwards this header without prefix.
 
 	if !ok || len(a) == 0 || a[0] == "" {
-		return Identity{}, ErrNotFound
+		return Identity{}, errors.Mark(ErrNotFound, 0)
 	}
 
 	auth := strings.SplitN(a[0], " ", 2)
@@ -193,12 +193,12 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 		payload, _ := base64.StdEncoding.DecodeString(auth[1])
 		pair := strings.SplitN(string(payload), ":", 2)
 		if len(pair) != 2 || pair[1] != "" {
-			return Identity{}, ErrInvalidHeader
+			return Identity{}, errors.Mark(ErrInvalidHeader, 0)
 		}
 		return ParseIdentityToken(ctx, pair[0])
 
 	default:
-		return Identity{}, ErrInvalidHeader
+		return Identity{}, errors.Mark(ErrInvalidHeader, 0)
 	}
 }
 
@@ -206,7 +206,7 @@ func identityFromCookie(ctx context.Context) (Identity, error) {
 	cookies := serverutil.CookiesFromIncomingContext(ctx)
 	c, ok := cookies[IdentityTokenCookieName]
 	if !ok {
-		return Identity{}, ErrNotFound
+		return Identity{}, errors.Mark(ErrNotFound, 0)
 	}
 	identity, err := ParseIdentityToken(ctx, c.Value)
 	if err != nil {

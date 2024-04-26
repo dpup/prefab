@@ -1,28 +1,28 @@
 package storage
 
 import (
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
 	// Returned when a record does not exist.
-	ErrNotFound = status.Error(codes.NotFound, "record not found")
+	ErrNotFound = errors.NewC("record not found", codes.NotFound)
 
 	// Returned when a record conficts with an existing key.
-	ErrAlreadyExists = status.Error(codes.AlreadyExists, "primary key already exists")
+	ErrAlreadyExists = errors.NewC("primary key already exists", codes.AlreadyExists)
 
 	// Returned when List is called with a non-slice.
-	ErrSliceRequired = status.Error(codes.InvalidArgument, "pointer slice required")
+	ErrSliceRequired = errors.NewC("pointer slice required", codes.InvalidArgument)
 
 	// Returned when a store can not marshal/unmarshal a model.
-	ErrInvalidModel = status.Error(codes.InvalidArgument, "invalid model")
+	ErrInvalidModel = errors.NewC("invalid model", codes.InvalidArgument)
 
 	// Returned when List is called with a filter and slice of mismatching types.
-	ErrTypeMismatch = status.Error(codes.InvalidArgument, "type mismatch")
+	ErrTypeMismatch = errors.NewC("type mismatch", codes.InvalidArgument)
 
 	// Returned when a store is passed an uninitialized pointer.
-	ErrNilModel = status.Error(codes.InvalidArgument, "uninitialized pointer passed as model")
+	ErrNilModel = errors.NewC("uninitialized pointer passed as model", codes.InvalidArgument)
 )
 
 // Store offers a basic CRUUDLE (Create Read Update Upsert Delete List Exists)

@@ -175,7 +175,7 @@ func Mark(e interface{}, skip int) *Error {
 		stack := make([]uintptr, MaxStackDepth)
 		length := runtime.Callers(2+skip, stack[:])
 		return &Error{
-			Err:            err.Err,
+			Err:            err,
 			stack:          stack[:length],
 			code:           err.code,
 			details:        err.details,
@@ -230,6 +230,11 @@ func WithDetails(err error, details ...protoiface.MessageV1) *Error {
 // errors in return values.
 func Errorf(format string, a ...interface{}) *Error {
 	return Wrap(fmt.Errorf(format, a...), 1)
+}
+
+// Codef creates a new error with the given message and status code.
+func Codef(code codes.Code, format string, a ...interface{}) *Error {
+	return NewC(fmt.Errorf(format, a...), code)
 }
 
 // Error returns the underlying error's message.
@@ -297,6 +302,12 @@ func (err *Error) Unwrap() error {
 // Code returns the gRPC status code associated with the error.
 func (err *Error) Code() codes.Code {
 	return err.code
+}
+
+// Append a message to the wrapped error.
+func (err *Error) Append(str string) *Error {
+	err.Err = fmt.Errorf("%w: %s", err.Err, str)
+	return err
 }
 
 // WithCode sets the gRPC status code associated with the error.
@@ -391,6 +402,10 @@ func Code(err error) codes.Code {
 	if err == nil {
 		return codes.OK
 	}
+	var e *Error
+	if ok := As(err, &e); ok {
+		return e.Code()
+	}
 	if e, ok := err.(codedError); ok {
 		return e.Code()
 	}
@@ -403,6 +418,10 @@ func Code(err error) codes.Code {
 func HTTPStatusCode(err error) int {
 	if err == nil {
 		return http.StatusOK
+	}
+	var e *Error
+	if ok := As(err, &e); ok {
+		return e.HTTPStatusCode()
 	}
 	if e, ok := err.(httpError); ok {
 		return e.HTTPStatusCode()

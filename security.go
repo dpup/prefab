@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type XFramesOptions string
@@ -22,7 +22,7 @@ const (
 
 var (
 	// HSTS requires a minimum expiration of 1 year for preload.
-	ErrBadHSTSExpiration = status.Error(codes.FailedPrecondition, "prefab: HSTS preload requires expiration of at least 1 year")
+	ErrBadHSTSExpiration = errors.NewC("prefab: HSTS preload requires expiration of at least 1 year", codes.FailedPrecondition)
 )
 
 // SecurityHeaders contains the security headers that should be set on HTTP
@@ -105,7 +105,7 @@ func (s *SecurityHeaders) compute() error {
 			}
 			if s.HSTSPreload {
 				if s.HSTSExpiration < time.Hour*24*365 {
-					return ErrBadHSTSExpiration
+					return errors.Mark(ErrBadHSTSExpiration, 0)
 				}
 				h += "; preload"
 			}

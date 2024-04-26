@@ -3,6 +3,7 @@ package storage
 import (
 	"reflect"
 
+	"github.com/dpup/prefab/errors"
 	pluralize "github.com/gertd/go-pluralize"
 	"github.com/iancoleman/strcase"
 )
@@ -48,7 +49,7 @@ func Name(m any) string {
 // ValidateReceiver returns an error if the model is nil or uninitialized.
 func ValidateReceiver(model Model) error {
 	if model == nil || (reflect.ValueOf(model).Kind() == reflect.Ptr && reflect.ValueOf(model).IsNil()) {
-		return ErrNilModel
+		return errors.Mark(ErrNilModel, 0)
 	}
 	return nil
 }

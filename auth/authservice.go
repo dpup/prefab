@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/serverutil"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // LoginHandler is a function which allows delegation of login requests.
@@ -39,7 +39,7 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 	logging.Info(ctx, "Login attempt")
 
 	if in.RedirectUri != "" && in.IssueToken {
-		return nil, status.Error(codes.InvalidArgument, "auth: `issue_token` not compatible with `redirect_uri`")
+		return nil, errors.NewC("auth: `issue_token` not compatible with `redirect_uri`", codes.InvalidArgument)
 	}
 
 	// TODO: Verify redirect_uri is a path or has a valid host.
@@ -61,7 +61,7 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 		return resp, err
 	}
 
-	return nil, status.Error(codes.InvalidArgument, "auth: unknown or unregistered provider")
+	return nil, errors.NewC("auth: unknown or unregistered provider", codes.InvalidArgument)
 }
 
 func (s *impl) Logout(ctx context.Context, in *LogoutRequest) (*LogoutResponse, error) {

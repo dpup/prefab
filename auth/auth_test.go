@@ -50,7 +50,7 @@ func TestTokenExpiration(t *testing.T) {
 	}()
 
 	_, err = ParseIdentityToken(ctx, tokenString)
-	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = token has invalid claims: token is expired")
+	assert.EqualError(t, err, "token has invalid claims: token is expired")
 }
 
 func TestTokenSigning(t *testing.T) {
@@ -61,14 +61,14 @@ func TestTokenSigning(t *testing.T) {
 	assert.Nil(t, err, "failed to issue token")
 
 	_, err = ParseIdentityToken(injectSigningKey("actual")(ctx), tokenString)
-	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = token signature is invalid: signature is invalid")
+	assert.EqualError(t, err, "token signature is invalid: signature is invalid")
 }
 
 func TestIdentityFromEmptyContext(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := IdentityFromContext(ctx)
-	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = identity not found")
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestIdentityFromCookie(t *testing.T) {
@@ -147,7 +147,7 @@ func TestIdentityFromBearerToken_blocked(t *testing.T) {
 
 	actual, err := IdentityFromContext(ctx)
 	assert.Equal(t, Identity{}, actual, "expected zero Identity")
-	assert.EqualError(t, err, "rpc error: code = Unauthenticated desc = token has been revoked")
+	assert.ErrorIs(t, err, ErrRevoked)
 }
 
 func TestIdentityFromBasicAuth(t *testing.T) {
@@ -185,7 +185,7 @@ func TestIdentityFromBasicAuth_invalidBasicAuth(t *testing.T) {
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	_, err = IdentityFromContext(ctx)
-	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = bad authorization header")
+	assert.ErrorIs(t, err, ErrInvalidHeader)
 }
 
 func TestIdentityFromBasicAuth_invalidAuthorizationType(t *testing.T) {
@@ -203,5 +203,5 @@ func TestIdentityFromBasicAuth_invalidAuthorizationType(t *testing.T) {
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	_, err = IdentityFromContext(ctx)
-	assert.EqualError(t, err, "rpc error: code = InvalidArgument desc = bad authorization header")
+	assert.ErrorIs(t, err, ErrInvalidHeader)
 }

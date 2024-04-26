@@ -71,3 +71,18 @@ func TestPublicMessage(t *testing.T) {
 	err = err.WithPublicMessage("public message")
 	assert.Equal(t, "public message", err.GRPCStatus().Message())
 }
+
+func TestWrappedError(t *testing.T) {
+	err := NewC("test error", codes.InvalidArgument)
+	wrappedErr := fmt.Errorf("%w : wrapped error", err)
+
+	assert.Equal(t, codes.InvalidArgument, Code(wrappedErr))
+}
+
+func TestMark(t *testing.T) {
+	err := NewC("test error", codes.InvalidArgument)
+	markedErr := Mark(err, 0)
+
+	assert.True(t, Is(markedErr, err), "Marked error should still satisfy Is")
+	assert.Equal(t, codes.InvalidArgument, Code(markedErr))
+}

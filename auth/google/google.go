@@ -75,6 +75,7 @@ import (
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/serverutil"
 	"github.com/google/uuid"
@@ -83,7 +84,6 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/idtoken"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -144,10 +144,10 @@ func (p *GooglePlugin) ServerOptions() []prefab.ServerOption {
 // From prefab.Plugin
 func (p *GooglePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.clientID == "" {
-		return status.Error(codes.InvalidArgument, "google: config missing client id")
+		return errors.New("google: config missing client id")
 	}
 	if p.clientSecret == "" {
-		return status.Error(codes.InvalidArgument, "google: config missing client secret")
+		return errors.New("google: config missing client secret")
 	}
 
 	ap := r.Get(auth.PluginName).(*auth.AuthPlugin)
@@ -158,7 +158,7 @@ func (p *GooglePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 
 func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	if req.Provider != ProviderName {
-		return nil, status.Error(codes.InvalidArgument, "google: login handler called for wrong provider")
+		return nil, errors.NewC("google: login handler called for wrong provider", codes.InvalidArgument)
 	}
 
 	var userInfo *UserInfo
@@ -174,7 +174,7 @@ func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) 
 		// Initiates a server side OAuth flow.
 		return p.redirectToGoogle(ctx, req.RedirectUri, req.Creds["state"])
 	} else {
-		return nil, status.Error(codes.InvalidArgument, "google: unexpected credentials, a `code` or an `idtoken` are required")
+		return nil, errors.NewC("google: unexpected credentials, a `code` or an `idtoken` are required", codes.InvalidArgument)
 	}
 
 	if err != nil {
@@ -254,7 +254,7 @@ func (p *GooglePlugin) handleGoogleCallback(w http.ResponseWriter, r *http.Reque
 func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawState string) (*UserInfo, error) {
 	_, err := p.parseState(rawState)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "google: failed to parse state: %s", err)
+		return nil, errors.Codef(codes.InvalidArgument, "google: failed to parse state: %s", err)
 	}
 
 	var conf = &oauth2.Config{
@@ -271,18 +271,18 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawSta
 	// Exchange authorization code for an access token.
 	token, err := conf.Exchange(ctx, code)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "google: token exchange failed: %s", err)
+		return nil, errors.Codef(codes.Internal, "google: token exchange failed: %s", err)
 	}
 
 	// Use the access token to fetch the user's profile.
 	client := conf.Client(ctx, token)
 	resp, err := client.Get(userInfoEndpoint)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "google: failed to fetch user profile: %s", err)
+		return nil, errors.Codef(codes.Internal, "google: failed to fetch user profile: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, status.Errorf(codes.Internal, "google: failed to get user info, status: %d", resp.StatusCode)
+		return nil, errors.Codef(codes.Internal, "google: failed to get user info, status: %d", resp.StatusCode)
 	}
 	return UserInfoFromJSON(resp.Body)
 }
@@ -293,7 +293,7 @@ func (p *GooglePlugin) handleIDToken(ctx context.Context, token string) (*UserIn
 	payload, err := idtoken.Validate(ctx, token, p.clientID)
 	if err != nil {
 		logging.Errorw(ctx, "google: failed to validate id token", "error", err)
-		return nil, status.Errorf(codes.InvalidArgument, "google: failed to validate id token: %s", err)
+		return nil, errors.Codef(codes.InvalidArgument, "google: failed to validate id token: %s", err)
 	}
 	return UserInfoFromClaims(payload.Claims)
 }

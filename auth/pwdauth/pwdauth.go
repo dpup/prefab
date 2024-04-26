@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -70,7 +71,7 @@ func (p *PwdAuthPlugin) Deps() []string {
 // From prefab.InitializablePlugin.
 func (p *PwdAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.accountFinder == nil {
-		return status.Error(codes.FailedPrecondition, "pwdauth: plugin requires an account finder")
+		return errors.NewC("pwdauth: plugin requires an account finder", codes.FailedPrecondition)
 	}
 	ap := r.Get(auth.PluginName).(*auth.AuthPlugin)
 	ap.AddLoginHandler(ProviderName, p.handleLogin)
@@ -79,21 +80,21 @@ func (p *PwdAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 
 func (p *PwdAuthPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	if req.Provider != ProviderName {
-		return nil, status.Error(codes.InvalidArgument, "pwdauth login handler called for wrong provider")
+		return nil, errors.NewC("pwdauth login handler called for wrong provider", codes.InvalidArgument)
 	}
 	if req.Creds["email"] == "" || req.Creds["password"] == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing credentials, pwdauth login requires an `email` and `password`")
+		return nil, errors.NewC("missing credentials, pwdauth login requires an `email` and `password`", codes.InvalidArgument)
 	}
 
 	a, err := p.accountFinder.FindAccount(ctx, req.Creds["email"])
 	if status.Code(err) == codes.NotFound {
-		return nil, status.Error(codes.Unauthenticated, "invalid email or password")
+		return nil, errors.NewC("invalid email or password", codes.Unauthenticated)
 	} else if err != nil {
 		return nil, err
 	}
 
 	if err := p.hasher.Compare(a.HashedPassword, []byte(req.Creds["password"])); err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid email or password")
+		return nil, errors.NewC("invalid email or password", codes.Unauthenticated)
 	}
 
 	idt, err := auth.IdentityToken(ctx, identityFromAccount(a))

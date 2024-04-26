@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/serverutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -73,16 +73,16 @@ func VerifyCSRF(ctx context.Context, signingKey []byte) error {
 	md, _ := metadata.FromIncomingContext(ctx)
 	params := md.Get(csrfParam)
 	if len(params) == 0 || params[0] == "" {
-		return status.Errorf(codes.FailedPrecondition, "csrf: missing token in request")
+		return errors.Codef(codes.FailedPrecondition, "csrf: missing token in request")
 	}
 
 	fromCookie := csrfTokenFromCookie(ctx)
 	if fromCookie == "" {
-		return status.Errorf(codes.FailedPrecondition, "csrf: missing token in cookies")
+		return errors.Codef(codes.FailedPrecondition, "csrf: missing token in cookies")
 	}
 
 	if params[0] != fromCookie {
-		return status.Errorf(codes.FailedPrecondition, "csrf: token mismatch")
+		return errors.Codef(codes.FailedPrecondition, "csrf: token mismatch")
 	}
 
 	return verifyCSRFToken(fromCookie, signingKey)
@@ -115,17 +115,17 @@ func generateCSRFToken(signingKey []byte) string {
 func verifyCSRFToken(token string, signingKey []byte) error {
 	parts := strings.SplitN(token, "_", 2)
 	if len(parts) != 2 {
-		return status.Errorf(codes.FailedPrecondition, "csrf: invalid token")
+		return errors.Codef(codes.FailedPrecondition, "csrf: invalid token")
 	}
 
 	actualMac, err := hex.DecodeString(parts[0])
 	if err != nil {
-		return status.Errorf(codes.FailedPrecondition, "csrf: invalid signature")
+		return errors.Codef(codes.FailedPrecondition, "csrf: invalid signature")
 	}
 
 	randomData, err := hex.DecodeString(parts[1])
 	if err != nil {
-		return status.Errorf(codes.FailedPrecondition, "csrf: invalid data")
+		return errors.Codef(codes.FailedPrecondition, "csrf: invalid data")
 	}
 
 	hasher := hmac.New(sha256.New, []byte(signingKey))
@@ -133,7 +133,7 @@ func verifyCSRFToken(token string, signingKey []byte) error {
 	expectedMac := hasher.Sum(nil)
 
 	if !hmac.Equal(actualMac, expectedMac) {
-		return status.Errorf(codes.FailedPrecondition, "csrf: signature mismatch")
+		return errors.Codef(codes.FailedPrecondition, "csrf: signature mismatch")
 	}
 
 	return nil

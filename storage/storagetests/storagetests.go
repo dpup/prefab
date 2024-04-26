@@ -264,9 +264,8 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if err := store.List(tt.models, tt.filter); err != tt.wantErr {
-					t.Errorf("store.List() error = %v, wantErr %v", err, tt.wantErr)
-				}
+				err := store.List(tt.models, tt.filter)
+				assert.ErrorIs(t, err, tt.wantErr, "store.List() error = %v, wantErr %v", err, tt.wantErr)
 			})
 		}
 	})

@@ -10,8 +10,8 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/pwdauth"
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func main() {
@@ -51,7 +51,7 @@ func (a accountStore) FindAccount(ctx context.Context, email string) (*pwdauth.A
 			return acc, nil
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "account not found")
+	return nil, errors.Codef(codes.NotFound, "account not found")
 }
 
 var testAccounts = []*pwdauth.Account{

@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/storage"
 
 	"github.com/mattn/go-sqlite3"
@@ -123,7 +124,7 @@ func (s *store) Read(id string, model storage.Model) error {
 		return translateError(err)
 	}
 
-	return json.Unmarshal(value, model)
+	return errors.Wrap(json.Unmarshal(value, model), 0)
 }
 
 func (s *store) Update(models ...storage.Model) error {
@@ -138,7 +139,7 @@ func (s *store) Update(models ...storage.Model) error {
 		value, err := json.Marshal(model)
 		if err != nil {
 			tx.Rollback()
-			return fmt.Errorf("%w: %s", storage.ErrInvalidModel, err)
+			return errors.Mark(storage.ErrInvalidModel, 0).Append(err.Error())
 		}
 
 		var res sql.Result
@@ -157,7 +158,7 @@ func (s *store) Update(models ...storage.Model) error {
 		}
 		if i, err := res.RowsAffected(); i == 0 || err != nil {
 			tx.Rollback()
-			return storage.ErrNotFound
+			return errors.Mark(storage.ErrNotFound, 0)
 		}
 	}
 
@@ -233,7 +234,7 @@ func (s *store) Delete(model storage.Model) error {
 		return translateError(err)
 	}
 	if i, err := res.RowsAffected(); i == 0 || err != nil {
-		return storage.ErrNotFound
+		return errors.Mark(storage.ErrNotFound, 0)
 	}
 	return nil
 }
@@ -266,7 +267,9 @@ func (s *store) List(models any, filter storage.Model) error {
 		newElem := newElemPtr.Elem()
 		err := json.Unmarshal([]byte(value), newElem.Addr().Interface())
 		if err != nil {
-			return fmt.Errorf("%w: %s <%s>", storage.ErrInvalidModel, err, value)
+			return errors.Mark(storage.ErrInvalidModel, 0).
+				Append(err.Error()).
+				Append(fmt.Sprintf("<%v>", value))
 		}
 
 		sliceVal.Set(reflect.Append(sliceVal, newElem))
@@ -326,7 +329,7 @@ func (s *store) ensureTable(tableName string) error {
 		PRIMARY KEY (id)
 	);`)
 	if err != nil {
-		return fmt.Errorf("failed to create table [%s]: %w", tableName, err)
+		return errors.Errorf("failed to create table [%s]: %w", tableName, err)
 	}
 	return nil
 }
@@ -364,23 +367,23 @@ func (s *store) buildListQuery(model storage.Model) (string, []any) {
 
 func translateError(err error) error {
 	if err == sql.ErrNoRows {
-		return storage.ErrNotFound
+		return errors.Mark(storage.ErrNotFound, 0)
 	}
 	if sqlErr, ok := err.(sqlite3.Error); ok {
 		switch sqlErr.Code {
 		case sqlite3.ErrNotFound:
-			return storage.ErrNotFound
+			return errors.Mark(storage.ErrNotFound, 0)
 		case sqlite3.ErrConstraint:
-			return storage.ErrAlreadyExists
+			return errors.Mark(storage.ErrAlreadyExists, 0)
 		}
 	}
-	return err
+	return errors.Wrap(err, 0)
 }
 
 func prepareAndExec(tx *sql.Tx, query string, params ...any) (sql.Result, error) {
 	stmt, err := tx.Prepare(query)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, 0)
 	}
 	defer stmt.Close()
 	return stmt.Exec(params...)

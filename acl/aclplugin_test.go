@@ -8,9 +8,10 @@ import (
 	"github.com/dpup/prefab/acl"
 	"github.com/dpup/prefab/acl/acltest"
 	"github.com/dpup/prefab/auth"
+	"github.com/dpup/prefab/errors"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestAclPlugin_determineEffect(t *testing.T) {
@@ -113,7 +114,7 @@ func TestInterceptor(t *testing.T) {
 			case "2":
 				return &testDocument{id: "2", author: "betty@test.com", title: "Another Document", body: "This is another test document."}, nil
 			default:
-				return nil, status.Errorf(codes.NotFound, "document not found")
+				return nil, errors.Codef(codes.NotFound, "document not found")
 			}
 		}),
 		acl.WithRoleDescriber("document", func(ctx context.Context, subject auth.Identity, object any, domain acl.Domain) ([]acl.Role, error) {
@@ -137,7 +138,7 @@ func TestInterceptor(t *testing.T) {
 		name          string
 		args          args
 		handlerCalled bool
-		expectedErr   string
+		expectedErr   error
 	}{
 		{
 			name: "Author should be able to access own document",
@@ -147,7 +148,6 @@ func TestInterceptor(t *testing.T) {
 				method:   acltest.AclTestService_GetDocument_FullMethodName,
 			},
 			handlerCalled: true,
-			expectedErr:   "",
 		},
 		{
 			name: "Other user with email should be able to access another document",
@@ -157,7 +157,6 @@ func TestInterceptor(t *testing.T) {
 				method:   acltest.AclTestService_GetDocument_FullMethodName,
 			},
 			handlerCalled: true,
-			expectedErr:   "",
 		},
 		{
 			name: "Identity without email should be blocked",
@@ -167,7 +166,7 @@ func TestInterceptor(t *testing.T) {
 				method:   acltest.AclTestService_GetDocument_FullMethodName,
 			},
 			handlerCalled: false,
-			expectedErr:   "rpc error: code = PermissionDenied desc = you are not authorized to perform this action",
+			expectedErr:   acl.ErrPermissionDenied,
 		},
 		{
 			name: "Author should be able to save own document",
@@ -177,7 +176,6 @@ func TestInterceptor(t *testing.T) {
 				method:   acltest.AclTestService_SaveDocument_FullMethodName,
 			},
 			handlerCalled: true,
-			expectedErr:   "",
 		},
 		{
 			name: "Other user with email should not be able to save document",
@@ -187,7 +185,7 @@ func TestInterceptor(t *testing.T) {
 				method:   acltest.AclTestService_SaveDocument_FullMethodName,
 			},
 			handlerCalled: false,
-			expectedErr:   "rpc error: code = PermissionDenied desc = you are not authorized to perform this action",
+			expectedErr:   acl.ErrPermissionDenied,
 		},
 		{
 			name: "Method with no ACL should execute",
@@ -197,7 +195,6 @@ func TestInterceptor(t *testing.T) {
 				method:   acltest.AclTestService_NoACL_FullMethodName,
 			},
 			handlerCalled: true,
-			expectedErr:   "",
 		},
 	}
 	for _, tt := range tests {
@@ -214,9 +211,7 @@ func TestInterceptor(t *testing.T) {
 			// Test the interceptor.
 			gotResp, err := ap.Interceptor(ctx, tt.args.req, info, handler)
 
-			if err != nil && err.Error() != tt.expectedErr || err == nil && tt.expectedErr != "" {
-				t.Errorf("AclPlugin.Interceptor() error = %v, expectedErr %v", err.Error(), tt.expectedErr)
-			}
+			assert.ErrorIs(t, err, tt.expectedErr, "AclPlugin.Interceptor() error = %v, expectedErr %v", err, tt.expectedErr)
 			if handlerCalled != tt.handlerCalled {
 				t.Errorf("AclPlugin.Interceptor() handlerCalled = %v, want %v", handlerCalled, tt.handlerCalled)
 			}

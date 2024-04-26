@@ -19,8 +19,8 @@ import (
 	"strings"
 
 	"github.com/dpup/prefab"
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Constant name for identifying the templates plugin.
@@ -75,7 +75,7 @@ func (p *TemplatePlugin) Render(ctx context.Context, name string, data interface
 		}
 	}
 	if p.templates == nil {
-		return "", status.Error(codes.Internal, "no templates have been initialized")
+		return "", errors.NewC("no templates have been initialized", codes.Internal)
 	}
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)

@@ -36,8 +36,8 @@ import (
 	"github.com/dpup/prefab/acl/acltest"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/pwdauth"
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -105,7 +105,7 @@ func fetchOrg(ctx context.Context, key any) (any, error) {
 	if key.(string) == "xmen" {
 		return org{name: "xmen"}, nil
 	}
-	return nil, status.Error(codes.NotFound, "org not found")
+	return nil, errors.NewC("org not found", codes.NotFound)
 }
 
 // Object fecher for "document" type.
@@ -113,7 +113,7 @@ func fetchDocument(ctx context.Context, key any) (any, error) {
 	if doc, ok := staticDocuments[key.(string)]; ok {
 		return doc, nil
 	}
-	return nil, status.Error(codes.NotFound, "document not found")
+	return nil, errors.NewC("document not found", codes.NotFound)
 }
 
 // RoleDescriber for all objects.
@@ -129,7 +129,7 @@ func roleDescriber(ctx context.Context, id auth.Identity, object any, domain acl
 			return []acl.Role{}, nil
 		}
 	default:
-		return nil, status.Error(codes.InvalidArgument, "unknown object type")
+		return nil, errors.NewC("unknown object type", codes.InvalidArgument)
 	}
 
 	if _, ok := object.(document); ok {
@@ -195,7 +195,7 @@ func (a accountStore) FindAccount(ctx context.Context, email string) (*pwdauth.A
 			return acc, nil
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "account not found")
+	return nil, errors.Codef(codes.NotFound, "account not found")
 }
 
 // Logan is an admin, so can view all docs. Jean is author of first two docs,

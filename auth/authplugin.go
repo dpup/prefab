@@ -2,10 +2,10 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/dpup/prefab"
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/storage"
 )
@@ -82,7 +82,7 @@ func (ap *AuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 			logging.Info(ctx, "auth: initializing blocklist")
 			store := sp.(*storage.StoragePlugin)
 			if err := store.InitModel(&BlockedToken{}); err != nil {
-				return fmt.Errorf("auth: failed to initialize blocklist model: %w", err)
+				return errors.Errorf("auth: failed to initialize blocklist model: %w", err)
 			}
 			ap.blocklist = NewBlocklist(store)
 		}

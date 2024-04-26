@@ -17,11 +17,10 @@ package email
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/logging"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gopkg.in/gomail.v2"
 )
 
@@ -82,19 +81,19 @@ func (p *EmailPlugin) Name() string {
 // From prefab.InitializablePlugin
 func (p *EmailPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.from == "" {
-		return status.Error(codes.InvalidArgument, "email: config missing from adddress")
+		return errors.New("email: config missing from adddress")
 	}
 	if p.smtpHost == "" {
-		return status.Error(codes.InvalidArgument, "email: config missing smtp host")
+		return errors.New("email: config missing smtp host")
 	}
 	if p.smtpPort == 0 {
-		return status.Error(codes.InvalidArgument, "email: config missing smtp port")
+		return errors.New("email: config missing smtp port")
 	}
 	if p.smtpUsername == "" {
-		return status.Error(codes.InvalidArgument, "email: config missing smtp username")
+		return errors.New("email: config missing smtp username")
 	}
 	if p.smtpPassword == "" {
-		return status.Error(codes.InvalidArgument, "email: config missing smtp password")
+		return errors.New("email: config missing smtp password")
 	}
 	return nil
 }

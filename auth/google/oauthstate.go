@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -46,24 +46,24 @@ func (p *GooglePlugin) newOauthState(code string, redirectUri string) *oauthStat
 
 func (p *GooglePlugin) parseState(s string) (*oauthState, error) {
 	if s == "" {
-		return nil, status.Error(codes.InvalidArgument, "google: state parameter is empty")
+		return nil, errors.NewC("google: state parameter is empty", codes.InvalidArgument)
 	}
 	b, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "google: invalid state parameter, not base64 encoded")
+		return nil, errors.NewC("google: invalid state parameter, not base64 encoded", codes.InvalidArgument)
 	}
 	var state oauthState
 	err = json.Unmarshal(b, &state)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "google: invalid state parameter, json decode failed")
+		return nil, errors.NewC("google: invalid state parameter, json decode failed", codes.InvalidArgument)
 	}
 	if state.TimeStamp.Add(stateExpiration).Before(time.Now()) {
-		return nil, status.Error(codes.InvalidArgument, "google: state parameter has expired")
+		return nil, errors.NewC("google: state parameter has expired", codes.InvalidArgument)
 	}
 
 	actual, err := hex.DecodeString(state.Signature)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "google: state parameter has invalid signature")
+		return nil, errors.NewC("google: state parameter has invalid signature", codes.InvalidArgument)
 	}
 	state.Signature = ""
 
@@ -72,7 +72,7 @@ func (p *GooglePlugin) parseState(s string) (*oauthState, error) {
 	expected := h.Sum(nil)
 
 	if !hmac.Equal(actual, expected) {
-		return nil, status.Error(codes.InvalidArgument, "google: state parameter has invalid signature")
+		return nil, errors.NewC("google: state parameter has invalid signature", codes.InvalidArgument)
 	}
 
 	return &state, nil

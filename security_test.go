@@ -18,17 +18,22 @@ func TestSecurityHeaders(t *testing.T) {
 		expectedError   error
 	}{
 		{
-			name:            "empty",
-			conf:            &SecurityHeaders{},
-			expectedHeaders: map[string]string{},
-			expectedError:   nil,
+			name: "empty",
+			conf: &SecurityHeaders{},
+			expectedHeaders: map[string]string{
+				"Referrer-Policy":        "strict-origin-when-cross-origin",
+				"X-Content-Type-Options": "nosniff",
+			},
+			expectedError: nil,
 		},
 
 		{
 			name: "x-frame-options-deny",
 			conf: &SecurityHeaders{XFramesOptions: XFramesOptionsDeny},
 			expectedHeaders: map[string]string{
-				"X-Frame-Options": "DENY",
+				"Referrer-Policy":        "strict-origin-when-cross-origin",
+				"X-Content-Type-Options": "nosniff",
+				"X-Frame-Options":        "DENY",
 			},
 			expectedError: nil,
 		},
@@ -36,7 +41,9 @@ func TestSecurityHeaders(t *testing.T) {
 			name: "x-frame-options-sameorigin",
 			conf: &SecurityHeaders{XFramesOptions: XFramesOptionsSameOrigin},
 			expectedHeaders: map[string]string{
-				"X-Frame-Options": "SAMEORIGIN",
+				"Referrer-Policy":        "strict-origin-when-cross-origin",
+				"X-Content-Type-Options": "nosniff",
+				"X-Frame-Options":        "SAMEORIGIN",
 			},
 			expectedError: nil,
 		},
@@ -45,6 +52,8 @@ func TestSecurityHeaders(t *testing.T) {
 			name: "hsts expiration only",
 			conf: &SecurityHeaders{HSTSExpiration: time.Hour * 24},
 			expectedHeaders: map[string]string{
+				"Referrer-Policy":           "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":    "nosniff",
 				"Strict-Transport-Security": "max-age=86400",
 			},
 			expectedError: nil,
@@ -57,6 +66,8 @@ func TestSecurityHeaders(t *testing.T) {
 				HSTSPreload:           true,
 			},
 			expectedHeaders: map[string]string{
+				"Referrer-Policy":           "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":    "nosniff",
 				"Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
 			},
 			expectedError: nil,
@@ -79,7 +90,9 @@ func TestSecurityHeaders(t *testing.T) {
 				CORSOrigins: []string{"https://something.com"},
 			},
 			expectedHeaders: map[string]string{
-				"Vary": "Origin",
+				"Vary":                   "Origin",
+				"Referrer-Policy":        "strict-origin-when-cross-origin",
+				"X-Content-Type-Options": "nosniff",
 			},
 		},
 		{
@@ -90,6 +103,8 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			expectedHeaders: map[string]string{
 				"Vary":                         "Origin",
+				"Referrer-Policy":              "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":       "nosniff",
 				"Access-Control-Allow-Origin":  "https://example.com",
 				"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH",
 			},
@@ -103,6 +118,8 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			expectedHeaders: map[string]string{
 				"Vary":                         "Origin",
+				"Referrer-Policy":              "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":       "nosniff",
 				"Access-Control-Allow-Origin":  "https://example.com",
 				"Access-Control-Allow-Methods": "GET",
 			},
@@ -116,6 +133,8 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			expectedHeaders: map[string]string{
 				"Vary":                         "Origin",
+				"Referrer-Policy":              "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":       "nosniff",
 				"Access-Control-Allow-Origin":  "https://example.com",
 				"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH",
 				"Access-Control-Allow-Headers": "X-Custom-Header, X-Another-Header",
@@ -130,6 +149,8 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			expectedHeaders: map[string]string{
 				"Vary":                             "Origin",
+				"Referrer-Policy":                  "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":           "nosniff",
 				"Access-Control-Allow-Origin":      "https://example.com",
 				"Access-Control-Allow-Methods":     "GET, POST, PUT, DELETE, PATCH",
 				"Access-Control-Allow-Credentials": "true",
@@ -144,6 +165,8 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			expectedHeaders: map[string]string{
 				"Vary":                         "Origin",
+				"Referrer-Policy":              "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":       "nosniff",
 				"Access-Control-Allow-Origin":  "https://example.com",
 				"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH",
 				"Access-Control-Max-Age":       "3600",
@@ -159,6 +182,8 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			expectedHeaders: map[string]string{
 				"Vary":                         "Origin",
+				"Referrer-Policy":              "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":       "nosniff",
 				"Access-Control-Allow-Origin":  "https://example.com",
 				"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH",
 				"Access-Control-Allow-Headers": "X-Allowed",
@@ -174,6 +199,8 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			expectedHeaders: map[string]string{
 				"Vary":                          "Origin",
+				"Referrer-Policy":               "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":        "nosniff",
 				"Access-Control-Expose-Headers": "X-Exposed",
 			},
 		},

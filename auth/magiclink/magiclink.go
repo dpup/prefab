@@ -39,12 +39,12 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/email"
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/serverutil"
 	"github.com/dpup/prefab/templates"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gopkg.in/gomail.v2"
 )
 
@@ -110,10 +110,10 @@ func (p *MagicLinkPlugin) Deps() []string {
 // From prefab.InitializablePlugin.
 func (p *MagicLinkPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if len(p.signingKey) == 0 {
-		return status.Error(codes.InvalidArgument, "magiclink: config missing signing key")
+		return errors.New("magiclink: config missing signing key")
 	}
 	if p.tokenExpiration == 0 {
-		return status.Error(codes.InvalidArgument, "magiclink: config missing token expiration")
+		return errors.New("magiclink: config missing token expiration")
 	}
 
 	p.emailer = r.Get(email.PluginName).(*email.EmailPlugin)
@@ -126,7 +126,7 @@ func (p *MagicLinkPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 
 func (p *MagicLinkPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	if req.Provider != ProviderName {
-		return nil, status.Error(codes.InvalidArgument, "magiclink login handler called for wrong provider")
+		return nil, errors.NewC("magiclink login handler called for wrong provider", codes.InvalidArgument)
 	}
 	if req.Creds["email"] != "" {
 		return p.handleEmail(ctx, req.Creds["email"], req.RedirectUri)
@@ -134,7 +134,7 @@ func (p *MagicLinkPlugin) handleLogin(ctx context.Context, req *auth.LoginReques
 	if req.Creds["token"] != "" {
 		return p.handleToken(ctx, req.Creds["token"], req.IssueToken, req.RedirectUri)
 	}
-	return nil, status.Error(codes.InvalidArgument, "missing credentials, magiclink login requires an `email` or `token`")
+	return nil, errors.NewC("missing credentials, magiclink login requires an `email` or `token`", codes.InvalidArgument)
 }
 
 func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirectUri string) (*auth.LoginResponse, error) {
@@ -170,7 +170,7 @@ func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirec
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
 	if err := p.emailer.Send(ctx, m); err != nil {
-		return nil, status.Errorf(codes.Internal, "magiclink: email sending failed: %v", err)
+		return nil, errors.Codef(codes.Internal, "magiclink: email sending failed: %v", err)
 	}
 
 	return &auth.LoginResponse{
@@ -234,10 +234,10 @@ func (p *MagicLinkPlugin) parseToken(tokenString string) (auth.Identity, error) 
 		jwt.WithIssuedAt(),
 	)
 	if err != nil {
-		return auth.Identity{}, status.Error(codes.InvalidArgument, err.Error())
+		return auth.Identity{}, errors.Wrap(err, 0).WithCode(codes.InvalidArgument)
 	}
 	if !token.Valid || token.Claims == nil {
-		return auth.Identity{}, status.Error(codes.InvalidArgument, "invalid token")
+		return auth.Identity{}, errors.NewC("invalid token", codes.InvalidArgument)
 	}
 
 	claims := token.Claims.(*Claims)

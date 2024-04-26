@@ -34,11 +34,11 @@ import (
 	"context"
 
 	"github.com/dpup/prefab/auth"
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/serverutil"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -125,15 +125,15 @@ func FieldOptions(req proto.Message) (string, string, error) {
 	var objectID, domainID string
 	if v, ok := serverutil.FieldOption(req, E_ObjectId); ok {
 		if len(v) != 1 {
-			return "", "", status.Errorf(codes.Internal, "acl error: require exactly one object_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+			return "", "", errors.Codef(codes.Internal, "acl error: require exactly one object_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
 		objectID = v[0].FieldValue.(string)
 	} else {
-		return "", "", status.Errorf(codes.Internal, "acl error: object_id required on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+		return "", "", errors.Codef(codes.Internal, "acl error: object_id required on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 	}
 	if v, ok := serverutil.FieldOption(req, E_DomainId); ok {
 		if len(v) != 1 {
-			return "", "", status.Errorf(codes.Internal, "acl error: expected exactly one domain_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+			return "", "", errors.Codef(codes.Internal, "acl error: expected exactly one domain_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
 		domainID = v[0].FieldValue.(string)
 	}

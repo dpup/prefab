@@ -5,15 +5,17 @@ import (
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
 // Constant name for identifying the core ACL plugin
 const PluginName = "acl"
+
+var ErrPermissionDenied = errors.Codef(codes.PermissionDenied, "you are not authorized to perform this action")
 
 // Configuration options for the ACL Plugin.
 type AclOption func(*AclPlugin)
@@ -140,15 +142,15 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 		return handler(ctx, req)
 	}
 	if ap.policies[action] == nil {
-		return nil, status.Errorf(codes.Internal, "acl error: no policies configured for '%s' on %s", action, info.FullMethod)
+		return nil, errors.Codef(codes.Internal, "acl error: no policies configured for '%s' on %s", action, info.FullMethod)
 	}
 	fetcher := ap.fetcherForKey(objectKey)
 	if fetcher == nil {
-		return nil, status.Errorf(codes.Internal, "acl error: no object fetcher for key '%s' on %s", objectKey, info.FullMethod)
+		return nil, errors.Codef(codes.Internal, "acl error: no object fetcher for key '%s' on %s", objectKey, info.FullMethod)
 	}
 	describer := ap.describerForKey(objectKey)
 	if describer == nil {
-		return nil, status.Errorf(codes.Internal, "acl error: no role describer for key '%s' on %s", objectKey, info.FullMethod)
+		return nil, errors.Codef(codes.Internal, "acl error: no role describer for key '%s' on %s", objectKey, info.FullMethod)
 	}
 
 	// Get the object and domain from the request object.
@@ -181,13 +183,13 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 	logging.Track(ctx, "acl.roles", roles)
 
 	if len(roles) == 0 {
-		return nil, status.Errorf(codes.PermissionDenied, "you are not authorized to perform this action")
+		return nil, errors.Mark(ErrPermissionDenied, 0)
 	}
 
 	if ap.DetermineEffect(action, roles, defaultEffect) == Allow {
 		return handler(ctx, req)
 	}
-	return nil, status.Errorf(codes.PermissionDenied, "you are not authorized to perform this action")
+	return nil, errors.Mark(ErrPermissionDenied, 0)
 }
 
 // DetermineEffect checks to see if there are any policies which explicitly
