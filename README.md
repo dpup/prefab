@@ -15,7 +15,7 @@ authentication, logging, templating, and ACLs.
 - **Serve static files:** Serve static files for development or convenience.
 - **Pluggable:** A plugin model provides easy customization and extensibility.
 - **Configurable:** File, env, or functional options.
-- **Logging:** Pluggable logging with request scoped field tracking.
+- **Logging & errors:** Request scoped field tracking, coded errors, stack traces, public/private error messages.
 - **Security:** CSRF protection built-in and options for configuring CORS.
 - **Authentication:** Authenticate users with Google, Magic Links, or Email/Password.
 - **ACLs:** Use proto options to define access rules for RPC endpoints.
