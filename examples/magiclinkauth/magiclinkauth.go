@@ -17,8 +17,6 @@ import (
 )
 
 func main() {
-	prefab.LoadDefaultConfig()
-
 	// Initialize the server with the auth, email, and magiclink plugins, this
 	// should be enough to request a magic link and authenticate a client as that
 	// email account. There is no application logic or persistance.

@@ -32,18 +32,16 @@ func init() {
 		"auth.expiration": "24h",
 		"auth.signingKey": randomString(32), // Tokens will break with each restart.
 	}, "."), nil)
-}
 
-// LoadDefaultConfig reads the default config file, prefab.yaml, from the
-// current working directory, or the first parent that contains a matching file,
-// and and sets up environment variable overrides.
-func LoadDefaultConfig() {
+	// Look for a prefab.yaml file in the current directory or any parent.
 	configFile := searchForConfig("prefab.yaml", ".")
 	if configFile != "" {
 		if err := Config.Load(file.Provider(configFile), yaml.Parser()); err != nil {
 			panic("error loading config: " + err.Error())
 		}
 	}
+
+	// Load environment variables with the prefix PF__.
 	Config.Load(env.Provider("PF__", ".", transformEnv), nil)
 }
 

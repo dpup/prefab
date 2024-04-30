@@ -58,8 +58,6 @@ type document struct {
 }
 
 func main() {
-	prefab.LoadDefaultConfig()
-
 	s := prefab.New(
 		// Use basic email/password auth so that we can demonstrate different users
 		// seeing different results.

@@ -15,8 +15,6 @@ import (
 )
 
 func main() {
-	prefab.LoadDefaultConfig()
-
 	s := prefab.New(
 		prefab.WithPlugin(auth.Plugin()),
 		prefab.WithPlugin(pwdauth.Plugin(
