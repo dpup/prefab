@@ -18,6 +18,9 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Filename of the standard configuration file.
+const ConfigFile = "prefab.yaml"
+
 // Config is a global koanf instance used to access application level
 // configuration options.
 var Config = koanf.New(".")
@@ -34,9 +37,8 @@ func init() {
 	}, "."), nil)
 
 	// Look for a prefab.yaml file in the current directory or any parent.
-	configFile := searchForConfig("prefab.yaml", ".")
-	if configFile != "" {
-		if err := Config.Load(file.Provider(configFile), yaml.Parser()); err != nil {
+	if cfg := searchForConfig(ConfigFile, "."); cfg != "" {
+		if err := Config.Load(file.Provider(cfg), yaml.Parser()); err != nil {
 			panic("error loading config: " + err.Error())
 		}
 	}
