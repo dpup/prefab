@@ -66,8 +66,8 @@ func (s *SecurityHeaders) Apply(w http.ResponseWriter, r *http.Request) error {
 	if len(s.CORSOrigins) > 0 {
 		origin := r.Header.Get("Origin")
 		if s.allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			if r.Method == http.MethodOptions {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
 				for k, v := range s.preflightHeaders {
 					w.Header().Set(k, v)
 				}
