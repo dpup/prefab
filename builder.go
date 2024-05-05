@@ -97,6 +97,7 @@ func (b *builder) build() *Server {
 				Multiline:       true,
 				Indent:          "  ",
 				EmitUnpopulated: true,
+				UseProtoNames:   false,
 			},
 		}),
 

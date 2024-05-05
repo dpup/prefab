@@ -47,8 +47,8 @@ type grpcStatusProto interface {
 }
 
 type customErrorResponse struct {
-	Code     int32
-	CodeName string
-	Message  string
-	Details  []*anypb.Any
+	Code     int32        `protobuf:"varint,1,opt,name=code,proto3" json:"code"`
+	CodeName string       `protobuf:"bytes,2,opt,name=code_name,json=codeName,proto3" json:"codeName"`
+	Message  string       `protobuf:"bytes,3,opt,name=message,proto3" json:"message"`
+	Details  []*anypb.Any `protobuf:"bytes,3,rep,name=details,proto3" json:"details,omitempty"`
 }
