@@ -201,6 +201,7 @@ func TestSecurityHeaders(t *testing.T) {
 				"Vary":                          "Origin",
 				"Referrer-Policy":               "strict-origin-when-cross-origin",
 				"X-Content-Type-Options":        "nosniff",
+				"Access-Control-Allow-Origin":   "https://example.com",
 				"Access-Control-Expose-Headers": "X-Exposed",
 			},
 		},

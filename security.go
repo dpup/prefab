@@ -40,6 +40,7 @@ type SecurityHeaders struct {
 
 	// Access-Control headers define which origins are allowed to access the
 	// resource and what methods are allowed.
+	// TODO: Should this allow for patterns instead of only exact origin matches?
 	CORSOrigins          []string
 	CORSAllowMethods     []string
 	CORSAllowHeaders     []string
@@ -115,8 +116,14 @@ func (s *SecurityHeaders) compute() error {
 		if len(s.CORSOrigins) > 0 {
 			s.staticHeaders["Vary"] = "Origin"
 
+			// See https://fetch.spec.whatwg.org/#http-responses for details on
+			// headers required on preflight and non-preflight requests.
+
+			if s.CORSAllowCredentials {
+				s.staticHeaders["Access-Control-Allow-Credentials"] = "true"
+			}
+
 			s.preflightHeaders = make(map[string]string)
-			s.preflightHeaders["Access-Control-Allow-Origin"] = s.CORSOrigins[0]
 			if len(s.CORSAllowMethods) > 0 {
 				s.preflightHeaders["Access-Control-Allow-Methods"] = strings.Join(s.CORSAllowMethods, ", ")
 			} else {
@@ -125,14 +132,10 @@ func (s *SecurityHeaders) compute() error {
 			if len(s.CORSAllowHeaders) > 0 {
 				s.preflightHeaders["Access-Control-Allow-Headers"] = strings.Join(s.CORSAllowHeaders, ", ")
 			}
-			if s.CORSAllowCredentials {
-				s.preflightHeaders["Access-Control-Allow-Credentials"] = "true"
-			}
 			if s.CORSMaxAge > 0 {
 				s.preflightHeaders["Access-Control-Max-Age"] = fmt.Sprintf("%.0f", s.CORSMaxAge.Seconds())
 			}
 
-			// TODO: Should this allow patterns instead of only exact matches?
 			s.allowedOrigins = map[string]bool{}
 			for _, origin := range s.CORSOrigins {
 				s.allowedOrigins[origin] = true
