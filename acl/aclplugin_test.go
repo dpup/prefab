@@ -127,6 +127,21 @@ func TestInterceptor(t *testing.T) {
 				return []acl.Role{}, nil
 			}
 		}),
+
+		acl.WithPolicy(acl.Allow, acl.Role("authenticated"), acl.Action("self.inspect")),
+		acl.WithObjectFetcher("*", func(ctx context.Context, key any) (any, error) {
+			// For the test we don't care what gets returned, in reality the '*' might
+			// return something like the identity for the user, a session object, or
+			// a root entity such as a workspace. Key will be an empty string.
+			return 1, nil
+		}),
+		acl.WithRoleDescriber("*", func(ctx context.Context, subject auth.Identity, object any, domain acl.Domain) ([]acl.Role, error) {
+			if subject == (auth.Identity{}) {
+				return []acl.Role{"anonymous"}, nil
+			} else {
+				return []acl.Role{"authenticated"}, nil
+			}
+		}),
 	)
 
 	type args struct {
@@ -196,6 +211,25 @@ func TestInterceptor(t *testing.T) {
 			},
 			handlerCalled: true,
 		},
+		{
+			name: "Authenticated user should be able to call action only method",
+			args: args{
+				identity: auth.Identity{Email: "betty@test.com"},
+				req:      &acltest.Request{},
+				method:   acltest.AclTestService_Self_FullMethodName,
+			},
+			handlerCalled: true,
+		},
+		{
+			name: "Anonymous user should not be able to call action only method",
+			args: args{
+				identity: auth.Identity{},
+				req:      &acltest.Request{},
+				method:   acltest.AclTestService_Self_FullMethodName,
+			},
+			handlerCalled: false,
+			expectedErr:   acl.ErrPermissionDenied,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -210,7 +244,6 @@ func TestInterceptor(t *testing.T) {
 
 			// Test the interceptor.
 			gotResp, err := ap.Interceptor(ctx, tt.args.req, info, handler)
-
 			assert.ErrorIs(t, err, tt.expectedErr, "AclPlugin.Interceptor() error = %v, expectedErr %v", err, tt.expectedErr)
 			if handlerCalled != tt.handlerCalled {
 				t.Errorf("AclPlugin.Interceptor() handlerCalled = %v, want %v", handlerCalled, tt.handlerCalled)

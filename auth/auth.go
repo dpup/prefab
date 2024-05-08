@@ -219,6 +219,10 @@ func identityFromCookie(ctx context.Context) (Identity, error) {
 // attached. This is useful for testing, where we want to simulate a request
 // with a given identity.
 func ContextWithIdentityForTest(ctx context.Context, identity Identity) context.Context {
+	if identity == (Identity{}) {
+		// Short-circuity to avoid serialization/deserialization of empty identity.
+		return ctx
+	}
 	tokenString, _ := IdentityToken(ctx, identity)
 	md := metadata.Pairs("authorization", tokenString)
 	return metadata.NewIncomingContext(ctx, md)

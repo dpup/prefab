@@ -121,20 +121,20 @@ func MethodOptions(info *grpc.UnaryServerInfo) (objectKey string, action Action,
 }
 
 // FieldOptions returns proto fields that are tagged with ACL related options.
-func FieldOptions(req proto.Message) (string, string, error) {
-	var objectID, domainID string
+func FieldOptions(req proto.Message) (any, string, error) {
+	var objectID any
+	var domainID string
 	if v, ok := serverutil.FieldOption(req, E_ObjectId); ok {
 		if len(v) != 1 {
 			return "", "", errors.Codef(codes.Internal, "acl error: require exactly one object_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
-		objectID = v[0].FieldValue.(string)
-	} else {
-		return "", "", errors.Codef(codes.Internal, "acl error: object_id required on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+		objectID = v[0].FieldValue
 	}
 	if v, ok := serverutil.FieldOption(req, E_DomainId); ok {
 		if len(v) != 1 {
 			return "", "", errors.Codef(codes.Internal, "acl error: expected exactly one domain_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
+		// TODO: Assert string.
 		domainID = v[0].FieldValue.(string)
 	}
 	return objectID, domainID, nil

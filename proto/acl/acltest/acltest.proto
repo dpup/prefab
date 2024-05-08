@@ -15,10 +15,11 @@ service AclTestService {
   }
 
 
-  rpc ActionOnly(Request) returns (Response) {
-    option (prefab.acl.action) = "action_only";
+  // Demonstrated an action only endpoint with no target resource.
+  rpc Self(Request) returns (Response) {
+    option (prefab.acl.action) = "self.inspect";
     option (google.api.http) = {
-      get: "/api/action-only"
+      get: "/api/self"
     };
   }
 

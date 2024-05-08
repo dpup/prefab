@@ -159,15 +159,15 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 		return nil, err
 	}
 
-	// Get the caller's identity.
-	identity, err := auth.IdentityFromContext(ctx)
+	// Fetch the object that the action is being performed on.
+	object, err := fetcher(ctx, objectID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fetch the object that the action is being performed on.
-	object, err := fetcher(ctx, objectID)
-	if err != nil {
+	// Get the caller's identity.
+	identity, err := auth.IdentityFromContext(ctx)
+	if err != nil && !errors.Is(err, auth.ErrNotFound) {
 		return nil, err
 	}
 

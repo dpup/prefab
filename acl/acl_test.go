@@ -35,10 +35,10 @@ func Test_methodOptions(t *testing.T) {
 		{
 			name: "ActionOnly",
 			args: args{
-				info: &grpc.UnaryServerInfo{FullMethod: acltest.AclTestService_ActionOnly_FullMethodName},
+				info: &grpc.UnaryServerInfo{FullMethod: acltest.AclTestService_Self_FullMethodName},
 			},
 			wantObjectKey:     "*",
-			wantAction:        "action_only",
+			wantAction:        "self.inspect",
 			wantDefaultEffect: acl.Deny,
 		},
 		{
