@@ -54,16 +54,23 @@ const (
 	IdentityTokenCookieName = "pf-id"
 )
 
+// Claims registered as part of a prefab identity token.
 type Claims struct {
+	// Standard public JWT claims per https://www.iana.org/assignments/jwt/jwt.xhtml
 	jwt.RegisteredClaims
 	Name          string           `json:"name"`
 	Email         string           `json:"email"`
 	EmailVerified bool             `json:"email_verified"`
 	AuthTime      *jwt.NumericDate `json:"auth_time,omitempty"`
+
+	// Custom claims.
+	Provider string `json:"idp"`
 }
 
 func (c *Claims) Validate() error {
-	// No custom validation for now.
+	if c.Provider == "" {
+		return errors.Mark(ErrInvalidToken, 0).Append("missing provider")
+	}
 	return nil
 }
 
@@ -93,15 +100,16 @@ func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        identity.SessionID,
+			Subject:   identity.Subject,
 			Audience:  jwt.ClaimStrings{address},
 			Issuer:    address,
 			IssuedAt:  jwt.NewNumericDate(timeFunc()),
 			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(expirationFromContext(ctx))),
-			Subject:   identity.Subject,
 		},
 		Name:          identity.Name,
 		Email:         identity.Email,
 		EmailVerified: identity.EmailVerified,
+		Provider:      identity.Provider,
 		AuthTime:      jwt.NewNumericDate(identity.AuthTime),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -134,6 +142,10 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		if err := claims.Validate(); err != nil {
+			return Identity{}, err
+		}
+
 		// Check to see if the token has been revoked or blocked.
 		if blocked, err := IsBlocked(ctx, claims.ID); blocked || err != nil {
 			if err != nil {
@@ -143,6 +155,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		}
 
 		return Identity{
+			Provider:      claims.Provider,
 			SessionID:     claims.ID,
 			AuthTime:      claims.AuthTime.Time,
 			Subject:       claims.Subject,
@@ -152,7 +165,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		}, nil
 	}
 
-	return Identity{}, errors.Mark(ErrInvalidToken, 0)
+	return Identity{}, errors.Mark(ErrInvalidToken, 0).Append("invalid claims")
 }
 
 // IdentityFromContext parses and verifies a JWT received from incoming GRPC

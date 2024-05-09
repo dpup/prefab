@@ -17,7 +17,8 @@ func TestTokenRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	original := Identity{
-		Subject: "1",
+		Subject:  "1",
+		Provider: "test",
 		// Use JWT time library to make sure the dates have the same precision when comparing in tests.
 		AuthTime:      jwt.NewNumericDate(time.Now()).Time,
 		Email:         "andor@aldhani-rebels.org",
@@ -36,7 +37,7 @@ func TestTokenRoundTrip(t *testing.T) {
 
 func TestTokenExpiration(t *testing.T) {
 	ctx := context.Background()
-	identity := Identity{Subject: "2"}
+	identity := Identity{Subject: "2", Provider: "test"}
 
 	tokenString, err := IdentityToken(ctx, identity)
 	assert.Nil(t, err, "failed to issue token")
@@ -55,7 +56,7 @@ func TestTokenExpiration(t *testing.T) {
 
 func TestTokenSigning(t *testing.T) {
 	ctx := context.Background()
-	identity := Identity{Subject: "2"}
+	identity := Identity{Subject: "2", Provider: "test"}
 
 	tokenString, err := IdentityToken(injectSigningKey("evil")(ctx), identity)
 	assert.Nil(t, err, "failed to issue token")
@@ -77,6 +78,7 @@ func TestIdentityFromCookie(t *testing.T) {
 	expected := Identity{
 		Subject:  "3",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
@@ -96,6 +98,7 @@ func TestIdentityFromAuthHeader(t *testing.T) {
 	expected := Identity{
 		Subject:  "4",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
@@ -115,6 +118,7 @@ func TestIdentityFromBearerToken(t *testing.T) {
 	expected := Identity{
 		Subject:  "4",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
@@ -128,6 +132,23 @@ func TestIdentityFromBearerToken(t *testing.T) {
 	assert.Equal(t, expected, actual, "identity from header does not match")
 }
 
+func TestIdentityFromBearerToken_missingProvider(t *testing.T) {
+	ctx := context.Background()
+	idt := Identity{
+		SessionID: "12345",
+		Subject:   "4",
+	}
+	tokenString, err := IdentityToken(ctx, idt)
+	assert.Nil(t, err, "failed to issue token")
+
+	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", tokenString))
+	ctx = metadata.NewIncomingContext(ctx, md)
+
+	actual, err := IdentityFromContext(ctx)
+	assert.Equal(t, Identity{}, actual, "expected zero Identity")
+	assert.ErrorIs(t, err, ErrInvalidToken)
+}
+
 func TestIdentityFromBearerToken_blocked(t *testing.T) {
 	blocklist := NewBlocklist(memorystore.New())
 	blocklist.Block("12345")
@@ -138,6 +159,7 @@ func TestIdentityFromBearerToken_blocked(t *testing.T) {
 		SessionID: "12345",
 		Subject:   "4",
 		AuthTime:  jwt.NewNumericDate(time.Now()).Time,
+		Provider:  "test",
 	}
 	tokenString, err := IdentityToken(ctx, idt)
 	assert.Nil(t, err, "failed to issue token")
@@ -156,6 +178,7 @@ func TestIdentityFromBasicAuth(t *testing.T) {
 	expected := Identity{
 		Subject:  "4",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
@@ -176,6 +199,7 @@ func TestIdentityFromBasicAuth_invalidBasicAuth(t *testing.T) {
 	expected := Identity{
 		Subject:  "4",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")
@@ -194,6 +218,7 @@ func TestIdentityFromBasicAuth_invalidAuthorizationType(t *testing.T) {
 	expected := Identity{
 		Subject:  "4",
 		AuthTime: jwt.NewNumericDate(time.Now()).Time,
+		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
 	assert.Nil(t, err, "failed to issue token")

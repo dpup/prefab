@@ -118,15 +118,17 @@ message IdentityRequest {}
 
 // Information about the authenticated identity.
 message IdentityResponse {
+  string provider = 1;
+
   // An auth provider specific identifier used to authenticate the user.
-  string subject = 1;
+  string subject = 2;
 
   // An email address associated with the identity, if available.
-  string email = 2;
+  string email = 3;
 
   // Whether the email is thought to have been verified.
-  bool email_verified = 3;
+  bool email_verified = 4;
 
   // A name associated with the identity, if available.
-  string name = 4;
+  string name = 5;
 }

@@ -303,6 +303,7 @@ func (p *GooglePlugin) handleIDToken(ctx context.Context, token string) (*UserIn
 // cookie.
 func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserInfo, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	identity := auth.Identity{
+		Provider:      ProviderName,
 		SessionID:     uuid.NewString(),
 		AuthTime:      time.Now(),
 		Subject:       userInfo.ID,

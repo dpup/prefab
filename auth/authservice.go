@@ -111,6 +111,7 @@ func (s *impl) Identity(ctx context.Context, in *IdentityRequest) (*IdentityResp
 		return nil, err
 	}
 	return &IdentityResponse{
+		Provider:      i.Provider,
 		Subject:       i.Subject,
 		Email:         i.Email,
 		EmailVerified: i.EmailVerified,

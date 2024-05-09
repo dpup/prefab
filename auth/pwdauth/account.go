@@ -26,6 +26,7 @@ type Account struct {
 
 func identityFromAccount(a *Account) auth.Identity {
 	return auth.Identity{
+		Provider:      ProviderName,
 		SessionID:     uuid.NewString(),
 		AuthTime:      time.Now(),
 		Subject:       a.ID,
