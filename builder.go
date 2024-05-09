@@ -67,6 +67,7 @@ func New(opts ...ServerOption) *Server {
 }
 
 type builder struct {
+	baseContext     context.Context
 	host            string
 	port            int
 	incomingHeaders []string
@@ -87,6 +88,10 @@ type builder struct {
 }
 
 func (b *builder) build() *Server {
+	if b.baseContext == nil {
+		b.baseContext = context.Background()
+	}
+
 	gatewayOpts := b.buildGatewayOpts()
 	gateway := runtime.NewServeMux(
 		// Override default JSON marshaler so that 0, false, and "" are emitted as
@@ -124,7 +129,7 @@ func (b *builder) build() *Server {
 		runtime.WithOutgoingHeaderMatcher(runtime.DefaultHeaderMatcher),
 	)
 
-	ctx := context.Background()
+	ctx := b.baseContext
 	if b.logger != nil {
 		ctx = logging.With(ctx, b.logger)
 	} else {
@@ -203,6 +208,14 @@ func (b *builder) buildGatewayOpts() []grpc.DialOption {
 
 func (b *builder) isSecure() bool {
 	return b.certFile != "" && b.keyFile != ""
+}
+
+// WithContext sets the base context for the server. This context will be used
+// for all requests and can be used to inject values into the context.
+func WithContext(ctx context.Context) ServerOption {
+	return func(b *builder) {
+		b.baseContext = ctx
+	}
 }
 
 // WithHost configures the hostname or IP the server will listen on.
