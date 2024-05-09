@@ -174,9 +174,19 @@ func TestInterceptor(t *testing.T) {
 			handlerCalled: true,
 		},
 		{
-			name: "Identity without email should be blocked",
+			name: "Zero identity should be blocked",
 			args: args{
 				identity: auth.Identity{},
+				req:      &acltest.GetDocumentRequest{DocumentId: "1"},
+				method:   acltest.AclTestService_GetDocument_FullMethodName,
+			},
+			handlerCalled: false,
+			expectedErr:   acl.ErrUnauthenticated,
+		},
+		{
+			name: "Identity with empty email should be blocked",
+			args: args{
+				identity: auth.Identity{Subject: "aaa", Email: ""},
 				req:      &acltest.GetDocumentRequest{DocumentId: "1"},
 				method:   acltest.AclTestService_GetDocument_FullMethodName,
 			},
@@ -228,7 +238,7 @@ func TestInterceptor(t *testing.T) {
 				method:   acltest.AclTestService_Self_FullMethodName,
 			},
 			handlerCalled: false,
-			expectedErr:   acl.ErrPermissionDenied,
+			expectedErr:   acl.ErrUnauthenticated,
 		},
 	}
 	for _, tt := range tests {

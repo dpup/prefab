@@ -15,7 +15,10 @@ import (
 // Constant name for identifying the core ACL plugin
 const PluginName = "acl"
 
-var ErrPermissionDenied = errors.Codef(codes.PermissionDenied, "you are not authorized to perform this action")
+var (
+	ErrPermissionDenied = errors.Codef(codes.PermissionDenied, "you are not authorized to perform this action")
+	ErrUnauthenticated  = errors.Codef(codes.Unauthenticated, "the requested action requires authentication")
+)
 
 // Configuration options for the ACL Plugin.
 type AclOption func(*AclPlugin)
@@ -165,10 +168,17 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 		return nil, err
 	}
 
+	defaultError := ErrPermissionDenied
+
 	// Get the caller's identity.
 	identity, err := auth.IdentityFromContext(ctx)
-	if err != nil && !errors.Is(err, auth.ErrNotFound) {
-		return nil, err
+	if err != nil {
+		if !errors.Is(err, auth.ErrNotFound) {
+			return nil, err
+		}
+		// If the request is unauthenticated, still try to run the ACLs, but change
+		// the default error type to Unauthenticated instead of Permission Denied.
+		defaultError = ErrUnauthenticated
 	}
 
 	// Get the user's roles relative to the object.
@@ -183,13 +193,13 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 	logging.Track(ctx, "acl.roles", roles)
 
 	if len(roles) == 0 {
-		return nil, errors.Mark(ErrPermissionDenied, 0)
+		return nil, errors.Mark(defaultError, 0)
 	}
 
 	if ap.DetermineEffect(action, roles, defaultEffect) == Allow {
 		return handler(ctx, req)
 	}
-	return nil, errors.Mark(ErrPermissionDenied, 0)
+	return nil, errors.Mark(defaultError, 0)
 }
 
 // DetermineEffect checks to see if there are any policies which explicitly
