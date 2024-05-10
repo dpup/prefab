@@ -1,17 +1,17 @@
-package acl_test
+package authz_test
 
 import (
 	"testing"
 
-	"github.com/dpup/prefab/acl"
-	"github.com/dpup/prefab/acl/acltest"
+	"github.com/dpup/prefab/authz"
+	"github.com/dpup/prefab/authz/authztest"
 
 	"google.golang.org/grpc"
 )
 
 func Test_methodOptions(t *testing.T) {
 	// Force proto-dependency for global registration.
-	_ = acltest.UnimplementedAclTestServiceServer{}
+	_ = authztest.UnimplementedAuthzTestServiceServer{}
 
 	type args struct {
 		info *grpc.UnaryServerInfo
@@ -20,49 +20,49 @@ func Test_methodOptions(t *testing.T) {
 		name              string
 		args              args
 		wantObjectKey     string
-		wantAction        acl.Action
-		wantDefaultEffect acl.Effect
+		wantAction        authz.Action
+		wantDefaultEffect authz.Effect
 	}{
 		{
-			name: "NoACL",
+			name: "NoPolicy",
 			args: args{
-				info: &grpc.UnaryServerInfo{FullMethod: acltest.AclTestService_NoACL_FullMethodName},
+				info: &grpc.UnaryServerInfo{FullMethod: authztest.AuthzTestService_NoPolicy_FullMethodName},
 			},
 			wantObjectKey:     "*",
 			wantAction:        "",
-			wantDefaultEffect: acl.Deny,
+			wantDefaultEffect: authz.Deny,
 		},
 		{
 			name: "ActionOnly",
 			args: args{
-				info: &grpc.UnaryServerInfo{FullMethod: acltest.AclTestService_Self_FullMethodName},
+				info: &grpc.UnaryServerInfo{FullMethod: authztest.AuthzTestService_Self_FullMethodName},
 			},
 			wantObjectKey:     "*",
 			wantAction:        "self.inspect",
-			wantDefaultEffect: acl.Deny,
+			wantDefaultEffect: authz.Deny,
 		},
 		{
 			name: "GetDocument",
 			args: args{
-				info: &grpc.UnaryServerInfo{FullMethod: acltest.AclTestService_GetDocument_FullMethodName},
+				info: &grpc.UnaryServerInfo{FullMethod: authztest.AuthzTestService_GetDocument_FullMethodName},
 			},
 			wantObjectKey:     "document",
 			wantAction:        "documents.view",
-			wantDefaultEffect: acl.Deny,
+			wantDefaultEffect: authz.Deny,
 		},
 		{
 			name: "GetDocumentTitle",
 			args: args{
-				info: &grpc.UnaryServerInfo{FullMethod: acltest.AclTestService_GetDocumentTitle_FullMethodName},
+				info: &grpc.UnaryServerInfo{FullMethod: authztest.AuthzTestService_GetDocumentTitle_FullMethodName},
 			},
 			wantObjectKey:     "document",
 			wantAction:        "documents.view_meta",
-			wantDefaultEffect: acl.Allow,
+			wantDefaultEffect: authz.Allow,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotObjectID, gotAction, gotEffect := acl.MethodOptions(tt.args.info)
+			gotObjectID, gotAction, gotEffect := authz.MethodOptions(tt.args.info)
 			if gotObjectID != tt.wantObjectKey {
 				t.Errorf("methodOptions() got ObjectKey = %v, want %v", gotObjectID, tt.wantObjectKey)
 			}
@@ -77,11 +77,11 @@ func Test_methodOptions(t *testing.T) {
 }
 
 func TestFieldOptions(t *testing.T) {
-	req := &acltest.GetDocumentRequest{
+	req := &authztest.GetDocumentRequest{
 		DocumentId: "123",
 		OrgId:      "nyc",
 	}
-	objectID, domainID, err := acl.FieldOptions(req)
+	objectID, domainID, err := authz.FieldOptions(req)
 	if err != nil {
 		t.Error(err)
 	}

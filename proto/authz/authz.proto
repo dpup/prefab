@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package prefab.acl;
-option go_package = "github.com/dpup/prefab/acl";
+package prefab.authz;
+option go_package = "github.com/dpup/prefab/authz";
 
 import "google/protobuf/descriptor.proto";
 

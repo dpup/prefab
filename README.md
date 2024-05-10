@@ -4,9 +4,9 @@
 gRPC Gateway. It provides sensible defaults to get your server up and running
 with minimal boilerplate, while also offering configuration via environment
 variables, config files, or programmatic options.
- 
+
 Prefab includes a suite of plugins, adding capabilities such as
-authentication, logging, templating, and ACLs.
+authentication, authorization, logging, and templating.
 
 ## ✅ Features
 
@@ -17,8 +17,8 @@ authentication, logging, templating, and ACLs.
 - **Configurable:** File, env, or functional options.
 - **Logging & errors:** Request scoped field tracking, coded errors, stack traces, public/private error messages.
 - **Security:** CSRF protection built-in and options for configuring CORS.
-- **Authentication:** Authenticate users with Google, Magic Links, or Email/Password.
-- **ACLs:** Use proto options to define access rules for RPC endpoints.
+- **Authn:** Authenticate users with Google, Magic Links, or Email/Password.
+- **Authz:** Use proto options to define access rules for RPC endpoints.
 - **Templates:** Currently using standard go templates.
 
 ## 💡 Goals
@@ -190,9 +190,9 @@ Included implementations:
 **[In-Memory](./storage/memorystore/)**: Stores data in simple Go maps.
 
 **[SQLite3](./storage/sqlitestore/)**: SQLite backed storage. Explicitly
-  initialized models are stored in their own table, with a `prefab_` prefix.
-  Uninitialized models are stored in `prefab_default` indexed by `ID` and
-  `EntityType`.
+initialized models are stored in their own table, with a `prefab_` prefix.
+Uninitialized models are stored in `prefab_default` indexed by `ID` and
+`EntityType`.
 
 ## 🔐 Security
 
@@ -271,14 +271,14 @@ server:
 
     # Allow CORS from a static app and a single 3rd party site.
     corsOrigins:
-    - https://app.example.com
-    - https://plugin.vendor.com
+      - https://app.example.com
+      - https://plugin.vendor.com
     corsAllowedMethods:
-    - GET
-    - POST
-    - PUT
+      - GET
+      - POST
+      - PUT
     corsAllowedHeaders:
-    - x-csrf-protection
+      - x-csrf-protection
     corsAllowCredentials: true
     corsMaxAge: 72h
 ```

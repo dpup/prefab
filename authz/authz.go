@@ -1,8 +1,8 @@
-// Package acl provides a plugin for implementing basic access controls. It uses
-// the service descriptor to define the ACL, which is then enforced by a GRPC
+// Package authz provides a plugin for implementing basic access controls. It uses
+// the service descriptor to define the Authz, which is then enforced by a GRPC
 // interceptor.
 //
-// ACL Policies are defined in terms of roles and actions, both of which are
+// Authz Policies are defined in terms of roles and actions, both of which are
 // application defined strings. For example, an "editor" role might be allowed
 // to perform the "document.edit" action.
 //
@@ -20,7 +20,7 @@
 // mutlti-tenant systems or systems where a user might be part of multiple
 // workspaces or groups, each with different permissions.
 //
-// To map an incoming request to a resource, the ACL plugin uses "Object
+// To map an incoming request to a resource, the Authz plugin uses "Object
 // Fetchers". Fetchers can be registered against a key, which can be an
 // arbitrary string, or derived from `reflect.Type`. The fetcher is then called
 // with the value of a request parameter, per the field option.
@@ -28,7 +28,7 @@
 // RPCs can be configured with a default effect of Allow. For example, a page
 // might be configured to allow all users to view it, except those on mobile
 // devices (this is a bit of a tenuous example, but you get the idea).
-package acl
+package authz
 
 import (
 	"context"
@@ -95,7 +95,7 @@ type ObjectFetcher func(ctx context.Context, key any) (any, error)
 // Describes a role relative to a type.
 type RoleDescriber func(ctx context.Context, subject auth.Identity, object any, domain Domain) ([]Role, error)
 
-// MethodOptions returns ACL related method options from the method descriptor
+// MethodOptions returns Authz related method options from the method descriptor
 // associated with the given info.
 func MethodOptions(info *grpc.UnaryServerInfo) (objectKey string, action Action, defaultEffect Effect) {
 	if v, ok := serverutil.MethodOption(info, E_ObjectKey); ok {
@@ -120,19 +120,19 @@ func MethodOptions(info *grpc.UnaryServerInfo) (objectKey string, action Action,
 	return
 }
 
-// FieldOptions returns proto fields that are tagged with ACL related options.
+// FieldOptions returns proto fields that are tagged with Authz related options.
 func FieldOptions(req proto.Message) (any, string, error) {
 	var objectID any
 	var domainID string
 	if v, ok := serverutil.FieldOption(req, E_ObjectId); ok {
 		if len(v) != 1 {
-			return "", "", errors.Codef(codes.Internal, "acl error: require exactly one object_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+			return "", "", errors.Codef(codes.Internal, "authz error: require exactly one object_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
 		objectID = v[0].FieldValue
 	}
 	if v, ok := serverutil.FieldOption(req, E_DomainId); ok {
 		if len(v) != 1 {
-			return "", "", errors.Codef(codes.Internal, "acl error: expected exactly one domain_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+			return "", "", errors.Codef(codes.Internal, "authz error: expected exactly one domain_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
 		// TODO: Assert string.
 		domainID = v[0].FieldValue.(string)

@@ -1,57 +1,57 @@
 syntax = "proto3";
 
-package prefab.acl_test;
-option go_package = "github.com/dpup/prefab/acl/acltest";
+package prefab.authz_test;
+option go_package = "github.com/dpup/prefab/authz/authztest";
 
 import "google/api/annotations.proto";
-import "acl/acl.proto";
+import "authz/authz.proto";
 
-service AclTestService {
+service AuthzTestService {
 
-  rpc NoACL(Request) returns (Response) {
+  rpc NoPolicy(Request) returns (Response) {
     option (google.api.http) = {
-      get: "/api/no-acl"
+      get: "/api/no-policy"
     };
   }
 
 
   // Demonstrated an action only endpoint with no target resource.
   rpc Self(Request) returns (Response) {
-    option (prefab.acl.action) = "self.inspect";
+    option (prefab.authz.action) = "self.inspect";
     option (google.api.http) = {
       get: "/api/self"
     };
   }
 
-  // Demonstrates a standard deny ACL. All users are denied by default, and a
+  // Demonstrates a standard deny Authz. All users are denied by default, and a
   // policy can be used to allow certain roles to view the document.
   rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse) {
-    option (prefab.acl.action) = "documents.view";
-    option (prefab.acl.object_key) = "document";
-    option (prefab.acl.default_effect) = "deny";
+    option (prefab.authz.action) = "documents.view";
+    option (prefab.authz.object_key) = "document";
+    option (prefab.authz.default_effect) = "deny";
     
     option (google.api.http) = {
       get: "/api/{org_id}/docs/{document_id}"
     };
   }
 
-  // Another standard deny ACL, but with a different action.
+  // Another standard deny Authz, but with a different action.
   rpc SaveDocument(SaveDocumentRequest) returns (SaveDocumentResponse) {
-    option (prefab.acl.action) = "documents.write";
-    option (prefab.acl.object_key) = "document";
-    option (prefab.acl.default_effect) = "deny";
+    option (prefab.authz.action) = "documents.write";
+    option (prefab.authz.object_key) = "document";
+    option (prefab.authz.default_effect) = "deny";
     
     option (google.api.http) = {
       put: "/api/{org_id}/docs/{document_id}"
     };
   }
 
-  // Demonstrates a default allow ACL. Policies can be used to restrict certain
+  // Demonstrates a default allow Authz. Policies can be used to restrict certain
   // roles from viewing the title.
   rpc GetDocumentTitle(GetDocumentRequest) returns (GetDocumentResponse) {
-    option (prefab.acl.action) = "documents.view_meta";
-    option (prefab.acl.object_key) = "document";
-    option (prefab.acl.default_effect) = "allow";
+    option (prefab.authz.action) = "documents.view_meta";
+    option (prefab.authz.object_key) = "document";
+    option (prefab.authz.default_effect) = "allow";
     
     option (google.api.http) = {
       get: "/api/{org_id}/docs/{document_id}/title"
@@ -59,8 +59,8 @@ service AclTestService {
   }
 
   rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse) {
-    option (prefab.acl.action) = "documents.list";
-    option (prefab.acl.object_key) = "org";
+    option (prefab.authz.action) = "documents.list";
+    option (prefab.authz.object_key) = "org";
     
     option (google.api.http) = {
       get: "/api/{org_id}/docs"
@@ -77,8 +77,8 @@ message Response {
 }
 
 message GetDocumentRequest {
-  string org_id = 1 [(prefab.acl.domain_id) = true];
-  string document_id = 2 [(prefab.acl.object_id) = true];
+  string org_id = 1 [(prefab.authz.domain_id) = true];
+  string document_id = 2 [(prefab.authz.object_id) = true];
 }
 
 message GetDocumentResponse {
@@ -88,8 +88,8 @@ message GetDocumentResponse {
 }
 
 message SaveDocumentRequest {
-  string org_id = 1 [(prefab.acl.domain_id) = true];
-  string document_id = 2 [(prefab.acl.object_id) = true];
+  string org_id = 1 [(prefab.authz.domain_id) = true];
+  string document_id = 2 [(prefab.authz.object_id) = true];
   string title = 3;
   string body = 4;
 }
@@ -101,7 +101,7 @@ message SaveDocumentResponse {
 }
 
 message ListDocumentsRequest {
-  string org_id = 1 [(prefab.acl.object_id) = true];
+  string org_id = 1 [(prefab.authz.object_id) = true];
 }
 
 message ListDocumentsResponse {

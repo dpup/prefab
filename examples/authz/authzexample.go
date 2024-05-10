@@ -1,6 +1,6 @@
-// An example of how to use the ACL plugin.
+// An example of how to use the Authz plugin.
 //
-// $ go run examples/acls/aclexample.go
+// $ go run examples/authzs/authzexample.go
 //
 // At time of writing there is no web UI to exercise the endpoints, so you'll
 // need to use CURL (or equivalent). Use the following commands to try things
@@ -32,18 +32,18 @@ import (
 	"fmt"
 
 	"github.com/dpup/prefab"
-	"github.com/dpup/prefab/acl"
-	"github.com/dpup/prefab/acl/acltest"
 	"github.com/dpup/prefab/auth"
 	"github.com/dpup/prefab/auth/pwdauth"
+	"github.com/dpup/prefab/authz"
+	"github.com/dpup/prefab/authz/authztest"
 	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
 )
 
 const (
-	roleStandard = acl.Role("sys.standard")
-	roleAdmin    = acl.Role("sys.admin")
-	roleDocOwner = acl.Role("doc.owner")
+	roleStandard = authz.Role("sys.standard")
+	roleAdmin    = authz.Role("sys.admin")
+	roleDocOwner = authz.Role("doc.owner")
 )
 
 type org struct {
@@ -67,29 +67,29 @@ func main() {
 			pwdauth.WithHasher(pwdauth.TestHasher),    // Doesn't hash passwords.
 		)),
 
-		// Set up the example ACLs.
+		// Set up the example policies and rules.
 		// - Any user can list document titles.
 		// - The owner or an admin can view a specific document.
 		// - Only the owner can write to a document.
 		// - For this example, roles will be additive. All authenticated users will
 		//   have the "standard" role. Then optionally "admin" and/or "owner".
-		prefab.WithPlugin(acl.Plugin(
-			acl.WithPolicy(acl.Allow, roleStandard, acl.Action("documents.view_meta")),
-			acl.WithPolicy(acl.Allow, roleStandard, acl.Action("documents.list")),
-			acl.WithPolicy(acl.Allow, roleDocOwner, acl.Action("documents.view")),
-			acl.WithPolicy(acl.Allow, roleDocOwner, acl.Action("documents.write")),
-			acl.WithPolicy(acl.Allow, roleAdmin, acl.Action("documents.view")),
-			acl.WithObjectFetcher("org", fetchOrg),
-			acl.WithObjectFetcher("document", fetchDocument),
-			acl.WithRoleDescriber("*", roleDescriber),
+		prefab.WithPlugin(authz.Plugin(
+			authz.WithPolicy(authz.Allow, roleStandard, authz.Action("documents.view_meta")),
+			authz.WithPolicy(authz.Allow, roleStandard, authz.Action("documents.list")),
+			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.view")),
+			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.write")),
+			authz.WithPolicy(authz.Allow, roleAdmin, authz.Action("documents.view")),
+			authz.WithObjectFetcher("org", fetchOrg),
+			authz.WithObjectFetcher("document", fetchDocument),
+			authz.WithRoleDescriber("*", roleDescriber),
 		)),
 
 		// TODO: Add basic web UI to make it easier to exercise the endpoints.
 	)
 
-	// Register the GRPC service defined in the acltest package.
-	acltest.RegisterAclTestServiceHandlerFromEndpoint(s.GatewayArgs())
-	acltest.RegisterAclTestServiceServer(s.ServiceRegistrar(), &testServer{})
+	// Register the GRPC service defined in the authztest package.
+	authztest.RegisterAuthzTestServiceHandlerFromEndpoint(s.GatewayArgs())
+	authztest.RegisterAuthzTestServiceServer(s.ServiceRegistrar(), &testServer{})
 
 	// Start the server.
 	if err := s.Start(); err != nil {
@@ -97,7 +97,7 @@ func main() {
 	}
 }
 
-// ObjectFetcher associated with the "org" type which comes from the ACL
+// ObjectFetcher associated with the "org" type which comes from the Authz
 // specification in the proto description.
 func fetchOrg(ctx context.Context, key any) (any, error) {
 	if key.(string) == "xmen" {
@@ -115,16 +115,16 @@ func fetchDocument(ctx context.Context, key any) (any, error) {
 }
 
 // RoleDescriber for all objects.
-func roleDescriber(ctx context.Context, id auth.Identity, object any, domain acl.Domain) ([]acl.Role, error) {
+func roleDescriber(ctx context.Context, id auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
 	// Assume just one domain/org/workspace for this example.
 	switch o := object.(type) {
 	case document:
 		if domain != "xmen" {
-			return []acl.Role{}, nil
+			return []authz.Role{}, nil
 		}
 	case org:
 		if o.name != "xmen" {
-			return []acl.Role{}, nil
+			return []authz.Role{}, nil
 		}
 	default:
 		return nil, errors.NewC("unknown object type", codes.InvalidArgument)
@@ -133,12 +133,12 @@ func roleDescriber(ctx context.Context, id auth.Identity, object any, domain acl
 	if _, ok := object.(document); ok {
 		// Assume just one domain/org/workspace for this example.
 		if domain != "xmen" {
-			return []acl.Role{}, nil
+			return []authz.Role{}, nil
 		}
 	}
 
 	// All xmen get the standard role.
-	roles := []acl.Role{roleStandard}
+	roles := []authz.Role{roleStandard}
 
 	// Wolverine gets to be an admin.
 	if id.Email == "logan@xmen.net" {
@@ -153,30 +153,30 @@ func roleDescriber(ctx context.Context, id auth.Identity, object any, domain acl
 	return roles, nil
 }
 
-// Implements acltest.AclTestServiceServer so we can demonstrate the ACLs in
-// action. A very minimal implementation.
+// Implements authztest.AuthzTestServiceServer so we can demonstrate the
+// policies in action. A very minimal implementation.
 type testServer struct {
-	acltest.UnimplementedAclTestServiceServer
+	authztest.UnimplementedAuthzTestServiceServer
 }
 
-func (t *testServer) ListDocuments(ctx context.Context, in *acltest.ListDocumentsRequest) (*acltest.ListDocumentsResponse, error) {
-	return &acltest.ListDocumentsResponse{DocumentIds: []string{"1", "2", "3"}}, nil
+func (t *testServer) ListDocuments(ctx context.Context, in *authztest.ListDocumentsRequest) (*authztest.ListDocumentsResponse, error) {
+	return &authztest.ListDocumentsResponse{DocumentIds: []string{"1", "2", "3"}}, nil
 }
 
-func (t *testServer) GetDocument(ctx context.Context, in *acltest.GetDocumentRequest) (*acltest.GetDocumentResponse, error) {
+func (t *testServer) GetDocument(ctx context.Context, in *authztest.GetDocumentRequest) (*authztest.GetDocumentResponse, error) {
 	doc := staticDocuments[in.DocumentId]
-	return &acltest.GetDocumentResponse{
+	return &authztest.GetDocumentResponse{
 		Id:    doc.id,
 		Title: doc.title,
 		Body:  doc.body,
 	}, nil
 }
 
-func (t *testServer) SaveDocument(ctx context.Context, in *acltest.SaveDocumentRequest) (*acltest.SaveDocumentResponse, error) {
+func (t *testServer) SaveDocument(ctx context.Context, in *authztest.SaveDocumentRequest) (*authztest.SaveDocumentResponse, error) {
 	doc := staticDocuments[in.DocumentId]
 	doc.title = in.Title
 	doc.body = in.Body
-	return &acltest.SaveDocumentResponse{
+	return &authztest.SaveDocumentResponse{
 		Id:    doc.id,
 		Title: doc.title,
 		Body:  doc.body,

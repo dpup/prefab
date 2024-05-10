@@ -1,4 +1,4 @@
-package acl
+package authz
 
 import (
 	"context"
@@ -12,66 +12,66 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Constant name for identifying the core ACL plugin
-const PluginName = "acl"
+// Constant name for identifying the core Authz plugin
+const PluginName = "authz"
 
 var (
 	ErrPermissionDenied = errors.Codef(codes.PermissionDenied, "you are not authorized to perform this action")
 	ErrUnauthenticated  = errors.Codef(codes.Unauthenticated, "the requested action requires authentication")
 )
 
-// Configuration options for the ACL Plugin.
-type AclOption func(*AclPlugin)
+// Configuration options for the Authz Plugin.
+type AuthzOption func(*AuthzPlugin)
 
-// Plugin returns a new AclPlugin.
-func Plugin(opts ...AclOption) *AclPlugin {
-	ap := &AclPlugin{}
+// Plugin returns a new AuthzPlugin.
+func Plugin(opts ...AuthzOption) *AuthzPlugin {
+	ap := &AuthzPlugin{}
 	for _, opt := range opts {
 		opt(ap)
 	}
 	return ap
 }
 
-// WithPolicy adds an ACL policy to the plugin.
-func WithPolicy(effect Effect, role Role, action Action) AclOption {
-	return func(ap *AclPlugin) {
+// WithPolicy adds an Authz policy to the plugin.
+func WithPolicy(effect Effect, role Role, action Action) AuthzOption {
+	return func(ap *AuthzPlugin) {
 		ap.DefinePolicy(effect, role, action)
 	}
 }
 
 // WithRoleDescriber adds a role describer to the plugin.
-func WithObjectFetcher(objectKey string, fn ObjectFetcher) AclOption {
-	return func(ap *AclPlugin) {
+func WithObjectFetcher(objectKey string, fn ObjectFetcher) AuthzOption {
+	return func(ap *AuthzPlugin) {
 		ap.RegisterObjectFetcher(objectKey, fn)
 	}
 }
 
 // WithRoleDescriber adds a role describer to the plugin.
-func WithRoleDescriber(objectKey string, fn RoleDescriber) AclOption {
-	return func(ap *AclPlugin) {
+func WithRoleDescriber(objectKey string, fn RoleDescriber) AuthzOption {
+	return func(ap *AuthzPlugin) {
 		ap.RegisterRoleDescriber(objectKey, fn)
 	}
 }
 
-// AclPlugin provides functionality for authorizing requests and access to resources.
-type AclPlugin struct {
+// AuthzPlugin provides functionality for authorizing requests and access to resources.
+type AuthzPlugin struct {
 	policies       map[Action]map[Role]Effect
 	objectFetchers map[string]ObjectFetcher
 	roleDescribers map[string]RoleDescriber
 }
 
 // From plugin.Plugin
-func (ap *AclPlugin) Name() string {
+func (ap *AuthzPlugin) Name() string {
 	return PluginName
 }
 
 // From plugin.DependentPlugin
-func (ap *AclPlugin) Deps() []string {
+func (ap *AuthzPlugin) Deps() []string {
 	return []string{auth.PluginName}
 }
 
 // From prefab.OptionProvider, registers an additional interceptor.
-func (ap *AclPlugin) ServerOptions() []prefab.ServerOption {
+func (ap *AuthzPlugin) ServerOptions() []prefab.ServerOption {
 	return []prefab.ServerOption{
 		prefab.WithGRPCInterceptor(ap.Interceptor),
 	}
@@ -79,7 +79,7 @@ func (ap *AclPlugin) ServerOptions() []prefab.ServerOption {
 
 // DefinePolicy defines an policy which allows/denies the given role to perform
 // the action.
-func (ap *AclPlugin) DefinePolicy(effect Effect, role Role, action Action) {
+func (ap *AuthzPlugin) DefinePolicy(effect Effect, role Role, action Action) {
 	if ap.policies == nil {
 		ap.policies = make(map[Action]map[Role]Effect)
 	}
@@ -92,7 +92,7 @@ func (ap *AclPlugin) DefinePolicy(effect Effect, role Role, action Action) {
 // RegisterObjectFetcher registers a function for fetching an object based on a
 // request parameter that was specified in the proto descriptor. '*' can be used
 // as a wildcard to match any key which doesn't have a more specific fetcher.
-func (ap *AclPlugin) RegisterObjectFetcher(objectKey string, fn ObjectFetcher) {
+func (ap *AuthzPlugin) RegisterObjectFetcher(objectKey string, fn ObjectFetcher) {
 	if ap.objectFetchers == nil {
 		ap.objectFetchers = make(map[string]ObjectFetcher)
 	}
@@ -102,14 +102,14 @@ func (ap *AclPlugin) RegisterObjectFetcher(objectKey string, fn ObjectFetcher) {
 // RegisterRoleDescriber registers a function for describing a role relative to
 // an object.  '*' can be used as a wildcard to match any key which doesn't have
 // a more specific describer.
-func (ap *AclPlugin) RegisterRoleDescriber(objectKey string, fn RoleDescriber) {
+func (ap *AuthzPlugin) RegisterRoleDescriber(objectKey string, fn RoleDescriber) {
 	if ap.roleDescribers == nil {
 		ap.roleDescribers = make(map[string]RoleDescriber)
 	}
 	ap.roleDescribers[objectKey] = fn
 }
 
-func (ap *AclPlugin) fetcherForKey(objectKey string) ObjectFetcher {
+func (ap *AuthzPlugin) fetcherForKey(objectKey string) ObjectFetcher {
 	if fn, ok := ap.objectFetchers[objectKey]; ok {
 		return fn
 	}
@@ -119,7 +119,7 @@ func (ap *AclPlugin) fetcherForKey(objectKey string) ObjectFetcher {
 	return nil
 }
 
-func (ap *AclPlugin) describerForKey(objectKey string) RoleDescriber {
+func (ap *AuthzPlugin) describerForKey(objectKey string) RoleDescriber {
 	if fn, ok := ap.roleDescribers[objectKey]; ok {
 		return fn
 	}
@@ -129,7 +129,8 @@ func (ap *AclPlugin) describerForKey(objectKey string) RoleDescriber {
 	return nil
 }
 
-// Interceptor that enforces ACLs configured on the GRPC service descriptors.
+// Interceptor that enforces authorization policies configured on the GRPC
+// service descriptors.
 //
 // This interceptor:
 // 1. Uses method options to get object key and action.
@@ -137,23 +138,23 @@ func (ap *AclPlugin) describerForKey(objectKey string) RoleDescriber {
 // 3. Fetches the object based on the object key and id (ObjectFetcher).
 // 4. Gets the user's role relative to the object (RoleDescriber).
 // 5. Checks if the role can perform the action on the object.
-func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	// Get the ACL spec from the method descriptor.
+func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	// Get the Authz spec from the method descriptor.
 	objectKey, action, defaultEffect := MethodOptions(info)
 	if action == "" {
-		// No ACLs to enforce.
+		// No policies to enforce.
 		return handler(ctx, req)
 	}
 	if ap.policies[action] == nil {
-		return nil, errors.Codef(codes.Internal, "acl error: no policies configured for '%s' on %s", action, info.FullMethod)
+		return nil, errors.Codef(codes.Internal, "authz error: no policies configured for '%s' on %s", action, info.FullMethod)
 	}
 	fetcher := ap.fetcherForKey(objectKey)
 	if fetcher == nil {
-		return nil, errors.Codef(codes.Internal, "acl error: no object fetcher for key '%s' on %s", objectKey, info.FullMethod)
+		return nil, errors.Codef(codes.Internal, "authz error: no object fetcher for key '%s' on %s", objectKey, info.FullMethod)
 	}
 	describer := ap.describerForKey(objectKey)
 	if describer == nil {
-		return nil, errors.Codef(codes.Internal, "acl error: no role describer for key '%s' on %s", objectKey, info.FullMethod)
+		return nil, errors.Codef(codes.Internal, "authz error: no role describer for key '%s' on %s", objectKey, info.FullMethod)
 	}
 
 	// Get the object and domain from the request object.
@@ -176,7 +177,7 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 		if !errors.Is(err, auth.ErrNotFound) {
 			return nil, err
 		}
-		// If the request is unauthenticated, still try to run the ACLs, but change
+		// If the request is unauthenticated, still try to run the policy, but change
 		// the default error type to Unauthenticated instead of Permission Denied.
 		defaultError = ErrUnauthenticated
 	}
@@ -187,10 +188,10 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 		return nil, err
 	}
 
-	logging.Track(ctx, "acl.action", action)
-	logging.Track(ctx, "acl.object", objectID)
-	logging.Track(ctx, "acl.domain", domainID)
-	logging.Track(ctx, "acl.roles", roles)
+	logging.Track(ctx, "authz.action", action)
+	logging.Track(ctx, "authz.object", objectID)
+	logging.Track(ctx, "authz.domain", domainID)
+	logging.Track(ctx, "authz.roles", roles)
 
 	if len(roles) == 0 {
 		return nil, errors.Mark(defaultError, 0)
@@ -209,7 +210,7 @@ func (ap *AclPlugin) Interceptor(ctx context.Context, req interface{}, info *grp
 // In otherwords, if an RPC is default deny and two roles explicitly match a
 // policy, then both roles must allow access. This can be used to create
 // exclusion groups: e.g. all admins, except nyc-admins.
-func (ap *AclPlugin) DetermineEffect(action Action, roles []Role, defaultEffect Effect) Effect {
+func (ap *AuthzPlugin) DetermineEffect(action Action, roles []Role, defaultEffect Effect) Effect {
 	if len(roles) == 0 {
 		return defaultEffect
 	}
