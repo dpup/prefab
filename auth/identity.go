@@ -15,7 +15,8 @@ type Identity struct {
 	// Identity provider specific identifier. Maps to `sub` JWT claim.
 	Subject string
 
-	// name of the identity provider used to authenticate the user. Maps to
+	// Name of the identity provider used to authenticate the user. Maps to custom
+	// `idp` JWT claim.
 	Provider string
 
 	// The email address received from the identity provider, if available. Maps

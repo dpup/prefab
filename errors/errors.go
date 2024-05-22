@@ -17,7 +17,8 @@
 //	var Crashed = errors.Errorf("something really bad just happened")
 //
 //	func Crash() error {
-//	    return errors.NewC(Crashed, codes.Internal).WithPublicMessage("An unknown error occurred")
+//	    return errors.NewC(Crashed, codes.Internal).
+//				WithUserPresentableMessage("An unknown error occurred")
 //	}
 //
 // This can be called as follows:
@@ -75,7 +76,7 @@ type Error struct {
 	httpStatusCode int
 
 	// Error message to return to client,
-	publicMessage string
+	userPresentableMessage string
 }
 
 // New makes an Error from the given value. If that value is already an
@@ -153,13 +154,13 @@ func WrapPrefix(e interface{}, prefix string, skip int) *Error {
 	}
 
 	return &Error{
-		Err:            err.Err,
-		stack:          err.stack,
-		code:           err.code,
-		details:        err.details,
-		httpStatusCode: err.httpStatusCode,
-		publicMessage:  err.publicMessage,
-		prefix:         prefix,
+		Err:                    err.Err,
+		stack:                  err.stack,
+		code:                   err.code,
+		details:                err.details,
+		httpStatusCode:         err.httpStatusCode,
+		userPresentableMessage: err.userPresentableMessage,
+		prefix:                 prefix,
 	}
 }
 
@@ -175,13 +176,13 @@ func Mark(e interface{}, skip int) *Error {
 		stack := make([]uintptr, MaxStackDepth)
 		length := runtime.Callers(2+skip, stack[:])
 		return &Error{
-			Err:            err,
-			stack:          stack[:length],
-			code:           err.code,
-			details:        err.details,
-			httpStatusCode: err.httpStatusCode,
-			publicMessage:  err.publicMessage,
-			prefix:         err.prefix,
+			Err:                    err,
+			stack:                  stack[:length],
+			code:                   err.code,
+			details:                err.details,
+			httpStatusCode:         err.httpStatusCode,
+			userPresentableMessage: err.userPresentableMessage,
+			prefix:                 err.prefix,
 		}
 	}
 
@@ -189,13 +190,14 @@ func Mark(e interface{}, skip int) *Error {
 	return Wrap(e, 1+skip)
 }
 
-// WithPublicMessage takes an error message and adds a public message to it. If
-// the error is not already an `Error`, it will be wrapped in one.
-func WithPublicMessage(err error, publicMessage string) *Error {
+// WithUserPresentableMessage takes an error message and adds a public message
+// to it. If the error is not already an `Error`, it will be wrapped in one. The
+// user presentable message is what Prefab will return to the client.
+func WithUserPresentableMessage(err error, userPresentableMessage string) *Error {
 	if err == nil {
 		return nil
 	}
-	return Wrap(err, 1).WithPublicMessage(publicMessage)
+	return Wrap(err, 1).WithUserPresentableMessage(userPresentableMessage)
 }
 
 // WithCode takes an error and adds a gRPC status code to it. If the error is
@@ -372,23 +374,25 @@ func (err *Error) WithHTTPStatusCode(code int) *Error {
 	return err
 }
 
-// PublicMessage returns the error string that should be returned to the client.
-func (err *Error) PublicMessage() string {
-	if err.publicMessage != "" {
-		return err.publicMessage
+// UserPresentableMessage returns the error string that should be returned to
+// the client.
+func (err *Error) UserPresentableMessage() string {
+	if err.userPresentableMessage != "" {
+		return err.userPresentableMessage
 	}
 	return err.Error()
 }
 
-// WithPublicMessage sets the error string that should be returned to the client.
-func (err *Error) WithPublicMessage(publicMessage string) *Error {
-	err.publicMessage = publicMessage
+// WithUserPresentableMessage sets the error string that should be returned to
+// the client.
+func (err *Error) WithUserPresentableMessage(userPresentableMessage string) *Error {
+	err.userPresentableMessage = userPresentableMessage
 	return err
 }
 
 // GRPCStatus returns a gRPC status object for the error.
 func (err *Error) GRPCStatus() *status.Status {
-	st := status.New(err.Code(), err.PublicMessage())
+	st := status.New(err.Code(), err.UserPresentableMessage())
 	if len(err.details) > 0 {
 		st, _ = st.WithDetails(err.details...)
 	}

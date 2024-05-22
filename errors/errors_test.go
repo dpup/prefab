@@ -68,7 +68,7 @@ func TestPublicMessage(t *testing.T) {
 	err := New("test error")
 	assert.Equal(t, "test error", err.GRPCStatus().Message())
 
-	err = err.WithPublicMessage("public message")
+	err = err.WithUserPresentableMessage("public message")
 	assert.Equal(t, "public message", err.GRPCStatus().Message())
 }
 
