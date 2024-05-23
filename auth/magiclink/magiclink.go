@@ -98,12 +98,12 @@ type MagicLinkPlugin struct {
 	tokenExpiration time.Duration
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (p *MagicLinkPlugin) Name() string {
 	return PluginName
 }
 
-// From prefab.DependentPlugin
+// From prefab.DependentPlugin.
 func (p *MagicLinkPlugin) Deps() []string {
 	return []string{auth.PluginName, email.PluginName, templates.PluginName}
 }

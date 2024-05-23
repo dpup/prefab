@@ -73,12 +73,12 @@ type EmailPlugin struct {
 	smtpPassword string
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (p *EmailPlugin) Name() string {
 	return PluginName
 }
 
-// From prefab.InitializablePlugin
+// From prefab.InitializablePlugin.
 func (p *EmailPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.from == "" {
 		return errors.New("email: config missing from adddress")

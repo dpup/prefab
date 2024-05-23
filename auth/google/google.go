@@ -123,17 +123,17 @@ type GooglePlugin struct {
 	clientSecret string
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (p *GooglePlugin) Name() string {
 	return PluginName
 }
 
-// From prefab.DependentPlugin
+// From prefab.DependentPlugin.
 func (p *GooglePlugin) Deps() []string {
 	return []string{auth.PluginName}
 }
 
-// From prefab.OptionProvider
+// From prefab.OptionProvider.
 func (p *GooglePlugin) ServerOptions() []prefab.ServerOption {
 	return []prefab.ServerOption{
 		prefab.WithHTTPHandlerFunc("/api/auth/google/callback", p.handleGoogleCallback),
@@ -141,7 +141,7 @@ func (p *GooglePlugin) ServerOptions() []prefab.ServerOption {
 	}
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (p *GooglePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	if p.clientID == "" {
 		return errors.New("google: config missing client id")

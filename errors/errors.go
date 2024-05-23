@@ -235,7 +235,7 @@ func (err *Error) Error() string {
 }
 
 // Stack returns the callstack formatted the same way that go does
-// in runtime/debug.Stack()
+// in runtime/debug.Stack().
 func (err *Error) Stack() []byte {
 	buf := bytes.Buffer{}
 

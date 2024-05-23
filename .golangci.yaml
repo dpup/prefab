@@ -218,6 +218,21 @@ linters-settings:
     # Default: false
     all: true
 
+  wrapcheck:
+    ignoreSigs:
+    - errors.MaybeWrap
+    - errors.Mark
+    - errors.New(
+    - errors.NewC(
+    - errors.Codef(
+    - errors.Unwrap(
+    - errors.Join(
+    - .Errorf(
+    - .Wrap(
+    - .Wrapf(
+    - .WithMessage(
+    - .WithMessagef(
+    - .WithStack(
 
 linters:
   disable-all: true
@@ -251,6 +266,7 @@ linters:
   - goconst # finds repeated strings that could be replaced by a constant
   - gocritic # provides diagnostics that check for bugs, performance and style issues
   - gocyclo # computes and checks the cyclomatic complexity of functions
+  - godot # checks if comments end in a period
   - goimports # in addition to fixing imports, goimports also formats your code in the same style as gofmt
   - gomoddirectives # manages the use of 'replace', 'retract', and 'excludes' directives in go.mod
   - gomodguard # allow and block lists linter for direct Go module dependencies. This is different from depguard where there are different block types for example version constraints and module recommendations
@@ -291,8 +307,7 @@ linters:
   #- revive # fast, configurable, extensible, flexible, and beautiful linter for Go, drop-in replacement of golint
   #- nestif # reports deeply nested if statements
   #- errcheck # checking for unchecked errors, these unchecked errors can be critical bugs in some cases
-  #- godot # checks if comments end in a period
-  #- lll # reports long lines
+  #- wrapcheck # checks that errors returned from external packages are wrapped
 
   ## recommended, but may not be applicable
   #- gochecknoinits # checks that no init functions are present in Go code
@@ -310,10 +325,10 @@ linters:
   #- inamedparam # [great idea, but too strict, need to ignore a lot of cases by default] reports interfaces with unnamed method parameters
   #- interfacebloat # checks the number of methods inside an interface
   #- ireturn # accept interfaces, return concrete types
+  #- lll # reports long lines
   #- prealloc # [premature optimization, but can be used in some cases] finds slice declarations that could potentially be preallocated
   #- tagalign # checks that struct tags are well aligned
   #- varnamelen # [great idea, but too many false positives] checks that the length of a variable's name matches its scope
-  #- wrapcheck # checks that errors returned from external packages are wrapped
   #- zerologlint # detects the wrong usage of zerolog that a user forgets to dispatch zerolog.Event
 
   ## disabled

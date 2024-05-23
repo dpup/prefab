@@ -70,7 +70,8 @@ func ParseCookies(headers ...string) map[string]*http.Cookie {
 // that this can be used from both interceptors and handlers.
 //
 // Example:
-// ok, value, err := MethodOption(info, SomeProto.E_Option)
+//
+//	ok, value, err := MethodOption(info, SomeProto.E_Option)
 func MethodOption(info *grpc.UnaryServerInfo, ext protoreflect.ExtensionType) (any, bool) {
 	name := strings.ReplaceAll(info.FullMethod, "/", ".")
 	name = strings.TrimPrefix(name, ".")

@@ -172,7 +172,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 }
 
 // IdentityFromContext parses and verifies a JWT received from incoming GRPC
-// metadata. An `Authorization` header will take precedence over a `Cookie`,
+// metadata. An `Authorization` header will take precedence over a `Cookie`.
 func IdentityFromContext(ctx context.Context) (Identity, error) {
 	i, err := identityFromAuthHeader(ctx)
 	if !errors.Is(err, ErrNotFound) {

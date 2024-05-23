@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Constant name for identifying the core Authz plugin
+// Constant name for identifying the core Authz plugin.
 const PluginName = "authz"
 
 var (
@@ -60,12 +60,12 @@ type AuthzPlugin struct {
 	roleDescribers map[string]RoleDescriber
 }
 
-// From plugin.Plugin
+// From plugin.Plugin.
 func (ap *AuthzPlugin) Name() string {
 	return PluginName
 }
 
-// From plugin.DependentPlugin
+// From plugin.DependentPlugin.
 func (ap *AuthzPlugin) Deps() []string {
 	return []string{auth.PluginName}
 }

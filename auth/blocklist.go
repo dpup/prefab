@@ -70,7 +70,7 @@ type BlockedToken struct {
 	Key string
 }
 
-// Implements storage.Model
+// Implements storage.Model.
 func (bt *BlockedToken) PK() string {
 	return bt.Key
 }

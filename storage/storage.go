@@ -28,7 +28,7 @@ type StoragePlugin struct {
 	Store
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (p *StoragePlugin) Name() string {
 	return PluginName
 }

@@ -16,7 +16,7 @@ type formDecoder struct {
 	runtime.Marshaler
 }
 
-// ContentType means the content type of the response
+// ContentType means the content type of the response.
 func (u formDecoder) ContentType(_ interface{}) string {
 	return "application/json"
 }
@@ -27,7 +27,7 @@ func (u formDecoder) Marshal(v interface{}) ([]byte, error) {
 	return j.Marshal(v)
 }
 
-// NewDecoder indicates how to decode the request
+// NewDecoder indicates how to decode the request.
 func (u formDecoder) NewDecoder(r io.Reader) runtime.Decoder {
 	return runtime.DecoderFunc(func(p interface{}) error {
 		msg, ok := p.(proto.Message)

@@ -10,7 +10,7 @@ import (
 	"github.com/dpup/prefab/storage"
 )
 
-// Constant name for identifying the core auth plugin
+// Constant name for identifying the core auth plugin.
 const PluginName = "auth"
 
 // AuthOptions allow configuration of the AuthPlugin.
@@ -62,17 +62,17 @@ type AuthPlugin struct {
 	blocklist     Blocklist
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (ap *AuthPlugin) Name() string {
 	return PluginName
 }
 
-// From prefab.OptionalDependentPlugin
+// From prefab.OptionalDependentPlugin.
 func (ap *AuthPlugin) OptDeps() []string {
 	return []string{storage.PluginName}
 }
 
-// From prefab.InitializablePlugin
+// From prefab.InitializablePlugin.
 func (ap *AuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	// If a blocklist hasn't been configured, and a storage plugin is registered,
 	// then create a default blocklist for revoked tokens.
@@ -89,7 +89,7 @@ func (ap *AuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	return nil
 }
 
-// From prefab.OptionProvider
+// From prefab.OptionProvider.
 func (ap *AuthPlugin) ServerOptions() []prefab.ServerOption {
 	return []prefab.ServerOption{
 		prefab.WithGRPCService(&AuthService_ServiceDesc, ap.authService),

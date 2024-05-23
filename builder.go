@@ -224,7 +224,7 @@ func WithContext(ctx context.Context) ServerOption {
 
 // WithHost configures the hostname or IP the server will listen on.
 //
-// Config key: `server.host`
+// Config key: `server.host`.
 func WithHost(host string) ServerOption {
 	return func(b *builder) {
 		b.host = host
@@ -233,7 +233,7 @@ func WithHost(host string) ServerOption {
 
 // WithPort configures the port the server will listen on.
 //
-// Config key: `server.port`
+// Config key: `server.port`.
 func WithPort(port int) ServerOption {
 	return func(b *builder) {
 		b.port = port
@@ -245,7 +245,7 @@ func WithPort(port int) ServerOption {
 // the CORS security config are automatically added to this list,
 // see WithSecurityHeaders.
 //
-// Config key: `server.incomingHeaders`
+// Config key: `server.incomingHeaders`.
 func WithIncomingHeaders(headers ...string) ServerOption {
 	return func(b *builder) {
 		b.incomingHeaders = append(b.incomingHeaders, headers...)
@@ -255,7 +255,7 @@ func WithIncomingHeaders(headers ...string) ServerOption {
 // WithTLS configures the server to allow traffic via TLS using the provided
 // cert. If not called server will use HTTP/H2C.
 //
-// Config keys: `server.tls.certFile`, `server.tls.keyFile`
+// Config keys: `server.tls.certFile`, `server.tls.keyFile`.
 func WithTLS(certFile, keyFile string) ServerOption {
 	return func(b *builder) {
 		b.certFile = certFile
@@ -265,7 +265,7 @@ func WithTLS(certFile, keyFile string) ServerOption {
 
 // WithMaxRecvMsgSize sets the maximum GRPC message size. Default is 4Mb.
 //
-// Config key: `server.maxMsgSizeBytes`
+// Config key: `server.maxMsgSizeBytes`.
 func WithMaxRecvMsgSize(maxMsgSizeBytes int) ServerOption {
 	return func(b *builder) {
 		b.maxMsgSizeBytes = maxMsgSizeBytes
@@ -274,7 +274,7 @@ func WithMaxRecvMsgSize(maxMsgSizeBytes int) ServerOption {
 
 // WithCRSFSigningKey sets the key used to sign CSRF tokens.
 //
-// Config key: `server.csrfSigningKey`
+// Config key: `server.csrfSigningKey`.
 func WithCRSFSigningKey(signingKey string) ServerOption {
 	return func(b *builder) {
 		b.csrfSigningKey = []byte(signingKey)
@@ -294,7 +294,7 @@ func WithCRSFSigningKey(signingKey string) ServerOption {
 // - `server.security.corsAllowHeaders`
 // - `server.security.corsExposeHeaders`
 // - `server.security.corsAllowCredentials`
-// - `server.security.corsMaxAge`
+// - `server.security.corsMaxAge`.
 func WithSecurityHeaders(headers *SecurityHeaders) ServerOption {
 	return func(b *builder) {
 		b.securityHeaders = headers
@@ -407,7 +407,7 @@ func WithRequestConfig(injector ConfigInjector) ServerOption {
 }
 
 // Creates credentials from a cert and key file.
-// Based on credentials.NewServerTLSFromFile
+// Based on credentials.NewServerTLSFromFile.
 func serverTLSFromFile(cert, key string) credentials.TransportCredentials {
 	c, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
@@ -418,7 +418,7 @@ func serverTLSFromFile(cert, key string) credentials.TransportCredentials {
 	return credentials.NewTLS(tlsConfig)
 }
 
-// Based on credentials.NewClientTLSFromFile
+// Based on credentials.NewClientTLSFromFile.
 func clientTLSFromFile(cert string) credentials.TransportCredentials {
 	b, err := os.ReadFile(cert)
 	if err != nil {

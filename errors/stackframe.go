@@ -48,7 +48,7 @@ func (frame *StackFrame) Func() *runtime.Func {
 }
 
 // String returns the stackframe formatted in the same way as go does
-// in runtime/debug.Stack()
+// in runtime/debug.Stack().
 func (frame *StackFrame) String() string {
 	str := fmt.Sprintf("%s:%d (0x%x)\n", frame.File, frame.LineNumber, frame.ProgramCounter)
 

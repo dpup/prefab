@@ -42,12 +42,12 @@ type TemplatePlugin struct {
 	templates   *template.Template
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (p *TemplatePlugin) Name() string {
 	return PluginName
 }
 
-// From prefab.InitializablePlugin
+// From prefab.InitializablePlugin.
 func (p *TemplatePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	// Parse templates on initialization.
 	return p.parseAll()

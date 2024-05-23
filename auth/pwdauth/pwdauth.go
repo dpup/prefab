@@ -58,12 +58,12 @@ type PwdAuthPlugin struct {
 	accountFinder AccountFinder
 }
 
-// From prefab.Plugin
+// From prefab.Plugin.
 func (p *PwdAuthPlugin) Name() string {
 	return PluginName
 }
 
-// From prefab.DependentPlugin
+// From prefab.DependentPlugin.
 func (p *PwdAuthPlugin) Deps() []string {
 	return []string{auth.PluginName}
 }

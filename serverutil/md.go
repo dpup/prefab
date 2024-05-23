@@ -54,7 +54,7 @@ func HTTPMethod(ctx context.Context) string {
 // requests. This is used to allow certain headers to be passed through the
 // Gateway and into the GRPC server.
 //
-// See: runtime.WithIncomingHeaderMatcher
+// See: runtime.WithIncomingHeaderMatcher.
 func HeaderMatcher(headers []string) func(string) (string, bool) {
 	headerMap := map[string]bool{}
 	for _, h := range headers {
