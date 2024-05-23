@@ -31,6 +31,9 @@ const (
 
 	// Duration for which the CSRF token is valid.
 	csrfExpiration = time.Hour * 6
+
+	// Length of the CSRF token.
+	csrfTokenLength = 32
 )
 
 // SendCSRFToken sends a CSRF token in the response cookies and returns the
@@ -65,7 +68,7 @@ func SendCSRFToken(ctx context.Context, signingKey []byte) string {
 // token in the query params and cookies, and verifies that they match. If the
 // token is missing or invalid, an error is returned.
 func VerifyCSRF(ctx context.Context, signingKey []byte) error {
-	if h := serverutil.HttpHeader(ctx, csrfHeader); h != "" {
+	if h := serverutil.HTTPHeader(ctx, csrfHeader); h != "" {
 		// Simply the presence of the header is enough.
 		return nil
 	}
@@ -98,14 +101,14 @@ func csrfTokenFromCookie(ctx context.Context) string {
 }
 
 func generateCSRFToken(signingKey []byte) string {
-	randomData := make([]byte, 32)
+	randomData := make([]byte, csrfTokenLength)
 	if _, err := rand.Read(randomData); err != nil {
 		// Errors should not occur under normal operation and are unlikely to be
 		// recoverable. So let it fail hard.
 		panic("csrf: random number generation failed: " + err.Error())
 	}
 
-	hasher := hmac.New(sha256.New, []byte(signingKey))
+	hasher := hmac.New(sha256.New, signingKey)
 	hasher.Write(randomData)
 	mac := hex.EncodeToString(hasher.Sum(nil))
 
@@ -114,7 +117,8 @@ func generateCSRFToken(signingKey []byte) string {
 
 func verifyCSRFToken(token string, signingKey []byte) error {
 	parts := strings.SplitN(token, "_", 2)
-	if len(parts) != 2 {
+	expectedParts := 2
+	if len(parts) != expectedParts {
 		return errors.Codef(codes.FailedPrecondition, "csrf: invalid token")
 	}
 
@@ -128,7 +132,7 @@ func verifyCSRFToken(token string, signingKey []byte) error {
 		return errors.Codef(codes.FailedPrecondition, "csrf: invalid data")
 	}
 
-	hasher := hmac.New(sha256.New, []byte(signingKey))
+	hasher := hmac.New(sha256.New, signingKey)
 	hasher.Write(randomData)
 	expectedMac := hasher.Sum(nil)
 
@@ -163,7 +167,7 @@ func csrfInterceptor(signingKey []byte) grpc.UnaryServerInterceptor {
 		}
 
 		if mode == "auto" {
-			if httpMethod := serverutil.HttpMethod(ctx); httpMethod == "" {
+			if httpMethod := serverutil.HTTPMethod(ctx); httpMethod == "" {
 				// If no HTTP method, assume non-browser client and skip checks.
 				logging.Track(ctx, "server.csrf_mode", "auto-off")
 				return handler(ctx, req)

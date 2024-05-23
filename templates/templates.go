@@ -55,11 +55,11 @@ func (p *TemplatePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 
 // Load templates (*.tmpl) contained within the provided directory and all
 // sub-directories.
-func (r *TemplatePlugin) Load(dirs []string) error {
-	r.init()
-	r.dirs = append(r.dirs, dirs...)
-	for _, dir := range r.dirs {
-		if err := r.parse(dir); err != nil {
+func (p *TemplatePlugin) Load(dirs []string) error {
+	p.init()
+	p.dirs = append(p.dirs, dirs...)
+	for _, dir := range p.dirs {
+		if err := p.parse(dir); err != nil {
 			return err
 		}
 	}
@@ -89,28 +89,28 @@ func (p *TemplatePlugin) Render(ctx context.Context, name string, data interface
 	return b.String(), nil
 }
 
-func (r *TemplatePlugin) init() {
-	if r.templates == nil || r.alwaysParse {
-		r.templates = template.New("").Funcs(template.FuncMap{
+func (p *TemplatePlugin) init() {
+	if p.templates == nil || p.alwaysParse {
+		p.templates = template.New("").Funcs(template.FuncMap{
 			// template functions can be added here.
 		})
 	}
 }
 
-func (r *TemplatePlugin) parseAll() error {
-	r.init()
-	for _, dir := range r.dirs {
-		if err := r.parse(dir); err != nil {
+func (p *TemplatePlugin) parseAll() error {
+	p.init()
+	for _, dir := range p.dirs {
+		if err := p.parse(dir); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (r *TemplatePlugin) parse(dir string) error {
+func (p *TemplatePlugin) parse(dir string) error {
 	return filepath.Walk(dir, func(path string, _ os.FileInfo, _ error) error {
 		if strings.HasSuffix(path, ".tmpl") {
-			if _, err := r.templates.ParseFiles(path); err != nil {
+			if _, err := p.templates.ParseFiles(path); err != nil {
 				return err
 			}
 		}

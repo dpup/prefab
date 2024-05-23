@@ -78,7 +78,7 @@ func MethodOption(info *grpc.UnaryServerInfo, ext protoreflect.ExtensionType) (a
 	if err != nil {
 		panic("unexpected error accessing method descriptor for " + name + ": " + err.Error())
 	}
-	opts := methodDesc.Options().(*descriptorpb.MethodOptions)
+	opts, _ := methodDesc.Options().(*descriptorpb.MethodOptions)
 	if proto.HasExtension(opts, ext) {
 		return proto.GetExtension(opts, ext), true
 	}
@@ -91,9 +91,9 @@ func FieldOption(msg proto.Message, ext protoreflect.ExtensionType) ([]*FieldOpt
 	var results []*FieldOptionValue
 	m := msg.ProtoReflect()
 	fields := m.Descriptor().Fields()
-	for i := 0; i < fields.Len(); i++ {
+	for i := range fields.Len() {
 		fd := fields.Get(i)
-		opts := fd.Options().(*descriptorpb.FieldOptions)
+		opts, _ := fd.Options().(*descriptorpb.FieldOptions)
 		if proto.HasExtension(opts, ext) {
 			results = append(results, &FieldOptionValue{
 				FieldName:   string(fd.Name()),

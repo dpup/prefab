@@ -1,10 +1,10 @@
 package prefab
 
 import (
-	"fmt"
 	"io"
 	"net/url"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
 	"google.golang.org/protobuf/proto"
@@ -32,7 +32,7 @@ func (u formDecoder) NewDecoder(r io.Reader) runtime.Decoder {
 	return runtime.DecoderFunc(func(p interface{}) error {
 		msg, ok := p.(proto.Message)
 		if !ok {
-			return fmt.Errorf("not proto message")
+			return errors.New("not proto message")
 		}
 
 		formData, err := io.ReadAll(r)

@@ -6,16 +6,16 @@ import (
 )
 
 func TestIs(t *testing.T) {
-	custErr := errorWithCustomIs{
+	custErr := customIsError{
 		Key: "TestForFun",
 		Err: io.EOF,
 	}
 
-	shouldMatch := errorWithCustomIs{
+	shouldMatch := customIsError{
 		Key: "TestForFun",
 	}
 
-	shouldNotMatch := errorWithCustomIs{Key: "notOk"}
+	shouldNotMatch := customIsError{Key: "notOk"}
 
 	if !Is(custErr, shouldMatch) {
 		t.Errorf("custErr is not a TestForFun customError")
@@ -50,16 +50,16 @@ func TestIs(t *testing.T) {
 	}
 }
 
-type errorWithCustomIs struct {
+type customIsError struct {
 	Key string
 	Err error
 }
 
-func (ewci errorWithCustomIs) Error() string {
+func (ewci customIsError) Error() string {
 	return "[" + ewci.Key + "]: " + ewci.Err.Error()
 }
 
-func (ewci errorWithCustomIs) Is(target error) bool {
-	matched, ok := target.(errorWithCustomIs)
+func (ewci customIsError) Is(target error) bool {
+	matched, ok := target.(customIsError)
 	return ok && matched.Key == ewci.Key
 }

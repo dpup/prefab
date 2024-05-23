@@ -163,17 +163,18 @@ func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) 
 
 	var userInfo *UserInfo
 	var err error
-	if req.Creds["code"] != "" {
+	switch {
+	case req.Creds["code"] != "":
 		// Exchanges an authorization code for an access token, and sets up the
 		// identity cookies.
 		userInfo, err = p.handleAuthorizationCode(ctx, req.Creds["code"], req.Creds["state"])
-	} else if req.Creds["idtoken"] != "" {
+	case req.Creds["idtoken"] != "":
 		// Verifies the id token and uses the claims to set up the identity cookies.
 		userInfo, err = p.handleIDToken(ctx, req.Creds["idtoken"])
-	} else if len(req.Creds) == 0 || req.Creds["state"] != "" {
+	case len(req.Creds) == 0 || req.Creds["state"] != "":
 		// Initiates a server side OAuth flow.
 		return p.redirectToGoogle(ctx, req.RedirectUri, req.Creds["state"])
-	} else {
+	default:
 		return nil, errors.NewC("google: unexpected credentials, a `code` or an `idtoken` are required", codes.InvalidArgument)
 	}
 
@@ -226,7 +227,7 @@ func (p *GooglePlugin) handleGoogleCallback(w http.ResponseWriter, r *http.Reque
 		// TODO: Standardize pattern for HTTP handler error handler. Introduce a
 		// handler interface which returns an error.
 		logging.Errorf(ctx, "google: failed to parse state: %s", err)
-		w.WriteHeader(400)
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("google: invalid oauth state"))
 		return
 	}
@@ -243,7 +244,7 @@ func (p *GooglePlugin) handleGoogleCallback(w http.ResponseWriter, r *http.Reque
 
 	logging.Info(ctx, "Google Login: forwarding callback to GRPC handler")
 	w.Header().Add("location", u.String())
-	w.WriteHeader(302)
+	w.WriteHeader(http.StatusFound)
 }
 
 // Handle an OAuth2 authorization code retrieved from Google.
@@ -276,7 +277,8 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawSta
 
 	// Use the access token to fetch the user's profile.
 	client := conf.Client(ctx, token)
-	resp, err := client.Get(userInfoEndpoint)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, userInfoEndpoint, nil)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, errors.Codef(codes.Internal, "google: failed to fetch user profile: %s", err)
 	}

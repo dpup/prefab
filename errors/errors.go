@@ -99,7 +99,7 @@ func NewC(e interface{}, code codes.Code) *Error {
 	}
 
 	stack := make([]uintptr, MaxStackDepth)
-	length := runtime.Callers(2, stack[:])
+	length := runtime.Callers(2, stack)
 	return &Error{
 		Err:   err,
 		stack: stack[:length],
@@ -112,10 +112,6 @@ func NewC(e interface{}, code codes.Code) *Error {
 // fmt.Errorf("%v"). The skip parameter indicates how far up the stack
 // to start the stacktrace. 0 is from the current call, 1 from its caller, etc.
 func Wrap(e interface{}, skip int) *Error {
-	if e == nil {
-		return nil
-	}
-
 	var err error
 
 	switch e := e.(type) {
@@ -128,12 +124,21 @@ func Wrap(e interface{}, skip int) *Error {
 	}
 
 	stack := make([]uintptr, MaxStackDepth)
-	length := runtime.Callers(2+skip, stack[:])
+	length := runtime.Callers(2+skip, stack)
 	return &Error{
 		Err:   err,
 		stack: stack[:length],
 		code:  codes.Unknown,
 	}
+}
+
+// MaybeWrap makes an Error from the given value. Nil is passed through safely
+// to avoid nil pointer problems with the Error struct.
+func MaybeWrap(e interface{}, skip int) error {
+	if e == nil {
+		return nil
+	}
+	return Wrap(e, skip+1)
 }
 
 // WrapPrefix makes an Error from the given value. If that value is already an
@@ -143,10 +148,6 @@ func Wrap(e interface{}, skip int) *Error {
 // up the stack to start the stacktrace. 0 is from the current call,
 // 1 from its caller, etc.
 func WrapPrefix(e interface{}, prefix string, skip int) *Error {
-	if e == nil {
-		return nil
-	}
-
 	err := Wrap(e, 1+skip)
 
 	if err.prefix != "" {
@@ -169,12 +170,9 @@ func WrapPrefix(e interface{}, prefix string, skip int) *Error {
 // indicates how far up the stack to start the stacktrace. 0 is from the current
 // call, 1 from its caller, etc.
 func Mark(e interface{}, skip int) *Error {
-	if e == nil {
-		return nil
-	}
 	if err, ok := e.(*Error); ok {
 		stack := make([]uintptr, MaxStackDepth)
-		length := runtime.Callers(2+skip, stack[:])
+		length := runtime.Callers(2+skip, stack)
 		return &Error{
 			Err:                    err,
 			stack:                  stack[:length],
@@ -194,59 +192,45 @@ func Mark(e interface{}, skip int) *Error {
 // to it. If the error is not already an `Error`, it will be wrapped in one. The
 // user presentable message is what Prefab will return to the client.
 func WithUserPresentableMessage(err error, userPresentableMessage string) *Error {
-	if err == nil {
-		return nil
-	}
 	return Wrap(err, 1).WithUserPresentableMessage(userPresentableMessage)
 }
 
 // WithCode takes an error and adds a gRPC status code to it. If the error is
 // not already an `Error`, it will be wrapped in one.
 func WithCode(err error, code codes.Code) *Error {
-	if err == nil {
-		return nil
-	}
 	return Wrap(err, 1).WithCode(code)
 }
 
 // WithHTTPStatusCode takes an error and adds an explicit HTTP status code to
 // it, overriding the HTTP status mapped from the gRPC code.
 func WithHTTPStatusCode(err error, code int) *Error {
-	if err == nil {
-		return nil
-	}
 	return Wrap(err, 1).WithHTTPStatusCode(code)
 }
 
 // WithDetails takes an error and adds gRPC details to it. If the error is
 // not already an `Error`, it will be wrapped in one.
 func WithDetails(err error, details ...protoiface.MessageV1) *Error {
-	if err == nil {
-		return nil
-	}
 	return Wrap(err, 1).WithDetails(details...)
 }
 
 // Errorf creates a new error with the given message. You can use it
 // as a drop-in replacement for fmt.Errorf() to provide descriptive
 // errors in return values.
-func Errorf(format string, a ...interface{}) *Error {
+func Errorf(format string, a ...interface{}) error {
 	return Wrap(fmt.Errorf(format, a...), 1)
 }
 
 // Codef creates a new error with the given message and status code.
-func Codef(code codes.Code, format string, a ...interface{}) *Error {
+func Codef(code codes.Code, format string, a ...interface{}) error {
 	return NewC(fmt.Errorf(format, a...), code)
 }
 
 // Error returns the underlying error's message.
 func (err *Error) Error() string {
-
 	msg := err.Err.Error()
 	if err.prefix != "" {
 		msg = fmt.Sprintf("%s: %s", err.prefix, msg)
 	}
-
 	return msg
 }
 
@@ -290,7 +274,8 @@ func (err *Error) StackFrames() []StackFrame {
 
 // TypeName returns the type this error. e.g. *errors.stringError.
 func (err *Error) TypeName() string {
-	if _, ok := err.Err.(uncaughtPanic); ok {
+	var up uncaughtPanicError
+	if As(err, &up) {
 		return "panic"
 	}
 	return reflect.TypeOf(err.Err).String()

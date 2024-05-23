@@ -9,7 +9,7 @@ import (
 	"github.com/dpup/prefab/authz"
 	"github.com/dpup/prefab/authz/authztest"
 	"github.com/dpup/prefab/errors"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
@@ -254,7 +254,7 @@ func TestInterceptor(t *testing.T) {
 
 			// Test the interceptor.
 			gotResp, err := ap.Interceptor(ctx, tt.args.req, info, handler)
-			assert.ErrorIs(t, err, tt.expectedErr, "AuthzPlugin.Interceptor() error = %v, expectedErr %v", err, tt.expectedErr)
+			require.ErrorIs(t, err, tt.expectedErr, "AuthzPlugin.Interceptor() error = %v, expectedErr %v", err, tt.expectedErr)
 			if handlerCalled != tt.handlerCalled {
 				t.Errorf("AuthzPlugin.Interceptor() handlerCalled = %v, want %v", handlerCalled, tt.handlerCalled)
 			}
@@ -263,5 +263,4 @@ func TestInterceptor(t *testing.T) {
 			}
 		})
 	}
-
 }

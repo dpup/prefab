@@ -81,11 +81,11 @@ func TestHttpMethodAndMetadataAnnotator(t *testing.T) {
 	md := HttpMetadataAnnotator(context.Background(), req)
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
-	if method := HttpMethod(ctx); method != "POST" {
+	if method := HTTPMethod(ctx); method != "POST" {
 		t.Errorf("Expected HTTP method 'POST', got '%s'", method)
 	}
 
-	if method := HttpMethod(context.Background()); method != "" {
+	if method := HTTPMethod(context.Background()); method != "" {
 		t.Errorf("Expected no HTTP method, got '%s'", method)
 	}
 }
@@ -138,7 +138,7 @@ func TestHttpHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := metadata.NewIncomingContext(context.Background(), tt.contextMetadata)
-			if got := HttpHeader(ctx, tt.header); got != tt.want {
+			if got := HTTPHeader(ctx, tt.header); got != tt.want {
 				t.Errorf("HttpHeader() = %v, want %v", got, tt.want)
 			}
 		})

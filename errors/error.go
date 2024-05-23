@@ -20,12 +20,14 @@ func Is(e error, original error) bool {
 		return true
 	}
 
-	if e, ok := e.(*Error); ok {
-		return Is(e.Err, original)
+	var pe *Error
+	if As(e, &pe) {
+		return Is(pe.Err, original)
 	}
 
-	if original, ok := original.(*Error); ok {
-		return Is(e, original.Err)
+	var oe *Error
+	if As(original, &oe) {
+		return Is(e, oe.Err)
 	}
 
 	return false

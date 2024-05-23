@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,16 +26,24 @@ const ConfigFile = "prefab.yaml"
 // configuration options.
 var Config = koanf.New(".")
 
+const (
+	defaultPort = "8000"
+	defaultHost = "localhost"
+	keyLength   = 32
+)
+
 func init() {
 	// Provide fallbacks for cases when no configuration is loaded at all.
-	Config.Load(confmap.Provider(map[string]interface{}{
+	if err := Config.Load(confmap.Provider(map[string]interface{}{
 		"name":            "Prefab Server",
-		"address":         "http://localhost:8000",
-		"server.host":     "localhost",
-		"server.port":     8000,
+		"address":         "http://" + net.JoinHostPort(defaultHost, defaultPort),
+		"server.host":     defaultHost,
+		"server.port":     defaultPort,
 		"auth.expiration": "24h",
-		"auth.signingKey": randomString(32), // Tokens will break with each restart.
-	}, "."), nil)
+		"auth.signingKey": randomString(keyLength), // Tokens will break with each restart.
+	}, "."), nil); err != nil {
+		panic("error loading default config: " + err.Error())
+	}
 
 	// Look for a prefab.yaml file in the current directory or any parent.
 	if cfg := searchForConfig(ConfigFile, "."); cfg != "" {
@@ -44,10 +53,14 @@ func init() {
 	}
 
 	// Load environment variables with the prefix PF__.
-	Config.Load(env.Provider("PF__", ".", transformEnv), nil)
+	if err := Config.Load(env.Provider("PF__", ".", transformEnv), nil); err != nil {
+		panic("error loading env config: " + err.Error())
+	}
 }
 
 // Injects request scoped configuration from plugins.
+//
+//nolint:fatcontext // Lint complains about using context in a loop.
 func configInterceptor(injectors []ConfigInjector) func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		ctx = serverutil.WithAddress(ctx, Config.String("address"))

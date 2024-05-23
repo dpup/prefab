@@ -183,7 +183,7 @@ func (s *store) List(models interface{}, filter storage.Model) error {
 		}
 		// Skip if any non-zero field in filter differs from the corresponding field in model.
 		skip := false
-		for i := 0; i < newElem.NumField(); i++ {
+		for i := range newElem.NumField() {
 			if shouldFilter(filterValue.Field(i)) {
 				fieldVal := newElem.Field(i).Interface()
 				testVal := filterValue.Field(i).Interface()

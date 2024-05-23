@@ -7,6 +7,8 @@ import (
 	"github.com/dpup/prefab"
 )
 
+const defaultTokenExpiration = time.Hour * 24 * 30
+
 type signingKey struct{}
 
 type tokenExpiration struct{}
@@ -34,5 +36,5 @@ func expirationFromContext(ctx context.Context) time.Duration {
 	if v, ok := ctx.Value(tokenExpiration{}).(time.Duration); ok {
 		return v
 	}
-	return time.Hour * 24 * 30
+	return defaultTokenExpiration
 }

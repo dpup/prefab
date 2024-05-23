@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/storage"
 )
 
@@ -58,7 +59,7 @@ func (b *basicBlocklist) IsBlocked(key string) (bool, error) {
 
 func (b *basicBlocklist) Block(key string) error {
 	err := b.store.Create(&BlockedToken{Key: key})
-	if err != nil && err != storage.ErrAlreadyExists {
+	if errors.Is(err, storage.ErrAlreadyExists) {
 		return err
 	}
 	return nil

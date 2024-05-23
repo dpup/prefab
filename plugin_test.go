@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var ctx = context.Background()
@@ -43,7 +44,7 @@ func TestInit(t *testing.T) {
 
 	// Initialize plugins
 	err := r.Init(ctx)
-	assert.Nil(t, err, "initialization failed")
+	require.NoError(t, err, "initialization failed")
 
 	// Check initialization order
 	expectedOrder := []string{"D", "C", "B", "A"}

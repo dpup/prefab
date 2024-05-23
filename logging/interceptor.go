@@ -28,7 +28,6 @@ func scopingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo
 // Adds extra error fields to the logging context.
 func errorInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	defer func() {
-
 		// Recover from panics, wrap them in an error so we can get a clean stack.
 		if r := recover(); r != nil {
 			Track(ctx, "error.panic", true)
@@ -38,23 +37,28 @@ func errorInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, 
 
 		// Track error information for use in logging interceptor.
 		if err != nil {
-			Track(ctx, "error.type", reflect.TypeOf(err))
-			Track(ctx, "error.http_status", errors.HTTPStatusCode(err))
-
-			// Add a minimalist stack trace to the log.
-			if e, ok := err.(*errors.Error); ok {
-				frames := e.StackFrames()
-				trace := []string{}
-				for i := 0; i < len(frames) && i < 5; i++ {
-					trace = append(trace, fmt.Sprintf("%s:%d", frames[i].File, frames[i].LineNumber))
-				}
-				Track(ctx, "error.stack_trace", trace)
-			}
+			trackError(ctx, err)
 		}
 	}()
 
 	resp, err = handler(ctx, req)
 	return
+}
+
+func trackError(ctx context.Context, err error) {
+	Track(ctx, "error.type", reflect.TypeOf(err))
+	Track(ctx, "error.http_status", errors.HTTPStatusCode(err))
+
+	// Add a minimalist stack trace to the log.
+	var prefabErr *errors.Error
+	if errors.Is(err, prefabErr) {
+		frames := prefabErr.StackFrames()
+		trace := []string{}
+		for i := 0; i < len(frames) && i < 5; i++ {
+			trace = append(trace, fmt.Sprintf("%s:%d", frames[i].File, frames[i].LineNumber))
+		}
+		Track(ctx, "error.stack_trace", trace)
+	}
 }
 
 // Standard interceptor from the GRPC Logging middleware.
@@ -69,7 +73,7 @@ var grpcLoggingInterceptor = grpc_logging.UnaryServerInterceptor(grpc_logging.Lo
 	}
 
 	for i := 0; i < len(fields); i += 2 {
-		key := fields[i].(string)
+		key, _ := fields[i].(string)
 		value := fields[i+1]
 		logger = logger.With(key, value)
 	}

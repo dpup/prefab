@@ -93,7 +93,8 @@ func (p *PwdAuthPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest)
 		return nil, err
 	}
 
-	if err := p.hasher.Compare(a.HashedPassword, []byte(req.Creds["password"])); err != nil {
+	err = p.hasher.Compare(a.HashedPassword, []byte(req.Creds["password"]))
+	if err != nil {
 		return nil, errors.NewC("invalid email or password", codes.Unauthenticated)
 	}
 

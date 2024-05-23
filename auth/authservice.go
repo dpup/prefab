@@ -53,9 +53,13 @@ func (s *impl) Login(ctx context.Context, in *LoginRequest) (*LoginResponse, err
 
 		if resp != nil && resp.RedirectUri != "" {
 			// Send a 302 redirect.
-			serverutil.SendStatusCode(ctx, 302)
-			serverutil.SendHeader(ctx, "location", resp.RedirectUri)
 			logging.Infow(ctx, "Sending redirect", "redirectUri", resp.RedirectUri)
+			if e := serverutil.SendStatusCode(ctx, http.StatusFound); e != nil {
+				logging.Errorw(ctx, "auth: failed to send status code", "error", e)
+			}
+			if e := serverutil.SendHeader(ctx, "location", resp.RedirectUri); e != nil {
+				logging.Errorw(ctx, "auth: failed to send header", "error", e)
+			}
 		}
 
 		return resp, err
@@ -72,7 +76,9 @@ func (s *impl) Logout(ctx context.Context, in *LogoutRequest) (*LogoutResponse, 
 	}
 
 	// If enabled, block this token from future use.
-	MaybeBlock(ctx, id.SessionID)
+	if err := MaybeBlock(ctx, id.SessionID); err != nil {
+		logging.Errorw(ctx, "auth: failed to block tokenfor logout", "error", err)
+	}
 
 	address := serverutil.AddressFromContext(ctx)
 	isSecure := strings.HasPrefix(address, "https")
@@ -96,7 +102,7 @@ func (s *impl) Logout(ctx context.Context, in *LogoutRequest) (*LogoutResponse, 
 	}
 
 	// For gateway requests, send the HTTP headers.
-	serverutil.SendStatusCode(ctx, 302)
+	serverutil.SendStatusCode(ctx, http.StatusFound)
 	serverutil.SendHeader(ctx, "location", r)
 	logging.Infow(ctx, "Sending logout redirect", "redirectUri", r)
 

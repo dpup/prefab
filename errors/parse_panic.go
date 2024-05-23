@@ -5,42 +5,54 @@ import (
 	"strings"
 )
 
-type uncaughtPanic struct{ message string }
+type uncaughtPanicError struct {
+	message string
+}
 
-func (p uncaughtPanic) Error() string {
+func (p uncaughtPanicError) Error() string {
 	return p.message
 }
 
+type state string
+
+const (
+	startState   state = "start"
+	seekState    state = "seek"
+	parsingState state = "parsing"
+	doneState    state = "done"
+)
+
 // ParsePanic allows you to get an error object from the output of a go program
 // that panicked. This is particularly useful with https://github.com/mitchellh/panicwrap.
+//
+//nolint:gocognit // This function is complex by nature.
 func ParsePanic(text string) (*Error, error) {
 	lines := strings.Split(text, "\n")
 
-	state := "start"
+	state := startState
 
 	var message string
 	var stack []StackFrame
 
-	for i := 0; i < len(lines); i++ {
+	for i := 0; i < len(lines) && state != doneState; i++ {
 		line := lines[i]
 
-		if state == "start" {
+		switch state {
+		case startState:
 			if strings.HasPrefix(line, "panic: ") {
 				message = strings.TrimPrefix(line, "panic: ")
-				state = "seek"
+				state = seekState
 			} else {
 				return nil, Errorf("bugsnag.panicParser: Invalid line (no prefix): %s", line)
 			}
-
-		} else if state == "seek" {
+		case seekState:
 			if strings.HasPrefix(line, "goroutine ") && strings.HasSuffix(line, "[running]:") {
-				state = "parsing"
+				state = parsingState
 			}
-
-		} else if state == "parsing" {
+		case parsingState:
 			if line == "" {
-				state = "done"
-				break
+				state = doneState
+				continue
 			}
 			createdBy := false
 			if strings.HasPrefix(line, "created by ") {
@@ -61,14 +73,13 @@ func ParsePanic(text string) (*Error, error) {
 
 			stack = append(stack, *frame)
 			if createdBy {
-				state = "done"
-				break
+				state = doneState
 			}
 		}
 	}
 
-	if state == "done" || state == "parsing" {
-		return &Error{Err: uncaughtPanic{message}, frames: stack}, nil
+	if state == doneState || state == parsingState {
+		return &Error{Err: uncaughtPanicError{message}, frames: stack}, nil
 	}
 	return nil, Errorf("could not parse panic: %v", text)
 }
@@ -96,7 +107,7 @@ func parsePanicFrame(name string, line string, createdBy bool) (*StackFrame, err
 		name = name[period+1:]
 	}
 
-	name = strings.Replace(name, "·", ".", -1)
+	name = strings.ReplaceAll(name, "·", ".")
 
 	if !strings.HasPrefix(line, "\t") {
 		return nil, Errorf("bugsnag.panicParser: Invalid line (no tab): %s", line)

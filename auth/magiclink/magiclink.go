@@ -57,6 +57,7 @@ const (
 
 	jwtIssuer   = "prefab"
 	jwtAudience = "magiclink"
+	jwtLeeway   = 5 * time.Second
 )
 
 // MagicLinkOptions allow configuration of the MagicLinkPlugin.
@@ -144,11 +145,12 @@ func (p *MagicLinkPlugin) handleEmail(ctx context.Context, email string, redirec
 	}
 
 	var url string
-	if redirectUri != "" && strings.Contains(redirectUri, "?") {
+	switch {
+	case strings.Contains(redirectUri, "?"):
 		url = redirectUri + "&token=" + token
-	} else if redirectUri != "" {
+	case redirectUri != "":
 		url = redirectUri + "?token=" + token
-	} else {
+	default:
 		address := serverutil.AddressFromContext(ctx)
 		url = address + "/api/auth/login?provider=magiclink&creds[token]=" + token
 	}
@@ -230,7 +232,7 @@ func (p *MagicLinkPlugin) parseToken(tokenString string) (auth.Identity, error) 
 		},
 		jwt.WithIssuer(jwtIssuer),
 		jwt.WithAudience(jwtAudience),
-		jwt.WithLeeway(5*time.Second),
+		jwt.WithLeeway(jwtLeeway),
 		jwt.WithIssuedAt(),
 	)
 	if err != nil {

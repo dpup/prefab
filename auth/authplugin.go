@@ -77,10 +77,9 @@ func (ap *AuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	// If a blocklist hasn't been configured, and a storage plugin is registered,
 	// then create a default blocklist for revoked tokens.
 	if ap.blocklist == nil {
-		sp := r.Get(storage.PluginName)
-		if sp != nil {
+		store, ok := r.Get(storage.PluginName).(*storage.StoragePlugin)
+		if store != nil && ok {
 			logging.Info(ctx, "auth: initializing blocklist")
-			store := sp.(*storage.StoragePlugin)
 			if err := store.InitModel(&BlockedToken{}); err != nil {
 				return errors.Errorf("auth: failed to initialize blocklist model: %w", err)
 			}

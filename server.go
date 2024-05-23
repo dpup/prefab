@@ -20,6 +20,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	shutdownGracePeriod = time.Second * 2
+	readHeaderTimeout   = 10 * time.Second
+)
+
 // Server wraps a HTTP server, a GRPC server, and a GRPC Gateway.
 //
 // Usage:
@@ -105,7 +110,8 @@ func (s *Server) Start() error {
 
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	s.httpServer = &http.Server{
-		Addr: addr,
+		Addr:              addr,
+		ReadHeaderTimeout: readHeaderTimeout,
 		BaseContext: func(listener net.Listener) context.Context {
 			return ctx
 		},
@@ -120,14 +126,16 @@ func (s *Server) Start() error {
 		signal.Notify(gracefulStop, syscall.SIGINT)
 		sig := <-gracefulStop
 		logging.Infof(s.baseContext, "👋 Graceful shutdown triggered... (sig %+v)\n", sig)
-		s.Shutdown()
+		if serr := s.Shutdown(); serr != nil {
+			logging.Errorw(s.baseContext, "❌ Shutdown error", "error", serr)
+		}
 		close(done)
 	}()
 
 	// TODO: Allow bufconn to be injected to allow tests to avoid the network.
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
+		return fmt.Errorf("failed to listen: %w", err)
 	}
 	defer ln.Close()
 
@@ -162,7 +170,7 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully shuts down the server with a 2s timeout.
 func (s *Server) Shutdown() error {
-	ctx, cancel := context.WithTimeout(s.baseContext, time.Second*2)
+	ctx, cancel := context.WithTimeout(s.baseContext, shutdownGracePeriod)
 	defer cancel()
 
 	// TODO: Add support for shutdown hooks.

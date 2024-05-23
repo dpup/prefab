@@ -20,13 +20,13 @@ const (
 	MetadataHTTPPrefix = "pf-http-"
 )
 
-// HttpHeader returns the value of a "permanent HTTP header" or a header that
+// HTTPHeader returns the value of a "permanent HTTP header" or a header that
 // was added to the allow-list by a HeaderMatcher.
 //
 // For permanent headers, see https://github.com/grpc-ecosystem/grpc-gateway/blob/main/runtime/context.go#L328
 //
 // This will only ever return a value for requests coming via the GRPC Gateway.
-func HttpHeader(ctx context.Context, header string) string {
+func HTTPHeader(ctx context.Context, header string) string {
 	header = strings.ToLower(header)
 	md, _ := metadata.FromIncomingContext(ctx)
 	if v := md.Get(MetadataHeaderPrefix + header); len(v) > 0 {
@@ -38,10 +38,10 @@ func HttpHeader(ctx context.Context, header string) string {
 	return ""
 }
 
-// HttpMethod returns the HTTP method of the request that was made to the
+// HTTPMethod returns the HTTP method of the request that was made to the
 // Gateway. This will only ever return a value for requests coming via the GRPC
 // Gateway.
-func HttpMethod(ctx context.Context) string {
+func HTTPMethod(ctx context.Context) string {
 	md, _ := metadata.FromIncomingContext(ctx)
 	v := md.Get(MetadataHTTPPrefix + "method")
 	if len(v) == 1 {

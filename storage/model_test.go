@@ -44,7 +44,7 @@ func TestName(t *testing.T) {
 		{name: "manual override", model: Vehicle{}, want: "cars"},
 		{name: "slice", model: []Fruit{}, want: "fruits"},
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				if got := Name(tt.model); got != tt.want {

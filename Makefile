@@ -12,6 +12,10 @@ $(foreach cmd,${TOOL_CMDS},$(eval $(notdir ${cmd})Cmd := ${cmd}))
 
 export PATH := $(TOOLS_OUT):$(PATH)
 
+.PHONY: lint
+lint:
+	@golangci-lint run 
+
 .PHONY: test 
 test: test-staticcheck test-vet test-unit
 

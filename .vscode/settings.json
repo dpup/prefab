@@ -3,7 +3,7 @@
     "PATH": "${env:PATH}:${workspaceRoot}/tools/bin"
   },
   "gopls": {
-    "build.buildFlags": ["-tags=tools"],
+    "build.buildFlags": ["-tags=tools"]
   },
   "protoc": {
     "options": [
@@ -21,12 +21,21 @@
   "cSpell.flagWords": ["hte"],
   "go.coverOnSave": true,
   "go.coverageDecorator": {
-      "type": "gutter",
-      "coveredGutterStyle": "blockgreen",
-      "uncoveredGutterStyle": "blockred"
+    "type": "gutter",
+    "coveredGutterStyle": "blockgreen",
+    "uncoveredGutterStyle": "blockred"
   },
   "go.coverageOptions": "showUncoveredCodeOnly",
   "files.exclude": {
     "*.touchfile": true
-  }
+  },
+  "go.vetOnSave": "package",
+  "go.lintTool": "golangci-lint",
+  "go.lintOnSave": "package",
+  "go.lintFlags": [
+    "-c",
+    "${workspaceFolder}/.golangci.yaml",
+    "--issues-exit-code=0",
+    "--fast"
+  ]
 }

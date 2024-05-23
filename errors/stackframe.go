@@ -25,19 +25,18 @@ type StackFrame struct {
 }
 
 // NewStackFrame popoulates a stack frame object from the program counter.
-func NewStackFrame(pc uintptr) (frame StackFrame) {
-
-	frame = StackFrame{ProgramCounter: pc}
+func NewStackFrame(pc uintptr) StackFrame {
+	frame := StackFrame{ProgramCounter: pc}
 	if frame.Func() == nil {
-		return
+		return frame
 	}
+
 	frame.Package, frame.Name = packageAndName(frame.Func())
 
 	// pc -1 because the program counters we use are usually return addresses,
 	// and we want to show the line that corresponds to the function call
 	frame.File, frame.LineNumber = frame.Func().FileLine(pc - 1)
-	return
-
+	return frame
 }
 
 // Func returns the function that contained this frame.
@@ -117,6 +116,6 @@ func packageAndName(fn *runtime.Func) (string, string) {
 		name = name[period+1:]
 	}
 
-	name = strings.Replace(name, "·", ".", -1)
+	name = strings.ReplaceAll(name, "·", ".")
 	return pkg, name
 }

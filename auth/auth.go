@@ -52,6 +52,9 @@ var (
 const (
 	// Cookie name used for storing the prefab identity token.
 	IdentityTokenCookieName = "pf-id"
+
+	// Leeway for JWT expiration checks.
+	jwtLeeway = 5 * time.Second
 )
 
 // Claims registered as part of a prefab identity token.
@@ -133,7 +136,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 		},
 		jwt.WithIssuer(address), // TODO: Possibly relax to allow tokens created by other issuers.
 		jwt.WithAudience(address),
-		jwt.WithLeeway(5*time.Second),
+		jwt.WithLeeway(jwtLeeway),
 		jwt.WithTimeFunc(timeFunc),
 		jwt.WithIssuedAt(),
 	)
@@ -187,8 +190,8 @@ func identityFromAuthHeader(ctx context.Context) (Identity, error) {
 	}
 
 	auth := strings.SplitN(a[0], " ", 2)
-
-	if len(auth) != 2 {
+	expectedParts := 2
+	if len(auth) != expectedParts {
 		// Relaxed fallback that allows tokens to be passed without the "bearer"
 		// or "basic" prefix. Instead it takes the whole header.
 		return ParseIdentityToken(ctx, a[0])

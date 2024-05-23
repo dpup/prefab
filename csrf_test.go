@@ -85,7 +85,7 @@ func TestVerifyCSRFTokenInvalidData(t *testing.T) {
 func TestVerifyCSRFTokenSignatureMismatch(t *testing.T) {
 	signingKey := []byte("secret-key")
 	randomData := make([]byte, 32)
-	rand.Read(randomData) // Ignore error for simplicity in test setup
+	_, _ = rand.Read(randomData) // Ignore error for simplicity in test setup
 
 	// Simulate a token with correct format but invalid signature
 	invalidSignature := hex.EncodeToString([]byte("invalidsignature")) + "_" + hex.EncodeToString(randomData)

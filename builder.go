@@ -169,8 +169,12 @@ func (b *builder) build() *Server {
 func (b *builder) wrapHandler(h http.Handler) http.Handler {
 	sh := b.securityHeaders
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sh.Apply(w, r)
-		if r.Method == "OPTIONS" {
+		if err := sh.Apply(w, r); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logging.Errorw(r.Context(), "Failed to apply security headers", "error", err)
+			return
+		}
+		if r.Method == http.MethodOptions {
 			return // Only send headers on OPTIONS requests.
 		}
 		h.ServeHTTP(w, r)

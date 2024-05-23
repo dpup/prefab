@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSecurityHeaders(t *testing.T) {
@@ -215,7 +216,7 @@ func TestSecurityHeaders(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			err := tt.conf.Apply(w, r)
-			assert.ErrorIs(t, err, tt.expectedError, "unexpected error")
+			require.ErrorIs(t, err, tt.expectedError, "unexpected error")
 
 			if err == nil {
 				result := w.Result()

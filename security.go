@@ -72,10 +72,8 @@ func (s *SecurityHeaders) Apply(w http.ResponseWriter, r *http.Request) error {
 				for k, v := range s.preflightHeaders {
 					w.Header().Set(k, v)
 				}
-			} else {
-				if len(s.CORSExposeHeaders) > 0 {
-					w.Header().Set("Access-Control-Expose-Headers", strings.Join(s.CORSExposeHeaders, ", "))
-				}
+			} else if len(s.CORSExposeHeaders) > 0 {
+				w.Header().Set("Access-Control-Expose-Headers", strings.Join(s.CORSExposeHeaders, ", "))
 			}
 		}
 	}
@@ -100,49 +98,59 @@ func (s *SecurityHeaders) compute() error {
 		}
 
 		if s.HSTSExpiration > 0 {
-			h := fmt.Sprintf("max-age=%.0f", s.HSTSExpiration.Seconds())
-			if s.HSTSIncludeSubdomains {
-				h += "; includeSubDomains"
+			if err := s.computeHSTSHeaders(); err != nil {
+				return err
 			}
-			if s.HSTSPreload {
-				if s.HSTSExpiration < time.Hour*24*365 {
-					return errors.Mark(ErrBadHSTSExpiration, 0)
-				}
-				h += "; preload"
-			}
-			s.staticHeaders["Strict-Transport-Security"] = h
 		}
 
 		if len(s.CORSOrigins) > 0 {
-			s.staticHeaders["Vary"] = "Origin"
-
-			// See https://fetch.spec.whatwg.org/#http-responses for details on
-			// headers required on preflight and non-preflight requests.
-
-			if s.CORSAllowCredentials {
-				s.staticHeaders["Access-Control-Allow-Credentials"] = "true"
-			}
-
-			s.preflightHeaders = make(map[string]string)
-			if len(s.CORSAllowMethods) > 0 {
-				s.preflightHeaders["Access-Control-Allow-Methods"] = strings.Join(s.CORSAllowMethods, ", ")
-			} else {
-				s.preflightHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH"
-			}
-			if len(s.CORSAllowHeaders) > 0 {
-				s.preflightHeaders["Access-Control-Allow-Headers"] = strings.Join(s.CORSAllowHeaders, ", ")
-			}
-			if s.CORSMaxAge > 0 {
-				s.preflightHeaders["Access-Control-Max-Age"] = fmt.Sprintf("%.0f", s.CORSMaxAge.Seconds())
-			}
-
-			s.allowedOrigins = map[string]bool{}
-			for _, origin := range s.CORSOrigins {
-				s.allowedOrigins[origin] = true
-			}
+			s.computeCORSHeaders()
 		}
 	}
 	return nil
+}
+
+func (s *SecurityHeaders) computeHSTSHeaders() error {
+	h := fmt.Sprintf("max-age=%.0f", s.HSTSExpiration.Seconds())
+	if s.HSTSIncludeSubdomains {
+		h += "; includeSubDomains"
+	}
+	if s.HSTSPreload {
+		if s.HSTSExpiration < time.Hour*24*365 {
+			return errors.Mark(ErrBadHSTSExpiration, 0)
+		}
+		h += "; preload"
+	}
+	s.staticHeaders["Strict-Transport-Security"] = h
+	return nil
+}
+
+// See https://fetch.spec.whatwg.org/#http-responses for details on
+// headers required on preflight and non-preflight requests.
+func (s *SecurityHeaders) computeCORSHeaders() {
+	s.staticHeaders["Vary"] = "Origin"
+
+	if s.CORSAllowCredentials {
+		s.staticHeaders["Access-Control-Allow-Credentials"] = "true"
+	}
+
+	s.preflightHeaders = make(map[string]string)
+	if len(s.CORSAllowMethods) > 0 {
+		s.preflightHeaders["Access-Control-Allow-Methods"] = strings.Join(s.CORSAllowMethods, ", ")
+	} else {
+		s.preflightHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH"
+	}
+	if len(s.CORSAllowHeaders) > 0 {
+		s.preflightHeaders["Access-Control-Allow-Headers"] = strings.Join(s.CORSAllowHeaders, ", ")
+	}
+	if s.CORSMaxAge > 0 {
+		s.preflightHeaders["Access-Control-Max-Age"] = fmt.Sprintf("%.0f", s.CORSMaxAge.Seconds())
+	}
+
+	s.allowedOrigins = map[string]bool{}
+	for _, origin := range s.CORSOrigins {
+		s.allowedOrigins[origin] = true
+	}
 }
 
 func (s *SecurityHeaders) normalizeHeaders(h []string) {

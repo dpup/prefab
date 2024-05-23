@@ -9,6 +9,8 @@
 //	)
 //
 //	store := sqlitestore.New(":memory:")
+//
+//nolint:gosec // Reports on G202. SQL string concat used to parameterize table.
 package sqlitestore
 
 import (
@@ -68,41 +70,7 @@ func (s *store) InitModel(model storage.Model) error {
 }
 
 func (s *store) Create(models ...storage.Model) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return translateError(err)
-	}
-
-	for _, model := range models {
-		id := model.PK()
-		entityType := storage.Name(model)
-		value, err := json.Marshal(model)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("%w: %s", storage.ErrInvalidModel, err)
-		}
-
-		if tableName, isDefault := s.tableName(model); isDefault {
-			_, err = prepareAndExec(tx,
-				"INSERT INTO "+tableName+" (id, entity_type, value) VALUES (?, ?, ?)",
-				id, entityType, value)
-		} else {
-			_, err = prepareAndExec(tx,
-				"INSERT INTO "+tableName+" (id, value) VALUES (?, ?)",
-				id, value)
-		}
-		if err != nil {
-			tx.Rollback()
-			return translateError(err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		tx.Rollback()
-		return translateError(err)
-	}
-
-	return nil
+	return s.insert(false, models...)
 }
 
 func (s *store) Read(id string, model storage.Model) error {
@@ -124,7 +92,7 @@ func (s *store) Read(id string, model storage.Model) error {
 		return translateError(err)
 	}
 
-	return errors.Wrap(json.Unmarshal(value, model), 0)
+	return errors.MaybeWrap(json.Unmarshal(value, model), 0)
 }
 
 func (s *store) Update(models ...storage.Model) error {
@@ -171,46 +139,7 @@ func (s *store) Update(models ...storage.Model) error {
 }
 
 func (s *store) Upsert(models ...storage.Model) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return translateError(err)
-	}
-
-	for _, model := range models {
-		id := model.PK()
-		entityType := storage.Name(model)
-		value, err := json.Marshal(model)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("%w: %s", storage.ErrInvalidModel, err)
-		}
-
-		if tableName, isDefault := s.tableName(model); isDefault {
-			_, err = prepareAndExec(tx,
-				`INSERT INTO `+tableName+` (id, entity_type, value, created_at, updated_at) 
-				VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-				ON CONFLICT(id, entity_type) DO UPDATE SET 
-				value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
-				id, entityType, value)
-		} else {
-			_, err = prepareAndExec(tx,
-				`INSERT INTO `+tableName+` (id, value, created_at, updated_at) 
-				VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-				ON CONFLICT(id) DO UPDATE SET 
-				value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
-				id, value)
-		}
-		if err != nil {
-			tx.Rollback()
-			return translateError(err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		tx.Rollback()
-		return translateError(err)
-	}
-
-	return nil
+	return s.insert(true, models...)
 }
 
 func (s *store) Delete(model storage.Model) error {
@@ -306,6 +235,53 @@ func (s *store) tableName(model storage.Model) (string, bool) {
 	return s.prefix + name, false
 }
 
+func (s *store) insert(upsert bool, models ...storage.Model) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return translateError(err)
+	}
+
+	for _, model := range models {
+		id := model.PK()
+		entityType := storage.Name(model)
+		value, err := json.Marshal(model)
+		if err != nil {
+			tx.Rollback()
+			return errors.Errorf("%w: %s", storage.ErrInvalidModel, err)
+		}
+
+		if tableName, isDefault := s.tableName(model); isDefault {
+			query := `INSERT INTO ` + tableName + ` (id, entity_type, value, created_at, updated_at) 
+				VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+			if upsert {
+				query += `
+					ON CONFLICT(id, entity_type) DO UPDATE SET 
+					value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+			}
+			_, err = prepareAndExec(tx, query, id, entityType, value)
+		} else {
+			query := `INSERT INTO ` + tableName + ` (id, value, created_at, updated_at) 
+				VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+			if upsert {
+				query += `
+					ON CONFLICT(id) DO UPDATE SET 
+					value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+			}
+			_, err = prepareAndExec(tx, query, id, value)
+		}
+		if err != nil {
+			tx.Rollback()
+			return translateError(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		return translateError(err)
+	}
+
+	return nil
+}
+
 func (s *store) ensureDefaultTable() {
 	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.prefix + `default (
 		id TEXT,
@@ -346,7 +322,7 @@ func (s *store) buildListQuery(model storage.Model) (string, []any) {
 		params = append(params, storage.Name(model))
 	}
 
-	for i := 0; i < filterValue.NumField(); i++ {
+	for i := range filterValue.NumField() {
 		field := filterValue.Field(i)
 		typeField := filterValue.Type().Field(i)
 
@@ -366,10 +342,11 @@ func (s *store) buildListQuery(model storage.Model) (string, []any) {
 }
 
 func translateError(err error) error {
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return errors.Mark(storage.ErrNotFound, 0)
 	}
-	if sqlErr, ok := err.(sqlite3.Error); ok {
+	var sqlErr sqlite3.Error
+	if errors.As(err, &sqlErr) {
 		switch sqlErr.Code {
 		case sqlite3.ErrNotFound:
 			return errors.Mark(storage.ErrNotFound, 0)
@@ -377,7 +354,7 @@ func translateError(err error) error {
 			return errors.Mark(storage.ErrAlreadyExists, 0)
 		}
 	}
-	return errors.Wrap(err, 0)
+	return errors.MaybeWrap(err, 0)
 }
 
 func prepareAndExec(tx *sql.Tx, query string, params ...any) (sql.Result, error) {

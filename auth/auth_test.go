@@ -10,6 +10,7 @@ import (
 	"github.com/dpup/prefab/storage/memorystore"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -27,10 +28,10 @@ func TestTokenRoundTrip(t *testing.T) {
 	}
 
 	tokenString, err := IdentityToken(ctx, original)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	parsed, err := ParseIdentityToken(ctx, tokenString)
-	assert.Nil(t, err, "failed to parse token")
+	require.NoError(t, err, "failed to parse token")
 
 	assert.Equal(t, original, parsed, "Parsed and original identities do not match")
 }
@@ -40,7 +41,7 @@ func TestTokenExpiration(t *testing.T) {
 	identity := Identity{Subject: "2", Provider: "test"}
 
 	tokenString, err := IdentityToken(ctx, identity)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	// Stub time to return a time in the future.
 	timeFunc = func() time.Time {
@@ -59,7 +60,7 @@ func TestTokenSigning(t *testing.T) {
 	identity := Identity{Subject: "2", Provider: "test"}
 
 	tokenString, err := IdentityToken(injectSigningKey("evil")(ctx), identity)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	_, err = ParseIdentityToken(injectSigningKey("actual")(ctx), tokenString)
 	assert.EqualError(t, err, "token signature is invalid: signature is invalid")
@@ -81,13 +82,13 @@ func TestIdentityFromCookie(t *testing.T) {
 		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	md := metadata.Pairs("grpcgateway-cookie", fmt.Sprintf("%s=%s", IdentityTokenCookieName, tokenString))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	actual, err := IdentityFromContext(ctx)
-	assert.Nil(t, err, "failed to extract identity: %v", err)
+	require.NoError(t, err, "failed to extract identity: %v", err)
 
 	assert.Equal(t, expected, actual, "identity from cookie does not match")
 }
@@ -101,13 +102,13 @@ func TestIdentityFromAuthHeader(t *testing.T) {
 		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	md := metadata.Pairs("authorization", tokenString)
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	actual, err := IdentityFromContext(ctx)
-	assert.Nil(t, err, "failed to extract identity")
+	require.NoError(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from header does not match")
 }
@@ -121,13 +122,13 @@ func TestIdentityFromBearerToken(t *testing.T) {
 		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", tokenString))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	actual, err := IdentityFromContext(ctx)
-	assert.Nil(t, err, "failed to extract identity")
+	require.NoError(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from header does not match")
 }
@@ -139,7 +140,7 @@ func TestIdentityFromBearerToken_missingProvider(t *testing.T) {
 		Subject:   "4",
 	}
 	tokenString, err := IdentityToken(ctx, idt)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", tokenString))
 	ctx = metadata.NewIncomingContext(ctx, md)
@@ -151,7 +152,7 @@ func TestIdentityFromBearerToken_missingProvider(t *testing.T) {
 
 func TestIdentityFromBearerToken_blocked(t *testing.T) {
 	blocklist := NewBlocklist(memorystore.New())
-	blocklist.Block("12345")
+	_ = blocklist.Block("12345")
 
 	ctx := WithBlockist(context.Background(), blocklist)
 
@@ -162,7 +163,7 @@ func TestIdentityFromBearerToken_blocked(t *testing.T) {
 		Provider:  "test",
 	}
 	tokenString, err := IdentityToken(ctx, idt)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", tokenString))
 	ctx = metadata.NewIncomingContext(ctx, md)
@@ -181,14 +182,14 @@ func TestIdentityFromBasicAuth(t *testing.T) {
 		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	basic := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:", tokenString)))
 	md := metadata.Pairs("authorization", fmt.Sprintf("basic %s", basic))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	actual, err := IdentityFromContext(ctx)
-	assert.Nil(t, err, "failed to extract identity")
+	require.NoError(t, err, "failed to extract identity")
 
 	assert.Equal(t, expected, actual, "identity from header does not match")
 }
@@ -202,7 +203,7 @@ func TestIdentityFromBasicAuth_invalidBasicAuth(t *testing.T) {
 		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	basic := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:password", tokenString)))
 	md := metadata.Pairs("authorization", fmt.Sprintf("basic %s", basic))
@@ -221,7 +222,7 @@ func TestIdentityFromBasicAuth_invalidAuthorizationType(t *testing.T) {
 		Provider: "test",
 	}
 	tokenString, err := IdentityToken(ctx, expected)
-	assert.Nil(t, err, "failed to issue token")
+	require.NoError(t, err, "failed to issue token")
 
 	basic := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:", tokenString)))
 	md := metadata.Pairs("authorization", fmt.Sprintf("xxxxx %s", basic))
