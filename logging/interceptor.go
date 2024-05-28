@@ -51,7 +51,7 @@ func trackError(ctx context.Context, err error) {
 
 	// Add a minimalist stack trace to the log.
 	var prefabErr *errors.Error
-	if errors.Is(err, prefabErr) {
+	if errors.As(err, &prefabErr) {
 		frames := prefabErr.StackFrames()
 		trace := []string{}
 		for i := 0; i < len(frames) && i < 5; i++ {

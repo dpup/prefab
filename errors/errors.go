@@ -191,8 +191,8 @@ func Mark(e interface{}, skip int) *Error {
 // WithUserPresentableMessage takes an error message and adds a public message
 // to it. If the error is not already an `Error`, it will be wrapped in one. The
 // user presentable message is what Prefab will return to the client.
-func WithUserPresentableMessage(err error, userPresentableMessage string) *Error {
-	return Wrap(err, 1).WithUserPresentableMessage(userPresentableMessage)
+func WithUserPresentableMessage(err error, userPresentableMessage string, args ...any) *Error {
+	return Wrap(err, 1).WithUserPresentableMessage(userPresentableMessage, args...)
 }
 
 // WithCode takes an error and adds a gRPC status code to it. If the error is
@@ -370,8 +370,8 @@ func (err *Error) UserPresentableMessage() string {
 
 // WithUserPresentableMessage sets the error string that should be returned to
 // the client.
-func (err *Error) WithUserPresentableMessage(userPresentableMessage string) *Error {
-	err.userPresentableMessage = userPresentableMessage
+func (err *Error) WithUserPresentableMessage(userPresentableMessage string, args ...any) *Error {
+	err.userPresentableMessage = fmt.Sprintf(userPresentableMessage, args...)
 	return err
 }
 
