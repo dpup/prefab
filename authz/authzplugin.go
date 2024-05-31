@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"slices"
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/auth"
@@ -32,6 +33,28 @@ func Plugin(opts ...AuthzOption) *AuthzPlugin {
 	return ap
 }
 
+// WithRoleHierarchy configures the plugin with a hierarchy of roles.
+//
+// The first role is the most powerful, and the last role has no hierarchy from
+// a single call. Multiple calls can be used to define a tree hierarchies.
+//
+// Example:
+//
+//	WithRoleHierarchy("owner", "admin", "editor", "viewer", "member")
+//	WithRoleHierarchy("suggester", "viewer")
+//
+// In this example, the "owner" role is an "admin", "editor", "viewer", and
+// "member". An "admin" is an "editor", "viewer", and "member". An "editor" is
+// also a "viewer" and a "member".
+//
+// A "suggester" is a "viewer" and a "member", since the ancestry of "viewer"
+// was defined by the previous call.
+func WithRoleHierarchy(roles ...Role) AuthzOption {
+	return func(ap *AuthzPlugin) {
+		ap.SetRoleHierarchy(roles...)
+	}
+}
+
 // WithPolicy adds an Authz policy to the plugin.
 func WithPolicy(effect Effect, role Role, action Action) AuthzOption {
 	return func(ap *AuthzPlugin) {
@@ -58,6 +81,7 @@ type AuthzPlugin struct {
 	policies       map[Action]map[Role]Effect
 	objectFetchers map[string]ObjectFetcher
 	roleDescribers map[string]RoleDescriber
+	roleParents    map[Role]Role
 }
 
 // From plugin.Plugin.
@@ -107,6 +131,37 @@ func (ap *AuthzPlugin) RegisterRoleDescriber(objectKey string, fn RoleDescriber)
 		ap.roleDescribers = make(map[string]RoleDescriber)
 	}
 	ap.roleDescribers[objectKey] = fn
+}
+
+// SetRoleHierarchy sets the hierarchy of roles.
+func (ap *AuthzPlugin) SetRoleHierarchy(roles ...Role) {
+	if len(roles) <= 1 {
+		return
+	}
+	if ap.roleParents == nil {
+		ap.roleParents = map[Role]Role{}
+	}
+	for i := 0; i < len(roles)-1; i++ {
+		if _, exists := ap.roleParents[roles[i]]; exists {
+			panic("role '" + roles[i] + "' is already part of an established hierarchy")
+		}
+		if slices.Contains(roles[i+1:], roles[i]) {
+			panic("cycle detected for role '" + roles[i] + "' in new hierarchy")
+		}
+		if slices.Contains(ap.RoleHierarchy(roles[i+1]), roles[i]) {
+			panic("cycle detected for role '" + roles[i] + "' in established hierarchy")
+		}
+		ap.roleParents[roles[i]] = roles[i+1]
+	}
+}
+
+// RoleHierarchy returns the hierarchy of roles.
+func (ap *AuthzPlugin) RoleHierarchy(role Role) []Role {
+	roles := []Role{role}
+	for parent := ap.roleParents[role]; parent != Role(""); parent = ap.roleParents[parent] {
+		roles = append(roles, parent)
+	}
+	return roles
 }
 
 func (ap *AuthzPlugin) fetcherForKey(objectKey string) ObjectFetcher {
@@ -216,8 +271,11 @@ func (ap *AuthzPlugin) DetermineEffect(action Action, roles []Role, defaultEffec
 	}
 	var effects effectList
 	for _, role := range roles {
-		if roleEffect, ok := ap.policies[action][role]; ok {
-			effects = append(effects, roleEffect)
+		inheritedRoles := ap.RoleHierarchy(role)
+		for _, r := range inheritedRoles {
+			if roleEffect, ok := ap.policies[action][r]; ok {
+				effects = append(effects, roleEffect)
+			}
 		}
 	}
 	return effects.Combine(defaultEffect)

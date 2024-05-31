@@ -9,6 +9,7 @@ import (
 	"github.com/dpup/prefab/authz"
 	"github.com/dpup/prefab/authz/authztest"
 	"github.com/dpup/prefab/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -263,4 +264,94 @@ func TestInterceptor(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthzPlugin_RoleHierarchy(t *testing.T) {
+	owner := authz.Role("owner")
+	admin := authz.Role("admin")
+	editor := authz.Role("editor")
+	suggester := authz.Role("suggester")
+	curator := authz.Role("curator")
+	viewer := authz.Role("viewer")
+	member := authz.Role("member")
+
+	ap := &authz.AuthzPlugin{}
+	ap.SetRoleHierarchy(owner, admin, editor, viewer, member)
+	ap.SetRoleHierarchy(suggester, viewer)
+	ap.SetRoleHierarchy(curator, viewer)
+
+	tests := []struct {
+		role     authz.Role
+		expected []authz.Role
+	}{
+		{role: owner, expected: []authz.Role{owner, admin, editor, viewer, member}},
+		{role: admin, expected: []authz.Role{admin, editor, viewer, member}},
+		{role: editor, expected: []authz.Role{editor, viewer, member}},
+		{role: suggester, expected: []authz.Role{suggester, viewer, member}},
+		{role: curator, expected: []authz.Role{curator, viewer, member}},
+		{role: viewer, expected: []authz.Role{viewer, member}},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			actual := ap.RoleHierarchy(tt.role)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestAuthzPlugin_RoleHierarchy_Inverted(t *testing.T) {
+	owner := authz.Role("owner")
+	admin := authz.Role("admin")
+	editor := authz.Role("editor")
+	suggester := authz.Role("suggester")
+	viewer := authz.Role("viewer")
+	member := authz.Role("member")
+
+	ap := &authz.AuthzPlugin{}
+	ap.SetRoleHierarchy(suggester, viewer)
+	ap.SetRoleHierarchy(owner, admin, editor, viewer, member)
+
+	tests := []struct {
+		role     authz.Role
+		expected []authz.Role
+	}{
+		{role: owner, expected: []authz.Role{owner, admin, editor, viewer, member}},
+		{role: suggester, expected: []authz.Role{suggester, viewer, member}},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			actual := ap.RoleHierarchy(tt.role)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestAuthzPlugin_RoleHierarchy_Error(t *testing.T) {
+	owner := authz.Role("owner")
+	admin := authz.Role("admin")
+	editor := authz.Role("editor")
+	suggester := authz.Role("suggester")
+
+	assert.Panics(t, func() {
+		ap := &authz.AuthzPlugin{}
+		ap.SetRoleHierarchy(owner, admin, editor, suggester)
+		ap.SetRoleHierarchy(editor, owner) // editor's parent is already suggester.
+	}, "expect panic when reassigning a parent role")
+}
+
+func TestAuthzPlugin_RoleHierarchy_Cycle(t *testing.T) {
+	owner := authz.Role("owner")
+	admin := authz.Role("admin")
+	editor := authz.Role("editor")
+
+	assert.Panics(t, func() {
+		ap := &authz.AuthzPlugin{}
+		ap.SetRoleHierarchy(owner, admin, editor, owner)
+	}, "expect panic when creating a cycle")
+
+	assert.Panics(t, func() {
+		ap := &authz.AuthzPlugin{}
+		ap.SetRoleHierarchy(owner, admin, editor)
+		ap.SetRoleHierarchy(editor, owner)
+	}, "expect panic when creating a cycle")
 }
