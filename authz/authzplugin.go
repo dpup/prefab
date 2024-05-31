@@ -98,6 +98,7 @@ func (ap *AuthzPlugin) Deps() []string {
 func (ap *AuthzPlugin) ServerOptions() []prefab.ServerOption {
 	return []prefab.ServerOption{
 		prefab.WithGRPCInterceptor(ap.Interceptor),
+		prefab.WithHTTPHandlerFunc("/debug/authz", ap.DebugHandler),
 	}
 }
 
@@ -141,7 +142,7 @@ func (ap *AuthzPlugin) SetRoleHierarchy(roles ...Role) {
 	if ap.roleParents == nil {
 		ap.roleParents = map[Role]Role{}
 	}
-	for i := 0; i < len(roles)-1; i++ {
+	for i := range len(roles) - 1 {
 		if _, exists := ap.roleParents[roles[i]]; exists {
 			panic("role '" + roles[i] + "' is already part of an established hierarchy")
 		}
@@ -155,13 +156,22 @@ func (ap *AuthzPlugin) SetRoleHierarchy(roles ...Role) {
 	}
 }
 
-// RoleHierarchy returns the hierarchy of roles.
+// RoleHierarchy returns the ancestry of a single role.
 func (ap *AuthzPlugin) RoleHierarchy(role Role) []Role {
 	roles := []Role{role}
 	for parent := ap.roleParents[role]; parent != Role(""); parent = ap.roleParents[parent] {
 		roles = append(roles, parent)
 	}
 	return roles
+}
+
+// RoleTree returns the hierarchy of roles in tree form.
+func (ap *AuthzPlugin) RoleTree() map[Role][]Role {
+	children := make(map[Role][]Role)
+	for child, parent := range ap.roleParents {
+		children[parent] = append(children[parent], child)
+	}
+	return children
 }
 
 func (ap *AuthzPlugin) fetcherForKey(objectKey string) ObjectFetcher {
