@@ -10,10 +10,10 @@ import (
 	"fmt"
 
 	"github.com/dpup/prefab"
-	"github.com/dpup/prefab/auth"
-	"github.com/dpup/prefab/auth/magiclink"
-	"github.com/dpup/prefab/email"
-	"github.com/dpup/prefab/templates"
+	"github.com/dpup/prefab/plugins/auth"
+	"github.com/dpup/prefab/plugins/auth/magiclink"
+	"github.com/dpup/prefab/plugins/email"
+	"github.com/dpup/prefab/plugins/templates"
 )
 
 func main() {

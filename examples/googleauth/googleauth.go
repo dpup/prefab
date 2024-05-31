@@ -10,10 +10,10 @@ import (
 	"fmt"
 
 	"github.com/dpup/prefab"
-	"github.com/dpup/prefab/auth"
-	"github.com/dpup/prefab/auth/google"
-	"github.com/dpup/prefab/storage"
-	"github.com/dpup/prefab/storage/sqlitestore"
+	"github.com/dpup/prefab/plugins/auth"
+	"github.com/dpup/prefab/plugins/auth/google"
+	"github.com/dpup/prefab/plugins/storage"
+	"github.com/dpup/prefab/plugins/storage/sqlite"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 		prefab.WithPlugin(auth.Plugin()),
 		prefab.WithPlugin(google.Plugin()),
 		// Register an SQLite store to persist revoked tokens.
-		prefab.WithPlugin(storage.Plugin(sqlitestore.New("example_googleauth.s3db"))),
+		prefab.WithPlugin(storage.Plugin(sqlite.New("example_googleauth.s3db"))),
 		prefab.WithStaticFiles("/", "./examples/googleauth/static/"),
 	)
 

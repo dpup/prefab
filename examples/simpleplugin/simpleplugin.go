@@ -7,8 +7,8 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
 	"github.com/dpup/prefab/logging"
-	"github.com/dpup/prefab/storage"
-	"github.com/dpup/prefab/storage/memorystore"
+	"github.com/dpup/prefab/plugins/storage"
+	"github.com/dpup/prefab/plugins/storage/memstore"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -17,7 +17,7 @@ func main() {
 	// Initialize the server with the sample plugin and a memory store.
 	s := prefab.New(
 		prefab.WithPlugin(&samplePlugin{}),
-		prefab.WithPlugin(storage.Plugin(memorystore.New())),
+		prefab.WithPlugin(storage.Plugin(memstore.New())),
 	)
 
 	// Register the GRPC service handlers from the other example.

@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package prefab.auth;
+option go_package = "github.com/dpup/prefab/plugins/auth";
+
+import "google/api/annotations.proto";
+
+service AuthService {
+  // Login allows a client to provide credentials which can be used to
+  // authenticate the client's identity. POST is preferred, some providers need
+  // credentials to be passed as GET.
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      get: "/api/auth/login"
+      additional_bindings {
+        post: "/api/auth/login"
+        body: "*"
+      }
+    };
+  }
+
+  // Logout clears the prefab id cookie. It should be noted that by default the
+  // identity token will remain valid until its expiry. Token invalidatation is
+  // supported via the addition of a blocklist.
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      get: "/api/auth/logout"
+      additional_bindings {
+        post: "/api/auth/logout"
+        body: "*"
+      }
+    };
+  }
+
+  // Config returns auth related configuration information that is safe for
+  // unauthenticated users to access.
+  rpc Config(ConfigRequest) returns (ConfigResponse) {
+    option (google.api.http) = {
+      get: "/api/auth/config"
+    };
+  }
+
+  // Identity returns information about the authenticated user.
+  rpc Identity(IdentityRequest) returns (IdentityResponse) {
+    option (google.api.http) = {
+      get: "/api/auth/me"
+    };
+  }
+}
+
+// A client request to authenticate the user. For instance:
+//   { "provider": "magiclink", "creds": {"email": "walt@disney.com"} }
+//
+message LoginRequest {
+  // Name of the auth-provider to use to process the creds.
+  string provider = 1;
+
+  // Creds contains key/value pairs of provider specific credentials.
+  map<string, string> creds = 2;
+
+  // Whether a token should be returned in the response. If false, a cookie will
+  // be set on the API root.
+  bool issue_token = 3;
+
+  // The URL where the user should be redirected after the cookie is set. 
+  // Incompatible with `issue_token`.
+  string redirect_uri = 4;
+}
+
+// The login response.
+message LoginResponse {
+  // Whether the token was issued. False does not necessarily indicate an error,
+  // some auth providers may require an additional step. For example, magiclink
+  // requires the user follow a URL that was sent to their email.
+  bool issued = 1;
+
+  // An auth token which can be used to make subsequently authenticated requests
+  // only set if `issue_token` is true.
+  string token = 2;
+
+  // Destination where the client should be redirected to, if applicable. HTTP
+  // headers will be added to GRPC metadata which will cause a 302 redirect if
+  // the RPC is called via the GRPC Gateway. Not compatible with `issue_token`
+  // set to true.
+  string redirect_uri = 3;
+}
+
+// The login response.
+message LogoutRequest {
+  // The URL where the user should be redirected after a successful logout.
+  string redirect_uri = 4;
+}
+
+// The logout response.
+message LogoutResponse {
+  // Destination where the client should be redirected to, if applicable. HTTP
+  // headers will be added to GRPC metadata which will cause a 302 redirect if
+  // the RPC is called via the GRPC Gateway.
+  string redirect_uri = 1;
+}
+
+// Empty request object.
+message ConfigRequest {}
+
+// Configuration information to help clients facilitate login.
+message ConfigResponse {
+  // Token that should be used in non-XHR requests to avoid cross-site request
+  // forgery attacks.
+  string csrf_token = 1;
+
+  // A map of key-value pairs configured by available auth plugins, for example
+  // google.client_id.
+  map<string, string> configs = 2;
+}
+
+// Empty request object. Auth credentials come from headers or cookie.
+message IdentityRequest {}
+
+// Information about the authenticated identity.
+message IdentityResponse {
+  string provider = 1;
+
+  // An auth provider specific identifier used to authenticate the user.
+  string subject = 2;
+
+  // An email address associated with the identity, if available.
+  string email = 3;
+
+  // Whether the email is thought to have been verified.
+  bool email_verified = 4;
+
+  // A name associated with the identity, if available.
+  string name = 5;
+}

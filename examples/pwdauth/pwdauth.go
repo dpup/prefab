@@ -8,9 +8,9 @@ import (
 	"fmt"
 
 	"github.com/dpup/prefab"
-	"github.com/dpup/prefab/auth"
-	"github.com/dpup/prefab/auth/pwdauth"
 	"github.com/dpup/prefab/errors"
+	"github.com/dpup/prefab/plugins/auth"
+	"github.com/dpup/prefab/plugins/auth/pwdauth"
 	"google.golang.org/grpc/codes"
 )
 

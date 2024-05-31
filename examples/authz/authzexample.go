@@ -32,11 +32,11 @@ import (
 	"fmt"
 
 	"github.com/dpup/prefab"
-	"github.com/dpup/prefab/auth"
-	"github.com/dpup/prefab/auth/pwdauth"
-	"github.com/dpup/prefab/authz"
-	"github.com/dpup/prefab/authz/authztest"
 	"github.com/dpup/prefab/errors"
+	"github.com/dpup/prefab/plugins/auth"
+	"github.com/dpup/prefab/plugins/auth/pwdauth"
+	"github.com/dpup/prefab/plugins/authz"
+	"github.com/dpup/prefab/plugins/authz/authztest"
 	"google.golang.org/grpc/codes"
 )
 
