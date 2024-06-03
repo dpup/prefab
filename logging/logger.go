@@ -20,6 +20,15 @@ func With(ctx context.Context, logger Logger) context.Context {
 	})
 }
 
+// EnsureLogger ensures that a logger is attached to the context. If one is
+// not present, a new development logger is created and attached.
+func EnsureLogger(ctx context.Context) context.Context {
+	if FromContext(ctx) == nil {
+		return With(ctx, NewDevLogger())
+	}
+	return ctx
+}
+
 // FromContext returns a scoped logger.
 func FromContext(ctx context.Context) Logger {
 	c, ok := ctx.Value(ctxkey{}).(*ctxkey)

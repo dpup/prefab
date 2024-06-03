@@ -79,7 +79,6 @@ type builder struct {
 
 	plugins *Registry
 
-	logger          logging.Logger
 	httpHandlers    []handler
 	interceptors    []grpc.UnaryServerInterceptor
 	serverBuilders  []func(s *Server)
@@ -129,12 +128,8 @@ func (b *builder) build() *Server {
 		runtime.WithOutgoingHeaderMatcher(runtime.DefaultHeaderMatcher),
 	)
 
-	ctx := b.baseContext
-	if b.logger != nil {
-		ctx = logging.With(ctx, b.logger)
-	} else {
-		ctx = logging.With(ctx, logging.NewDevLogger())
-	}
+	// Ensure that a logger is available.
+	ctx := logging.EnsureLogger(b.baseContext)
 
 	s := &Server{
 		baseContext: ctx,
@@ -362,13 +357,6 @@ func WithGRPCGateway(fn func(ctx context.Context, mux *runtime.ServeMux, endpoin
 				panic(err)
 			}
 		})
-	}
-}
-
-// WithLogger overrides the logger used by the server.
-func WithLogger(logger logging.Logger) ServerOption {
-	return func(b *builder) {
-		b.logger = logger
 	}
 }
 
