@@ -10,6 +10,7 @@ import (
 
 	"github.com/dpup/prefab/logging"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBus_BasicPubSub(t *testing.T) {
@@ -70,7 +71,7 @@ func TestBus_Wait(t *testing.T) {
 
 	bus.Publish(context.Background(), "topic", "hello")
 
-	assert.NoError(t, bus.Wait(context.Background(), time.Second))
+	require.NoError(t, bus.Wait(context.Background(), time.Second))
 	assert.True(t, called, "subscriber should have been called")
 }
 
@@ -87,7 +88,7 @@ func TestBus_WaitTimeout(t *testing.T) {
 
 	bus.Publish(context.Background(), "topic", "hello")
 
-	assert.Error(t, bus.Wait(context.Background(), time.Millisecond))
+	require.Error(t, bus.Wait(context.Background(), time.Millisecond))
 	assert.False(t, called, "subscriber should not have been called yet")
 }
 

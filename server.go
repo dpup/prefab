@@ -173,15 +173,18 @@ func (s *Server) Shutdown() error {
 	ctx, cancel := context.WithTimeout(s.baseContext, shutdownGracePeriod)
 	defer cancel()
 
-	// TODO: Add support for shutdown hooks.
-
 	err := s.httpServer.Shutdown(ctx)
 	if err != nil {
-		logging.Infof(s.baseContext, "❌ Shutdown error: %v", err)
+		logging.Infof(s.baseContext, "❌ HTTP shutdown error: %v", err)
 	} else {
-		logging.Info(s.baseContext, "👍 Connections drained")
+		logging.Info(s.baseContext, "👍 HTTP connections drained")
 	}
 	s.httpServer = nil
+
+	if perr := s.plugins.Shutdown(ctx); err != nil {
+		logging.Infof(s.baseContext, "❌ Plugin shutdown error: %v", perr)
+	}
+
 	return err
 }
 

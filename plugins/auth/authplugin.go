@@ -69,7 +69,9 @@ func (ap *AuthPlugin) Name() string {
 
 // From prefab.OptionalDependentPlugin.
 func (ap *AuthPlugin) OptDeps() []string {
-	return []string{storage.PluginName}
+	return []string{
+		storage.PluginName,
+	}
 }
 
 // From prefab.InitializablePlugin.

@@ -8,6 +8,7 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/plugins/auth"
+	"github.com/dpup/prefab/plugins/eventbus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -98,9 +99,15 @@ func (p *PwdAuthPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest)
 		return nil, errors.NewC("invalid email or password", codes.Unauthenticated)
 	}
 
-	idt, err := auth.IdentityToken(ctx, identityFromAccount(a))
+	id := identityFromAccount(a)
+
+	idt, err := auth.IdentityToken(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+
+	if bus := eventbus.FromContext(ctx); bus != nil {
+		bus.Publish(ctx, auth.LoginEvent, auth.AuthEvent{Identity: id})
 	}
 
 	if req.IssueToken {

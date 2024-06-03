@@ -40,6 +40,7 @@ import (
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/plugins/auth"
 	"github.com/dpup/prefab/plugins/email"
+	"github.com/dpup/prefab/plugins/eventbus"
 	"github.com/dpup/prefab/plugins/templates"
 	"github.com/dpup/prefab/serverutil"
 
@@ -190,6 +191,10 @@ func (p *MagicLinkPlugin) handleToken(ctx context.Context, token string, issueTo
 	idt, err := auth.IdentityToken(ctx, identity)
 	if err != nil {
 		return nil, err
+	}
+
+	if bus := eventbus.FromContext(ctx); bus != nil {
+		bus.Publish(ctx, auth.LoginEvent, auth.AuthEvent{Identity: identity})
 	}
 
 	if issueToken {

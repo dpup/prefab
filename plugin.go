@@ -30,6 +30,12 @@ type InitializablePlugin interface {
 	Init(ctx context.Context, r *Registry) error
 }
 
+// Implemented if the plugin needs to be shutdown.
+type ShutdownPlugin interface {
+	// Shutdown the plugin.
+	Shutdown(ctx context.Context) error
+}
+
 // Registry manages plugins and their dependencies.
 type Registry struct {
 	plugins map[string]Plugin
@@ -73,6 +79,23 @@ func (r *Registry) Init(ctx context.Context) error {
 	for _, key := range r.keys {
 		if err := r.initPlugin(ctx, key, initialized); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// Shutdown any plugins that implement the shutdown interface.
+func (r *Registry) Shutdown(ctx context.Context) error {
+	if r.plugins == nil {
+		return nil
+	}
+
+	for _, key := range r.keys {
+		if p, ok := r.plugins[key].(ShutdownPlugin); ok {
+			if err := p.Shutdown(ctx); err != nil {
+				return err
+			}
 		}
 	}
 

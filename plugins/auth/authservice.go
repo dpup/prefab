@@ -8,6 +8,7 @@ import (
 
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/plugins/eventbus"
 	"github.com/dpup/prefab/serverutil"
 	"google.golang.org/grpc/codes"
 )
@@ -99,6 +100,10 @@ func (s *impl) Logout(ctx context.Context, in *LogoutRequest) (*LogoutResponse, 
 	r := in.RedirectUri
 	if r == "" {
 		r = address
+	}
+
+	if bus := eventbus.FromContext(ctx); bus != nil {
+		bus.Publish(ctx, LogoutEvent, AuthEvent{Identity: id})
 	}
 
 	// For gateway requests, send the HTTP headers.

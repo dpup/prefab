@@ -77,6 +77,7 @@ import (
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugins/auth"
+	"github.com/dpup/prefab/plugins/eventbus"
 	"github.com/dpup/prefab/serverutil"
 	"github.com/google/uuid"
 
@@ -321,6 +322,10 @@ func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserI
 	}
 
 	logging.Infow(ctx, "google: user authenticated", "subject", identity.Subject, "email", identity.Email)
+
+	if bus := eventbus.FromContext(ctx); bus != nil {
+		bus.Publish(ctx, auth.LoginEvent, auth.AuthEvent{Identity: identity})
+	}
 
 	if req.IssueToken {
 		return &auth.LoginResponse{
