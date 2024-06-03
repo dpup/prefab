@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
 	"github.com/dpup/prefab/errors"
@@ -52,12 +51,7 @@ func trackError(ctx context.Context, err error) {
 	// Add a minimalist stack trace to the log.
 	var prefabErr *errors.Error
 	if errors.As(err, &prefabErr) {
-		frames := prefabErr.StackFrames()
-		trace := []string{}
-		for i := 0; i < len(frames) && i < 5; i++ {
-			trace = append(trace, fmt.Sprintf("%s:%d", frames[i].File, frames[i].LineNumber))
-		}
-		Track(ctx, "error.stack_trace", trace)
+		Track(ctx, "error.stack_trace", prefabErr.MinimalStack(0))
 	}
 }
 

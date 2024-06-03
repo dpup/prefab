@@ -2,10 +2,11 @@ package eventbus
 
 import (
 	"context"
-	"errors"
+	"runtime/debug"
 	"sync"
 	"time"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 )
 
@@ -62,11 +63,13 @@ func (b *Bus) Wait(ctx context.Context, timeout time.Duration) error {
 func (b *Bus) execute(ctx context.Context, sub Subscriber, data any) {
 	defer func() {
 		if r := recover(); r != nil {
-			logging.Errorf(ctx, "eventbus: recovered from panic: %v", r)
+			err, _ := errors.ParseStack(debug.Stack())
+			logging.Errorw(ctx, "eventbus: recovered from panic",
+				"error", r, "error.stack", err.MinimalStack(3))
 		}
 		b.wg.Done()
 	}()
-	if err := sub(context.Background(), data); err != nil {
-		logging.Errorf(ctx, "eventbus: subscriber error: %w", err)
+	if err := sub(ctx, data); err != nil {
+		logging.Errorw(ctx, "eventbus: subscriber error", "error", err)
 	}
 }

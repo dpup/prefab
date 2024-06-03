@@ -22,6 +22,12 @@ const (
 	doneState    state = "done"
 )
 
+// ParseStack is intended to be used with the results of `debug.Stack` this is
+// a hack for now and should be improved.
+func ParseStack(b []byte) (*Error, error) {
+	return ParsePanic("panic: hack\n\n" + string(b))
+}
+
 // ParsePanic allows you to get an error object from the output of a go program
 // that panicked. This is particularly useful with https://github.com/mitchellh/panicwrap.
 //
