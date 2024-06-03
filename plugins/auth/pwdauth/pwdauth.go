@@ -107,7 +107,7 @@ func (p *PwdAuthPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest)
 	}
 
 	if bus := eventbus.FromContext(ctx); bus != nil {
-		bus.Publish(ctx, auth.LoginEvent, auth.AuthEvent{Identity: id})
+		bus.Publish(auth.LoginEvent, auth.AuthEvent{Identity: id})
 	}
 
 	if req.IssueToken {

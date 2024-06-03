@@ -4,7 +4,6 @@ package eventbus
 
 import (
 	"context"
-	"time"
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/logging"
@@ -13,9 +12,6 @@ import (
 const (
 	// Constant name for identifying the eventbus plugin.
 	PluginName = "eventbus"
-
-	// How long to wait for the eventbus to shutdown.
-	shutdownTimeout = time.Second * 5
 )
 
 // Function type for event subscribers.
@@ -31,11 +27,11 @@ type EventBus interface {
 	Subscribe(event string, subscriber Subscriber)
 
 	// Publish an event. The event will be sent to all subscribers.
-	Publish(ctx context.Context, event string, data any)
+	Publish(event string, data any)
 
 	// Wait for the event bus to finish processing all events. You should ensure
 	// that publishers are also stopped as the event bus won't reject new events.
-	Wait(ctx context.Context, timeout time.Duration) error
+	Wait(ctx context.Context) error
 }
 
 // Plugin registers an eventbus with a Prefab server for use by other plugins
@@ -68,7 +64,7 @@ func (p *EventBusPlugin) ServerOptions() []prefab.ServerOption {
 
 // From prefab.ShutdownPlugin.
 func (p *EventBusPlugin) Shutdown(ctx context.Context) error {
-	err := p.Wait(ctx, shutdownTimeout)
+	err := p.Wait(ctx)
 	if err == nil {
 		logging.Info(ctx, "👍 Event bus drained")
 	}

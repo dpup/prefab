@@ -14,7 +14,7 @@ import (
 )
 
 func TestBus_BasicPubSub(t *testing.T) {
-	bus := NewBus()
+	bus := NewBus(context.Background())
 
 	var called bool
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {
@@ -23,7 +23,7 @@ func TestBus_BasicPubSub(t *testing.T) {
 		return nil
 	})
 
-	bus.Publish(context.Background(), "topic", "hello")
+	bus.Publish("topic", "hello")
 
 	assert.Eventually(t, func() bool { return called },
 		time.Millisecond*10,
@@ -32,7 +32,7 @@ func TestBus_BasicPubSub(t *testing.T) {
 }
 
 func TestBus_MultipleSubscribers(t *testing.T) {
-	bus := NewBus()
+	bus := NewBus(context.Background())
 
 	var called []int
 	var mu sync.Mutex
@@ -46,7 +46,7 @@ func TestBus_MultipleSubscribers(t *testing.T) {
 		})
 	}
 
-	bus.Publish(context.Background(), "topic", "hello")
+	bus.Publish("topic", "hello")
 
 	assert.Eventually(t, func() bool {
 		slices.Sort(called) // Execution order isn't gauranteed.
@@ -59,7 +59,7 @@ func TestBus_MultipleSubscribers(t *testing.T) {
 }
 
 func TestBus_Wait(t *testing.T) {
-	bus := NewBus()
+	bus := NewBus(context.Background())
 
 	var called bool
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {
@@ -69,14 +69,14 @@ func TestBus_Wait(t *testing.T) {
 		return nil
 	})
 
-	bus.Publish(context.Background(), "topic", "hello")
+	bus.Publish("topic", "hello")
 
-	require.NoError(t, bus.Wait(context.Background(), time.Second))
+	require.NoError(t, bus.Wait(context.Background()))
 	assert.True(t, called, "subscriber should have been called")
 }
 
 func TestBus_WaitTimeout(t *testing.T) {
-	bus := NewBus()
+	bus := NewBus(context.Background())
 
 	var called bool
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {
@@ -86,36 +86,39 @@ func TestBus_WaitTimeout(t *testing.T) {
 		return nil
 	})
 
-	bus.Publish(context.Background(), "topic", "hello")
+	bus.Publish("topic", "hello")
 
-	require.Error(t, bus.Wait(context.Background(), time.Millisecond))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+
+	require.Error(t, bus.Wait(ctx))
 	assert.False(t, called, "subscriber should not have been called yet")
 }
 
 func TestBus_SubscriberError(t *testing.T) {
-	bus := NewBus()
+	ctx := logging.With(context.Background(), logging.NewDevLogger())
+	bus := NewBus(ctx)
 
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {
 		return errors.New("subscriber error")
 	})
 
-	ctx := logging.With(context.Background(), logging.NewDevLogger())
-	bus.Publish(ctx, "topic", "hello")
-	assert.NoError(t, bus.Wait(ctx, time.Second))
+	bus.Publish("topic", "hello")
+	assert.NoError(t, bus.Wait(ctx))
 
 	// TODO: Check for error in logs.
 }
 
 func TestBus_SubscriberPanic(t *testing.T) {
-	bus := NewBus()
+	ctx := logging.With(context.Background(), logging.NewDevLogger())
+	bus := NewBus(ctx)
 
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {
 		panic("subscriber panic")
 	})
 
-	ctx := logging.With(context.Background(), logging.NewDevLogger())
-	bus.Publish(ctx, "topic", "hello")
-	assert.NoError(t, bus.Wait(ctx, time.Second))
+	bus.Publish("topic", "hello")
+	assert.NoError(t, bus.Wait(ctx))
 
 	// TODO: Check for error in logs.
 }

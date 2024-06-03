@@ -194,7 +194,7 @@ func (p *MagicLinkPlugin) handleToken(ctx context.Context, token string, issueTo
 	}
 
 	if bus := eventbus.FromContext(ctx); bus != nil {
-		bus.Publish(ctx, auth.LoginEvent, auth.AuthEvent{Identity: identity})
+		bus.Publish(auth.LoginEvent, auth.AuthEvent{Identity: identity})
 	}
 
 	if issueToken {

@@ -4,20 +4,23 @@ import (
 	"context"
 	"runtime/debug"
 	"sync"
-	"time"
 
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 )
 
-// NewBus returns a new EventBus.
-func NewBus() EventBus {
-	return &Bus{}
+// NewBus returns a new EventBus. ctx is passed to subscribers when they are
+// executed.
+func NewBus(ctx context.Context) EventBus {
+	return &Bus{
+		subscriberCtx: ctx,
+	}
 }
 
 // Implementation of EventBus which uses a simple map to store subscribers.
 type Bus struct {
-	subscribers map[string][]Subscriber
+	subscribers   map[string][]Subscriber
+	subscriberCtx context.Context
 
 	mu sync.Mutex     // Protects subscribers.
 	wg sync.WaitGroup // Waits for active subscribers to complete.
@@ -34,19 +37,19 @@ func (b *Bus) Subscribe(event string, handler Subscriber) {
 }
 
 // Publish an event.
-func (b *Bus) Publish(ctx context.Context, event string, data any) {
+func (b *Bus) Publish(event string, data any) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if subs, ok := b.subscribers[event]; ok {
 		for _, sub := range subs {
 			b.wg.Add(1)
-			go b.execute(ctx, sub, data)
+			go b.execute(sub, data)
 		}
 	}
 }
 
 // Wait for the event bus to finish processing all events.
-func (b *Bus) Wait(ctx context.Context, timeout time.Duration) error {
+func (b *Bus) Wait(ctx context.Context) error {
 	c := make(chan struct{})
 	go func() {
 		defer close(c)
@@ -55,21 +58,22 @@ func (b *Bus) Wait(ctx context.Context, timeout time.Duration) error {
 	select {
 	case <-c:
 		return nil
-	case <-time.After(timeout):
+	case <-ctx.Done():
 		return errors.New("eventbus: timeout waiting for subscribers to finish")
 	}
 }
 
-func (b *Bus) execute(ctx context.Context, sub Subscriber, data any) {
+func (b *Bus) execute(sub Subscriber, data any) {
 	defer func() {
 		if r := recover(); r != nil {
 			err, _ := errors.ParseStack(debug.Stack())
-			logging.Errorw(ctx, "eventbus: recovered from panic",
-				"error", r, "error.stack", err.MinimalStack(3))
+			skipFrames := 3
+			logging.Errorw(b.subscriberCtx, "eventbus: recovered from panic",
+				"error", r, "error.stack", err.MinimalStack(skipFrames))
 		}
 		b.wg.Done()
 	}()
-	if err := sub(ctx, data); err != nil {
-		logging.Errorw(ctx, "eventbus: subscriber error", "error", err)
+	if err := sub(b.subscriberCtx, data); err != nil {
+		logging.Errorw(b.subscriberCtx, "eventbus: subscriber error", "error", err)
 	}
 }
