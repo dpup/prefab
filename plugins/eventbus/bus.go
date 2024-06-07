@@ -13,7 +13,7 @@ import (
 // executed.
 func NewBus(ctx context.Context) EventBus {
 	return &Bus{
-		subscriberCtx: ctx,
+		subscriberCtx: logging.With(ctx, logging.FromContext(ctx).Named("eventbus")),
 	}
 }
 
@@ -41,9 +41,11 @@ func (b *Bus) Publish(event string, data any) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if subs, ok := b.subscribers[event]; ok {
+		ctx := logging.With(b.subscriberCtx, logging.FromContext(b.subscriberCtx).Named(event))
+		logging.Infow(ctx, "publishing event", "data", data)
 		for _, sub := range subs {
 			b.wg.Add(1)
-			go b.execute(sub, data)
+			go b.execute(ctx, sub, data)
 		}
 	}
 }
@@ -63,17 +65,18 @@ func (b *Bus) Wait(ctx context.Context) error {
 	}
 }
 
-func (b *Bus) execute(sub Subscriber, data any) {
+func (b *Bus) execute(ctx context.Context, sub Subscriber, data any) {
 	defer func() {
 		if r := recover(); r != nil {
 			err, _ := errors.ParseStack(debug.Stack())
 			skipFrames := 3
-			logging.Errorw(b.subscriberCtx, "eventbus: recovered from panic",
-				"error", r, "error.stack", err.MinimalStack(skipFrames))
+			numFrames := 5
+			logging.Errorw(ctx, "eventbus: recovered from panic",
+				"error", r, "error.stack_trace", err.MinimalStack(skipFrames, numFrames))
 		}
 		b.wg.Done()
 	}()
-	if err := sub(b.subscriberCtx, data); err != nil {
+	if err := sub(ctx, data); err != nil {
 		logging.Errorw(b.subscriberCtx, "eventbus: subscriber error", "error", err)
 	}
 }

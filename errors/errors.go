@@ -272,10 +272,10 @@ func (err *Error) StackFrames() []StackFrame {
 }
 
 // MinimalStack returns a minimal stack trace suitable for printing in logs.
-func (err *Error) MinimalStack(skip int) []string {
+func (err *Error) MinimalStack(skip, length int) []string {
 	frames := err.StackFrames()
 	trace := []string{}
-	for i := skip; i < len(frames) && i < skip+5; i++ {
+	for i := skip; i < len(frames) && i < skip+length; i++ {
 		trace = append(trace, fmt.Sprintf("%s:%d", frames[i].File, frames[i].LineNumber))
 	}
 	return trace

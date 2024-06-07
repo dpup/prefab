@@ -51,7 +51,8 @@ func trackError(ctx context.Context, err error) {
 	// Add a minimalist stack trace to the log.
 	var prefabErr *errors.Error
 	if errors.As(err, &prefabErr) {
-		Track(ctx, "error.stack_trace", prefabErr.MinimalStack(0))
+		Track(ctx, "error.stack_trace", prefabErr.MinimalStack(0, 5))
+		Track(ctx, "error.original_type", prefabErr.TypeName())
 	}
 }
 
@@ -62,8 +63,10 @@ var grpcLoggingInterceptor = grpc_logging.UnaryServerInterceptor(grpc_logging.Lo
 	if z, ok := logger.(*ZapLogger); ok {
 		// Disable zap's stack trace for all but panic level, because it's not very
 		// helpful to have the stacktrace of the logger interceptor. Errors that
-		// have stack traces will be added as fields, by the errorLoggingInterceptor.
-		z.z = z.z.Desugar().WithOptions(zap.AddStacktrace(zapcore.PanicLevel)).Sugar()
+		// have stack traces will be added as fields, by the errorInterceptor.
+		z.z = z.z.Desugar().WithOptions(
+			zap.AddStacktrace(zapcore.PanicLevel),
+		).Sugar()
 	}
 
 	for i := 0; i < len(fields); i += 2 {
