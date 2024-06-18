@@ -14,7 +14,7 @@ import (
 )
 
 func TestBus_BasicPubSub(t *testing.T) {
-	bus := NewBus(context.Background())
+	bus := NewBus(logging.EnsureLogger(context.Background()))
 
 	var called bool
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {
@@ -32,7 +32,7 @@ func TestBus_BasicPubSub(t *testing.T) {
 }
 
 func TestBus_MultipleSubscribers(t *testing.T) {
-	bus := NewBus(context.Background())
+	bus := NewBus(logging.EnsureLogger(context.Background()))
 
 	var called []int
 	var mu sync.Mutex
@@ -59,7 +59,7 @@ func TestBus_MultipleSubscribers(t *testing.T) {
 }
 
 func TestBus_Wait(t *testing.T) {
-	bus := NewBus(context.Background())
+	bus := NewBus(logging.EnsureLogger(context.Background()))
 
 	var called bool
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {
@@ -71,12 +71,12 @@ func TestBus_Wait(t *testing.T) {
 
 	bus.Publish("topic", "hello")
 
-	require.NoError(t, bus.Wait(context.Background()))
+	require.NoError(t, bus.Wait(logging.EnsureLogger(context.Background())))
 	assert.True(t, called, "subscriber should have been called")
 }
 
 func TestBus_WaitTimeout(t *testing.T) {
-	bus := NewBus(context.Background())
+	bus := NewBus(logging.EnsureLogger(context.Background()))
 
 	var called bool
 	bus.Subscribe("topic", func(ctx context.Context, data any) error {

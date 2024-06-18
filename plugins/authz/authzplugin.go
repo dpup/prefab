@@ -224,7 +224,7 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 	}
 
 	// Get the object and domain from the request object.
-	objectID, domainID, err := FieldOptions(req.(proto.Message))
+	objectID, domain, err := FieldOptions(req.(proto.Message))
 	if err != nil {
 		return nil, err
 	}
@@ -249,14 +249,15 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 	}
 
 	// Get the user's roles relative to the object.
-	roles, err := describer(ctx, identity, object, Domain(domainID))
+	roles, err := describer(ctx, identity, object, Domain(domain))
 	if err != nil {
 		return nil, err
 	}
 
 	logging.Track(ctx, "authz.action", action)
-	logging.Track(ctx, "authz.object", objectID)
-	logging.Track(ctx, "authz.domain", domainID)
+	logging.Track(ctx, "authz.objectID", objectID)
+	logging.Track(ctx, "authz.object", object)
+	logging.Track(ctx, "authz.domain", domain)
 	logging.Track(ctx, "authz.roles", roles)
 
 	if len(roles) == 0 {

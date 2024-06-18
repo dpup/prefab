@@ -15,7 +15,7 @@
 // other attributes. For example, an "admin" role could only be granted if the
 // request comes from a specific IP address.
 //
-// Role Describers can also be configured to accept a `domain_id` from the
+// Role Describers can also be configured to accept a `domain` from the
 // request. This is optional and is intended to simplify the implementation of
 // mutlti-tenant systems or systems where a user might be part of multiple
 // workspaces or groups, each with different permissions.
@@ -98,7 +98,7 @@ type RoleDescriber func(ctx context.Context, subject auth.Identity, object any, 
 // MethodOptions returns Authz related method options from the method descriptor
 // associated with the given info.
 func MethodOptions(info *grpc.UnaryServerInfo) (objectKey string, action Action, defaultEffect Effect) {
-	if v, ok := serverutil.MethodOption(info, E_ObjectKey); ok {
+	if v, ok := serverutil.MethodOption(info, E_Resource); ok {
 		objectKey = v.(string)
 	} else {
 		objectKey = "*"
@@ -122,20 +122,20 @@ func MethodOptions(info *grpc.UnaryServerInfo) (objectKey string, action Action,
 
 // FieldOptions returns proto fields that are tagged with Authz related options.
 func FieldOptions(req proto.Message) (any, string, error) {
-	var objectID any
-	var domainID string
-	if v, ok := serverutil.FieldOption(req, E_ObjectId); ok {
+	var id any
+	var domain string
+	if v, ok := serverutil.FieldOption(req, E_Id); ok {
 		if len(v) != 1 {
-			return "", "", errors.Codef(codes.Internal, "authz error: require exactly one object_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+			return "", "", errors.Codef(codes.Internal, "authz error: require exactly one id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
-		objectID = v[0].FieldValue
+		id = v[0].FieldValue
 	}
-	if v, ok := serverutil.FieldOption(req, E_DomainId); ok {
+	if v, ok := serverutil.FieldOption(req, E_Domain); ok {
 		if len(v) != 1 {
-			return "", "", errors.Codef(codes.Internal, "authz error: expected exactly one domain_id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+			return "", "", errors.Codef(codes.Internal, "authz error: expected exactly one domain on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
 		// TODO: Assert string.
-		domainID = v[0].FieldValue.(string)
+		domain = v[0].FieldValue.(string)
 	}
-	return objectID, domainID, nil
+	return id, domain, nil
 }

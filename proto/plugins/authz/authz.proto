@@ -7,12 +7,12 @@ import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.MethodOptions {
   string action = 50011;
-  string object_key = 50012;
+  string resource = 50012;
   string default_effect = 50013;
 }
 
 extend google.protobuf.FieldOptions {
-  bool object_id = 50021;
-  bool domain_id = 50022;
+  bool id = 50021;
+  bool domain = 50022;
 }
 
