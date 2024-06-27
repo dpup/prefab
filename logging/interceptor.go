@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const stackSize = 5
+
 // Interceptor returns a GRPC Logging interceptor configured to log using
 // the prefab logging adapter.
 func Interceptor() grpc.UnaryServerInterceptor {
@@ -51,7 +53,7 @@ func trackError(ctx context.Context, err error) {
 	// Add a minimalist stack trace to the log.
 	var prefabErr *errors.Error
 	if errors.As(err, &prefabErr) {
-		Track(ctx, "error.stack_trace", prefabErr.MinimalStack(0, 5))
+		Track(ctx, "error.stack_trace", prefabErr.MinimalStack(0, stackSize))
 		Track(ctx, "error.original_type", prefabErr.TypeName())
 	}
 }
