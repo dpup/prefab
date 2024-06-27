@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -340,6 +341,15 @@ func WithGRPCService(desc *grpc.ServiceDesc, impl any) ServerOption {
 	return func(b *builder) {
 		b.serverBuilders = append(b.serverBuilders, func(s *Server) {
 			s.ServiceRegistrar().RegisterService(desc, impl)
+		})
+	}
+}
+
+// WithGRPCReflection registers the GRPC reflection service.
+func WithGRPCReflection() ServerOption {
+	return func(b *builder) {
+		b.serverBuilders = append(b.serverBuilders, func(s *Server) {
+			reflection.Register(s.GRPCServerForReflection())
 		})
 	}
 }

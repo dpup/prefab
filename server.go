@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 const (
@@ -77,6 +78,11 @@ type Server struct {
 //
 //	debugservice.RegisterDebugServiceServer(server.ServiceRegistrar(), &debugServiceImpl{})
 func (s *Server) ServiceRegistrar() grpc.ServiceRegistrar {
+	return s.grpcServer
+}
+
+// GRPCServerForReflection returns the GRPC Server for use with reflection.
+func (s *Server) GRPCServerForReflection() reflection.GRPCServer {
 	return s.grpcServer
 }
 
