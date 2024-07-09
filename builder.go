@@ -25,8 +25,17 @@ import (
 type ServerOption func(*builder)
 
 type handler struct {
-	prefix  string
-	handler http.Handler
+	prefix      string
+	httpHandler http.Handler
+	jsonHandler JSONHandler
+}
+
+// Options passed to runtime.JSONPb when building the server.
+var JSONMarshalOptions = protojson.MarshalOptions{
+	Multiline:       true,
+	Indent:          "  ",
+	EmitUnpopulated: true,
+	UseProtoNames:   false,
 }
 
 // New returns a new server.
@@ -80,7 +89,7 @@ type builder struct {
 
 	plugins *Registry
 
-	httpHandlers    []handler
+	handlers        []handler
 	interceptors    []grpc.UnaryServerInterceptor
 	serverBuilders  []func(s *Server)
 	configInjectors []ConfigInjector
@@ -98,12 +107,7 @@ func (b *builder) build() *Server {
 		// actual values rather than undefined. This allows for better handling of
 		// PB wrapper types that allow for true, false, null.
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
-			MarshalOptions: protojson.MarshalOptions{
-				Multiline:       true,
-				Indent:          "  ",
-				EmitUnpopulated: true,
-				UseProtoNames:   false,
-			},
+			MarshalOptions: JSONMarshalOptions,
 		}),
 
 		// Map CSRF query param to metadata.
@@ -149,9 +153,17 @@ func (b *builder) build() *Server {
 		fn(s)
 	}
 
-	s.httpMux.Handle("/api/", b.wrapHandler(http.Handler(gateway)))
-	for _, h := range b.httpHandlers {
-		s.httpMux.Handle(h.prefix, b.wrapHandler(h.handler))
+	s.httpMux.Handle("/api/", securityMiddleware(http.Handler(gateway), b.securityHeaders))
+	for _, h := range b.handlers {
+		var handler http.Handler
+		if h.jsonHandler != nil {
+			handler = wrapJSONHandler(h.jsonHandler)
+		} else {
+			handler = h.httpHandler
+		}
+		handler = httpContextMiddleware(handler, b.configInjectors, gateway)
+		handler = securityMiddleware(handler, b.securityHeaders)
+		s.httpMux.Handle(h.prefix, handler)
 	}
 
 	// Register the metaservice last so that it can see all the client configs.
@@ -161,22 +173,6 @@ func (b *builder) build() *Server {
 
 	return s
 }
-
-func (b *builder) wrapHandler(h http.Handler) http.Handler {
-	sh := b.securityHeaders
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := sh.Apply(w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			logging.Errorw(r.Context(), "Failed to apply security headers", "error", err)
-			return
-		}
-		if r.Method == http.MethodOptions {
-			return // Only send headers on OPTIONS requests.
-		}
-		h.ServeHTTP(w, r)
-	})
-}
-
 func (b *builder) buildGRPCOpts() []grpc.ServerOption {
 	interceptors := append(
 		[]grpc.UnaryServerInterceptor{
@@ -301,9 +297,9 @@ func WithSecurityHeaders(headers *SecurityHeaders) ServerOption {
 // for HTTP requests that match the given prefix.
 func WithStaticFiles(prefix, dir string) ServerOption {
 	return func(b *builder) {
-		b.httpHandlers = append(b.httpHandlers, handler{
-			prefix:  prefix,
-			handler: http.FileServer(http.Dir(dir)),
+		b.handlers = append(b.handlers, handler{
+			prefix:      prefix,
+			httpHandler: http.FileServer(http.Dir(dir)),
 		})
 	}
 }
@@ -311,9 +307,9 @@ func WithStaticFiles(prefix, dir string) ServerOption {
 // WithHTTPHandler adds an HTTP handler.
 func WithHTTPHandler(prefix string, h http.Handler) ServerOption {
 	return func(b *builder) {
-		b.httpHandlers = append(b.httpHandlers, handler{
-			prefix:  prefix,
-			handler: h,
+		b.handlers = append(b.handlers, handler{
+			prefix:      prefix,
+			httpHandler: h,
 		})
 	}
 }
@@ -321,9 +317,20 @@ func WithHTTPHandler(prefix string, h http.Handler) ServerOption {
 // WithHTTPHandlerFunc adds an HTTP handler function.
 func WithHTTPHandlerFunc(prefix string, h func(http.ResponseWriter, *http.Request)) ServerOption {
 	return func(b *builder) {
-		b.httpHandlers = append(b.httpHandlers, handler{
-			prefix:  prefix,
-			handler: http.HandlerFunc(h),
+		b.handlers = append(b.handlers, handler{
+			prefix:      prefix,
+			httpHandler: http.HandlerFunc(h),
+		})
+	}
+}
+
+// WithJSONHandler adds a HTTP handler which returns JSON, serialized in a
+// consistent way to gRPC gateway responses.
+func WithJSONHandler(prefix string, h JSONHandler) ServerOption {
+	return func(b *builder) {
+		b.handlers = append(b.handlers, handler{
+			prefix:      prefix,
+			jsonHandler: h,
 		})
 	}
 }
@@ -465,4 +472,37 @@ func statusCodeForwarder(ctx context.Context, w http.ResponseWriter, p proto.Mes
 // time.
 type OptionProvider interface {
 	ServerOptions() []ServerOption
+}
+
+// For HTTP only requests, annotates the context with configs and with gRPC
+// metadata so that HTTP handlers can call downstream gRPC services directly.
+func httpContextMiddleware(h http.Handler, cf []ConfigInjector, gateway *runtime.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		ctx = injectConfigs(ctx, cf)
+
+		// TODO: Is this worth specifying? It is read via runtime.RPCMethod()
+		name := "HttpHandler"
+
+		// Extract information from the request and map it to GRPC metadata,
+		// mirroring the approach of the gRPC Gateway so that HTTP handlers can call
+		// downstream gRPC services directly and have HTTP headers forwarded.
+		ctx, err := runtime.AnnotateContext(ctx, gateway, r, name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logging.Errorw(r.Context(), "Failed to annotate context", "error", err)
+			return
+		}
+
+		// The incoming context is also annotated, so that prefab utility functions
+		// can be use from within the HTTP handlers as well as gRPC handlers.
+		ctx, err = runtime.AnnotateIncomingContext(ctx, gateway, r, name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logging.Errorw(r.Context(), "Failed to annotate context", "error", err)
+			return
+		}
+
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

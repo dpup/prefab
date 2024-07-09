@@ -276,7 +276,6 @@ linters:
   - loggercheck # checks key value pairs for common logger libraries (kitlog,klog,logr,zap)
   - makezero # finds slice declarations with non-zero initial length
   - mirror # reports wrong mirror patterns of bytes/strings usage
-  - mnd # detects magic numbers
   - musttag # enforces field tags in (un)marshaled structs
   - nakedret # finds naked returns in functions greater than a specified function length
   - nilerr # finds the code that returns nil even if it checks that the error is not nil
@@ -308,6 +307,9 @@ linters:
   #- nestif # reports deeply nested if statements
   #- errcheck # checking for unchecked errors, these unchecked errors can be critical bugs in some cases
   #- wrapcheck # checks that errors returned from external packages are wrapped
+
+  ## recommended, but annoying
+  #- mnd # detects magic numbers
 
   ## recommended, but may not be applicable
   #- gochecknoinits # checks that no init functions are present in Go code
@@ -394,4 +396,5 @@ issues:
   - ".*\\.pb\\.go$"
   - ".*\\.pb\\.gw\\.go$"
 
-  exclude-generated-strict: true
+  exclude:
+  - "shadow: declaration of .err. shadows declaration"

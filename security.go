@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dpup/prefab/errors"
+	"github.com/dpup/prefab/logging"
 	"google.golang.org/grpc/codes"
 )
 
@@ -157,4 +158,19 @@ func (s *SecurityHeaders) normalizeHeaders(h []string) {
 	for i, v := range h {
 		h[i] = textproto.CanonicalMIMEHeaderKey(v)
 	}
+}
+
+func securityMiddleware(h http.Handler, sh *SecurityHeaders) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := sh.Apply(w, r); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logging.Errorw(r.Context(), "Failed to apply security headers", "error", err)
+			return
+		}
+		if r.Method == http.MethodOptions {
+			return // Only send headers on OPTIONS requests.
+		}
+
+		h.ServeHTTP(w, r)
+	})
 }

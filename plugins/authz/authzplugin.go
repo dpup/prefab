@@ -211,17 +211,6 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 		// No policies to enforce.
 		return handler(ctx, req)
 	}
-	if ap.policies[action] == nil {
-		return nil, errors.Codef(codes.Internal, "authz error: no policies configured for '%s' on %s", action, info.FullMethod)
-	}
-	fetcher := ap.fetcherForKey(objectKey)
-	if fetcher == nil {
-		return nil, errors.Codef(codes.Internal, "authz error: no object fetcher for key '%s' on %s", objectKey, info.FullMethod)
-	}
-	describer := ap.describerForKey(objectKey)
-	if describer == nil {
-		return nil, errors.Codef(codes.Internal, "authz error: no role describer for key '%s' on %s", objectKey, info.FullMethod)
-	}
 
 	// Get the object and domain from the request object.
 	objectID, domain, err := FieldOptions(req.(proto.Message))
@@ -229,10 +218,49 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 		return nil, err
 	}
 
-	// Fetch the object that the action is being performed on.
-	object, err := fetcher(ctx, objectID)
-	if err != nil {
+	if err := ap.Authorize(ctx, AuthorizeParams{
+		ObjectKey:     objectKey,
+		ObjectID:      objectID,
+		Domain:        domain,
+		Action:        action,
+		DefaultEffect: defaultEffect,
+		Info:          info.FullMethod,
+	}); err != nil {
 		return nil, err
+	}
+
+	return handler(ctx, req)
+}
+
+// Parameters for the Authorize method.
+type AuthorizeParams struct {
+	ObjectKey     string
+	ObjectID      any
+	Domain        string
+	Action        Action
+	DefaultEffect Effect
+	Info          string
+}
+
+// Authorize takes the configuration and verifies that the caller is authorized
+// to perform the action on the object.
+func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error {
+	if ap.policies[cfg.Action] == nil {
+		return errors.Codef(codes.Internal, "authz error: no policies configured for '%s' on %s", cfg.Action, cfg.Info)
+	}
+	fetcher := ap.fetcherForKey(cfg.ObjectKey)
+	if fetcher == nil {
+		return errors.Codef(codes.Internal, "authz error: no object fetcher for key '%s' on %s", cfg.ObjectKey, cfg.Info)
+	}
+	describer := ap.describerForKey(cfg.ObjectKey)
+	if describer == nil {
+		return errors.Codef(codes.Internal, "authz error: no role describer for key '%s' on %s", cfg.ObjectKey, cfg.Info)
+	}
+
+	// Fetch the object that the action is being performed on.
+	object, err := fetcher(ctx, cfg.ObjectID)
+	if err != nil {
+		return err
 	}
 
 	defaultError := ErrPermissionDenied
@@ -241,7 +269,7 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 	identity, err := auth.IdentityFromContext(ctx)
 	if err != nil {
 		if !errors.Is(err, auth.ErrNotFound) {
-			return nil, err
+			return err
 		}
 		// If the request is unauthenticated, still try to run the policy, but change
 		// the default error type to Unauthenticated instead of Permission Denied.
@@ -249,25 +277,25 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 	}
 
 	// Get the user's roles relative to the object.
-	roles, err := describer(ctx, identity, object, Domain(domain))
+	roles, err := describer(ctx, identity, object, Domain(cfg.Domain))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	logging.Track(ctx, "authz.action", action)
-	logging.Track(ctx, "authz.objectID", objectID)
+	logging.Track(ctx, "authz.action", cfg.Action)
+	logging.Track(ctx, "authz.objectID", cfg.ObjectID)
 	logging.Track(ctx, "authz.object", object)
-	logging.Track(ctx, "authz.domain", domain)
+	logging.Track(ctx, "authz.domain", cfg.Domain)
 	logging.Track(ctx, "authz.roles", roles)
 
 	if len(roles) == 0 {
-		return nil, errors.Mark(defaultError, 0)
+		return errors.Mark(defaultError, 0)
 	}
 
-	if ap.DetermineEffect(action, roles, defaultEffect) == Allow {
-		return handler(ctx, req)
+	if ap.DetermineEffect(cfg.Action, roles, cfg.DefaultEffect) == Allow {
+		return nil
 	}
-	return nil, errors.Mark(defaultError, 0)
+	return errors.Mark(defaultError, 0)
 }
 
 // DetermineEffect checks to see if there are any policies which explicitly

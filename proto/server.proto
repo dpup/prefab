@@ -3,6 +3,7 @@ syntax = "proto3";
 package prefab;
 option go_package = "github.com/dpup/prefab";
 
+import "google/protobuf/any.proto";
 import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.MethodOptions {
@@ -17,4 +18,13 @@ extend google.protobuf.MethodOptions {
   //
   // Defaults to "auto".
   string csrf_mode = 50001;
+}
+
+// Overrides the default error gateway error response to include a code_name
+// for convenience.
+message CustomErrorResponse {
+  int32 code = 1;
+  string code_name = 2;
+  string message = 3;
+  repeated google.protobuf.Any details = 4;
 }

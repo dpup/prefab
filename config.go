@@ -34,13 +34,20 @@ const (
 
 func init() {
 	// Provide fallbacks for cases when no configuration is loaded at all.
+	// TODO: Allow plugins to extend the default configuration directly, so they
+	// aren't all grouped here.
 	if err := Config.Load(confmap.Provider(map[string]interface{}{
-		"name":            "Prefab Server",
-		"address":         "http://" + net.JoinHostPort(defaultHost, defaultPort),
-		"server.host":     defaultHost,
-		"server.port":     defaultPort,
-		"auth.expiration": "24h",
-		"auth.signingKey": randomString(keyLength), // Tokens will break with each restart.
+		"name":                  "Prefab Server",
+		"address":               "http://" + net.JoinHostPort(defaultHost, defaultPort),
+		"server.host":           defaultHost,
+		"server.port":           defaultPort,
+		"auth.expiration":       "24h",
+		"auth.signingKey":       randomString(keyLength), // Tokens will break with each restart.
+		"upload.path":           "/upload",
+		"upload.downloadPrefix": "/download",
+		"upload.maxFiles":       10,
+		"upload.maxMemory":      4 << 20,
+		"upload.validTypes":     []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
 	}, "."), nil); err != nil {
 		panic("error loading default config: " + err.Error())
 	}
@@ -59,20 +66,23 @@ func init() {
 }
 
 // Injects request scoped configuration from plugins.
-//
-//nolint:fatcontext // Lint complains about using context in a loop.
 func configInterceptor(injectors []ConfigInjector) func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-		ctx = serverutil.WithAddress(ctx, Config.String("address"))
-		for _, injector := range injectors {
-			ctx = injector(ctx)
-		}
-		return handler(ctx, req)
+		return handler(injectConfigs(ctx, injectors), req)
 	}
 }
 
 // ConfigInjector is a function that injects configuration into a context.
 type ConfigInjector func(context.Context) context.Context
+
+//nolint:fatcontext // Lint complains about using context in a loop.
+func injectConfigs(ctx context.Context, injectors []ConfigInjector) context.Context {
+	ctx = serverutil.WithAddress(ctx, Config.String("address"))
+	for _, injector := range injectors {
+		ctx = injector(ctx)
+	}
+	return ctx
+}
 
 func searchForConfig(filename string, startDir string) string {
 	d, err := filepath.Abs(startDir)

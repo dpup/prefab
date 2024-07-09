@@ -46,6 +46,7 @@ type Role string
 
 type Action string
 
+// TODO: Remove typedef. Rename to Scope.
 type Domain string
 
 type Effect int

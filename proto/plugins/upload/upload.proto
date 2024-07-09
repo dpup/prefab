@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package prefab.upload;
+option go_package = "github.com/dpup/prefab/plugins/upload";
+
+// Response from calling the upload endpoint.
+message UploadResponse {
+  repeated UploadedFile files = 1;
+}
+
+message UploadedFile {
+  // The original filename of the uploaded file, so that the client can match
+  // the uploaded file with the file that was uploaded.
+  string original_name = 1;
+
+  // The path where the file was uploaded to.
+  string upload_path = 2;
+}
