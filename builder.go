@@ -479,6 +479,7 @@ type OptionProvider interface {
 func httpContextMiddleware(h http.Handler, cf []ConfigInjector, gateway *runtime.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		ctx = logging.With(r.Context(), logging.FromContext(ctx).Named(r.URL.Path))
 		ctx = injectConfigs(ctx, cf)
 
 		// TODO: Is this worth specifying? It is read via runtime.RPCMethod()

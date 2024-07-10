@@ -120,7 +120,7 @@ func (p *UploadPlugin) OptDeps() []string {
 func (p *UploadPlugin) ServerOptions() []prefab.ServerOption {
 	return []prefab.ServerOption{
 		prefab.WithJSONHandler(p.uploadPath, p.handleUpload),
-		prefab.WithHTTPHandlerFunc(p.downloadPrefix, p.handleDownload),
+		prefab.WithHTTPHandlerFunc(p.getDownloadPrefix(), p.handleDownload),
 	}
 }
 
@@ -257,12 +257,12 @@ func (p *UploadPlugin) handleDownload(w http.ResponseWriter, r *http.Request) {
 		writeTextError(w, r, errors.NewC("upload: method not allowed", codes.Unimplemented))
 		return
 	}
-	if !strings.HasPrefix(r.URL.Path, p.downloadPrefix+"/") {
+	if !strings.HasPrefix(r.URL.Path, p.getDownloadPrefix()) {
 		writeTextError(w, r, errors.NewC("upload: path not allowed", codes.InvalidArgument))
 		return
 	}
 
-	filePath := r.URL.Path[len(p.downloadPrefix)+1:]
+	filePath := r.URL.Path[len(p.getDownloadPrefix()):]
 	parts := strings.Split(filePath, "/")
 	if len(parts) != 3 {
 		writeTextError(w, r, errors.NewC("upload: invalid file path", codes.InvalidArgument))
@@ -292,6 +292,13 @@ func (p *UploadPlugin) handleDownload(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", mime.TypeByExtension(filePath))
 	w.Write(data)
+}
+
+func (p *UploadPlugin) getDownloadPrefix() string {
+	if strings.HasSuffix(p.downloadPrefix, "/") {
+		return p.downloadPrefix
+	}
+	return p.downloadPrefix + "/"
 }
 
 func writeTextError(w http.ResponseWriter, r *http.Request, err error) {
