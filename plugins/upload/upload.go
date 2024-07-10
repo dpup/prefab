@@ -214,6 +214,7 @@ func (p *UploadPlugin) handleUpload(r *http.Request) (any, error) {
 		}
 	}
 
+	logging.Infow(ctx, "upload: files uploaded", "files", resp.Files)
 	return resp, nil
 }
 
@@ -290,6 +291,7 @@ func (p *UploadPlugin) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logging.Infow(r.Context(), "upload: downloading file", "file", filePath)
 	w.Header().Set("Content-Type", mime.TypeByExtension(filePath))
 	w.Write(data)
 }
