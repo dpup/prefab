@@ -12,7 +12,7 @@
 // that governs upload and download rights.
 //
 // Roadmap for this plugin:
-// - Support streaming uploads to reduce memory usage.
+// - Support streaming (uploads and backends) to reduce memory usage.
 package upload
 
 import (
