@@ -283,7 +283,7 @@ func newSaveRequest(files map[string][]byte) *http.Request {
 
 	req := httptest.NewRequest(http.MethodPost, "/upload", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return req
+	return req.WithContext(logging.EnsureLogger(context.Background()))
 }
 
 func jpegData() []byte {

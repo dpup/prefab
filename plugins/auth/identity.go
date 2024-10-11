@@ -1,6 +1,18 @@
 package auth
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/dpup/prefab/errors"
+	"github.com/dpup/prefab/serverutil"
+	"github.com/golang-jwt/jwt/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+)
+
+// Leeway for JWT expiration checks.
+const jwtLeeway = 5 * time.Second
 
 type Identity struct {
 
@@ -30,4 +42,105 @@ type Identity struct {
 	// Name received from the identity provider, if available. Maps to `name` JWT
 	// claim.
 	Name string
+}
+
+// IdentityFromContext parses and verifies a JWT received from incoming GRPC
+// metadata. An `Authorization` header will take precedence over a `Cookie`.
+func IdentityFromContext(ctx context.Context) (Identity, error) {
+	i, err := identityFromAuthHeader(ctx)
+	if !errors.Is(err, ErrNotFound) {
+		return i, err
+	}
+	return identityFromCookie(ctx)
+}
+
+// IdentityToken creates a signed JWT for the given identity.
+func IdentityToken(ctx context.Context, identity Identity) (string, error) {
+	// Both issuer and audience are set to the current server, indicating that the
+	// token was created by this server and is only intended to be used for this
+	// server.
+	address := serverutil.AddressFromContext(ctx)
+
+	claims := &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        identity.SessionID,
+			Subject:   identity.Subject,
+			Audience:  jwt.ClaimStrings{address},
+			Issuer:    address,
+			IssuedAt:  jwt.NewNumericDate(timeFunc()),
+			ExpiresAt: jwt.NewNumericDate(timeFunc().Add(expirationFromContext(ctx))),
+		},
+		Name:          identity.Name,
+		Email:         identity.Email,
+		EmailVerified: identity.EmailVerified,
+		Provider:      identity.Provider,
+		AuthTime:      jwt.NewNumericDate(identity.AuthTime),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	ss, err := token.SignedString(signingKeyFromContext(ctx))
+	if err != nil {
+		return "", errors.Wrap(err, 0).WithCode(codes.Unauthenticated)
+	}
+	return ss, nil
+}
+
+// ParseIdentityToken takes a signed JWT, validates it, and returns the identity
+// information encoded within. Invalid and expired tokens will error.
+func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, error) {
+	address := serverutil.AddressFromContext(ctx)
+
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&Claims{},
+		func(token *jwt.Token) (interface{}, error) {
+			return signingKeyFromContext(ctx), nil
+		},
+		jwt.WithIssuer(address), // TODO: Possibly relax to allow tokens created by other issuers.
+		jwt.WithAudience(address),
+		jwt.WithLeeway(jwtLeeway),
+		jwt.WithTimeFunc(timeFunc),
+		jwt.WithIssuedAt(),
+	)
+	if err != nil {
+		return Identity{}, errors.Wrap(err, 0).WithCode(codes.Unauthenticated)
+	}
+
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		if err := claims.Validate(); err != nil {
+			return Identity{}, err
+		}
+
+		// Check to see if the token has been revoked or blocked.
+		if blocked, err := IsBlocked(ctx, claims.ID); blocked || err != nil {
+			if err != nil {
+				return Identity{}, err
+			}
+			return Identity{}, ErrRevoked
+		}
+
+		return Identity{
+			Provider:      claims.Provider,
+			SessionID:     claims.ID,
+			AuthTime:      claims.AuthTime.Time,
+			Subject:       claims.Subject,
+			Email:         claims.Email,
+			EmailVerified: claims.EmailVerified,
+			Name:          claims.Name,
+		}, nil
+	}
+
+	return Identity{}, errors.Mark(ErrInvalidToken, 0).Append("invalid claims")
+}
+
+// ContextWithIdentityForTest creates a new context with the given identity
+// attached. This is useful for testing, where we want to simulate a request
+// with a given identity.
+func ContextWithIdentityForTest(ctx context.Context, identity Identity) context.Context {
+	if identity == (Identity{}) {
+		// Short-circuity to avoid serialization/deserialization of empty identity.
+		return ctx
+	}
+	tokenString, _ := IdentityToken(ctx, identity)
+	md := metadata.Pairs("authorization", tokenString)
+	return metadata.NewIncomingContext(ctx, md)
 }

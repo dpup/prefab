@@ -1,12 +1,13 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	],
-	"settings": {
-		"terminal.integrated.env.osx": {
-			"PATH": "${env:PATH}:${workspaceRoot}/tools/bin"
-		}
-	}
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "terminal.integrated.env.osx": {
+      "PATH": "${env:PATH}:${workspaceRoot}/tools/bin"
+    },
+    "makefile.configureOnOpen": false
+  }
 }
