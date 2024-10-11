@@ -45,6 +45,10 @@ func Plugin(opts ...AuthOption) *AuthPlugin {
 		authService:   &impl{},
 		jwtSigningKey: prefab.Config.String("auth.signingKey"),
 		jwtExpiration: prefab.Config.MustDuration("auth.expiration"),
+		identityExtractors: []IdentityExtractor{
+			identityFromAuthHeader,
+			identityFromCookie,
+		},
 	}
 	for _, opt := range opts {
 		opt(ap)
@@ -57,9 +61,10 @@ func Plugin(opts ...AuthOption) *AuthPlugin {
 type AuthPlugin struct {
 	authService *impl
 
-	jwtSigningKey string
-	jwtExpiration time.Duration
-	blocklist     Blocklist
+	jwtSigningKey      string
+	jwtExpiration      time.Duration
+	blocklist          Blocklist
+	identityExtractors []IdentityExtractor
 }
 
 // From prefab.Plugin.
@@ -99,6 +104,7 @@ func (ap *AuthPlugin) ServerOptions() []prefab.ServerOption {
 		prefab.WithRequestConfig(injectSigningKey(ap.jwtSigningKey)),
 		prefab.WithRequestConfig(injectExpiration(ap.jwtExpiration)),
 		prefab.WithRequestConfig(ap.injectBlocklist),
+		prefab.WithRequestConfig(ap.injectIdentityExtractors),
 	}
 }
 
@@ -107,9 +113,23 @@ func (ap *AuthPlugin) AddLoginHandler(provider string, h LoginHandler) {
 	ap.authService.AddLoginHandler(provider, h)
 }
 
+// AddIdentityExtractor can be called by other plugins to register identity
+// extractors which will be used to authenticate requests.
+//
+// The AuthPlugin assumes that any identity returned by an extractor has been
+// verified, and will not perform any additional verification. Extractors should
+// return ErrNotFound if no identity is observed.
+func (ap *AuthPlugin) AddIdentityExtractor(provider IdentityExtractor) {
+	ap.identityExtractors = append(ap.identityExtractors, provider)
+}
+
 func (ap *AuthPlugin) injectBlocklist(ctx context.Context) context.Context {
 	if ap.blocklist == nil {
 		return ctx
 	}
 	return WithBlockist(ctx, ap.blocklist)
+}
+
+func (ap *AuthPlugin) injectIdentityExtractors(ctx context.Context) context.Context {
+	return WithIdentityExtractors(ctx, ap.identityExtractors...)
 }

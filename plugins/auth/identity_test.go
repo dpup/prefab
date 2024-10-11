@@ -65,16 +65,14 @@ func TestTokenSigning(t *testing.T) {
 	_, err = ParseIdentityToken(injectSigningKey("actual")(ctx), tokenString)
 	assert.EqualError(t, err, "token signature is invalid: signature is invalid")
 }
-
 func TestIdentityFromEmptyContext(t *testing.T) {
-	ctx := context.Background()
-
+	ctx := WithIdentityExtractorsForTest(context.Background())
 	_, err := IdentityFromContext(ctx)
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestIdentityFromCookie(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithIdentityExtractorsForTest(context.Background())
 
 	expected := Identity{
 		Subject:  "3",
@@ -94,7 +92,7 @@ func TestIdentityFromCookie(t *testing.T) {
 }
 
 func TestIdentityFromAuthHeader(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithIdentityExtractorsForTest(context.Background())
 
 	expected := Identity{
 		Subject:  "4",
@@ -114,7 +112,7 @@ func TestIdentityFromAuthHeader(t *testing.T) {
 }
 
 func TestIdentityFromBearerToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithIdentityExtractorsForTest(context.Background())
 
 	expected := Identity{
 		Subject:  "4",
@@ -134,7 +132,7 @@ func TestIdentityFromBearerToken(t *testing.T) {
 }
 
 func TestIdentityFromBearerToken_missingProvider(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithIdentityExtractorsForTest(context.Background())
 	idt := Identity{
 		SessionID: "12345",
 		Subject:   "4",
@@ -154,7 +152,7 @@ func TestIdentityFromBearerToken_blocked(t *testing.T) {
 	blocklist := NewBlocklist(memstore.New())
 	_ = blocklist.Block("12345")
 
-	ctx := WithBlockist(context.Background(), blocklist)
+	ctx := WithBlockist(WithIdentityExtractorsForTest(context.Background()), blocklist)
 
 	idt := Identity{
 		SessionID: "12345",
@@ -174,7 +172,7 @@ func TestIdentityFromBearerToken_blocked(t *testing.T) {
 }
 
 func TestIdentityFromBasicAuth(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithIdentityExtractorsForTest(context.Background())
 
 	expected := Identity{
 		Subject:  "4",
@@ -195,7 +193,7 @@ func TestIdentityFromBasicAuth(t *testing.T) {
 }
 
 func TestIdentityFromBasicAuth_invalidBasicAuth(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithIdentityExtractorsForTest(context.Background())
 
 	expected := Identity{
 		Subject:  "4",
@@ -214,7 +212,7 @@ func TestIdentityFromBasicAuth_invalidBasicAuth(t *testing.T) {
 }
 
 func TestIdentityFromBasicAuth_invalidAuthorizationType(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithIdentityExtractorsForTest(context.Background())
 
 	expected := Identity{
 		Subject:  "4",

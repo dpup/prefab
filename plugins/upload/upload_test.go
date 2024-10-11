@@ -100,7 +100,7 @@ func TestUploadACL_Success(t *testing.T) {
 	r.Register(az)
 	r.Register(plugin)
 
-	require.NoError(t, r.Init(context.Background()))
+	require.NoError(t, r.Init(newTestContext()))
 
 	req := newSaveRequest(map[string][]byte{
 		"test.png": pngData(),
@@ -199,7 +199,7 @@ func TestDownloadACL_Success(t *testing.T) {
 	// Download as owner.
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/download/github.com/dpup/c57044605bd03a0ebd560736e76d5499ae9596a164db29b88fe096432d23d187.png", nil)
-	req = req.WithContext(logging.EnsureLogger(context.Background()))
+	req = req.WithContext(newTestContext())
 
 	plugin.handleDownload(rr, req)
 
@@ -247,7 +247,7 @@ func TestDownloadACL_Failure(t *testing.T) {
 	// Download as owner.
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/download/github.com/dpup/c57044605bd03a0ebd560736e76d5499ae9596a164db29b88fe096432d23d187.png", nil)
-	req = req.WithContext(logging.EnsureLogger(context.Background()))
+	req = req.WithContext(newTestContext())
 
 	plugin.handleDownload(rr, req)
 
@@ -283,7 +283,12 @@ func newSaveRequest(files map[string][]byte) *http.Request {
 
 	req := httptest.NewRequest(http.MethodPost, "/upload", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return req.WithContext(logging.EnsureLogger(context.Background()))
+	return req.WithContext(newTestContext())
+}
+
+func newTestContext() context.Context {
+	return auth.WithIdentityExtractorsForTest(
+		logging.EnsureLogger(context.Background()))
 }
 
 func jpegData() []byte {

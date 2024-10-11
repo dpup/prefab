@@ -44,14 +44,34 @@ type Identity struct {
 	Name string
 }
 
-// IdentityFromContext parses and verifies a JWT received from incoming GRPC
-// metadata. An `Authorization` header will take precedence over a `Cookie`.
+// IdentityExtractor is a function which returns a user identity from a given
+// context. Providers should return ErrNotFound if no identity is found.
+type IdentityExtractor func(ctx context.Context) (Identity, error)
+
+type identityExtractorsKey struct{}
+
+// WithIdentityExtractors attaches a list of identity providers to the context.
+func WithIdentityExtractors(ctx context.Context, providers ...IdentityExtractor) context.Context {
+	return context.WithValue(ctx, identityExtractorsKey{}, providers)
+}
+
+// IdentityFromContext parses and verifies a JWT received from the incoming
+// request context (including GRPC metadata.) An `Authorization` header will
+// take precedence over a `Cookie`, which in turn will take precedence over
+// other identity extractors.
 func IdentityFromContext(ctx context.Context) (Identity, error) {
-	i, err := identityFromAuthHeader(ctx)
-	if !errors.Is(err, ErrNotFound) {
+	providers, ok := ctx.Value(identityExtractorsKey{}).([]IdentityExtractor)
+	if !ok {
+		return Identity{}, errors.New("auth: no identity extractors registered. See WithDefaultExtractorsForTest")
+	}
+	for _, provider := range providers {
+		i, err := provider(ctx)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
 		return i, err
 	}
-	return identityFromCookie(ctx)
+	return Identity{}, ErrNotFound
 }
 
 // IdentityToken creates a signed JWT for the given identity.
@@ -132,10 +152,11 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 	return Identity{}, errors.Mark(ErrInvalidToken, 0).Append("invalid claims")
 }
 
-// ContextWithIdentityForTest creates a new context with the given identity
+// WithIdentityForTest creates a new context with the given identity
 // attached. This is useful for testing, where we want to simulate a request
 // with a given identity.
-func ContextWithIdentityForTest(ctx context.Context, identity Identity) context.Context {
+func WithIdentityForTest(ctx context.Context, identity Identity) context.Context {
+	ctx = WithIdentityExtractorsForTest(ctx)
 	if identity == (Identity{}) {
 		// Short-circuity to avoid serialization/deserialization of empty identity.
 		return ctx
@@ -143,4 +164,14 @@ func ContextWithIdentityForTest(ctx context.Context, identity Identity) context.
 	tokenString, _ := IdentityToken(ctx, identity)
 	md := metadata.Pairs("authorization", tokenString)
 	return metadata.NewIncomingContext(ctx, md)
+}
+
+// WithIdentityExtractorsForTest returns a context with the default identity
+// extractors attached. This is useful for testing, where we want to simulate
+// a request with a given identity.
+func WithIdentityExtractorsForTest(ctx context.Context) context.Context {
+	return WithIdentityExtractors(ctx,
+		identityFromAuthHeader,
+		identityFromCookie,
+	)
 }
