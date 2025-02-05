@@ -73,6 +73,7 @@ func main() {
 
 - [Plugin Model Overview](#plugin-model-overview)
 - [Authentication](#authentication)
+- [Authorization](#authorization)
 - [Storage](#storage)
 
 ### Plugin Model Overview
@@ -106,7 +107,7 @@ By convention, plugins should be created by a `Plugin` function. If the plugin
 is intended to be used by other plugins, it's name should be exported as
 `PluginName`. For example, `gpt.Plugin(...)` and `gpt.PluginName`.
 
-Explore the GoDoc and examples to learn how to use each prefab.
+Explore the GoDoc and examples to learn how to use each prefab plugin.
 
 ### Authentication
 
@@ -118,6 +119,8 @@ provider should be registered. The following providers are currently included.
 
 - [Google SSO](./examples/googleauth/googleauth.go)
 - [Magiclink passwordless login](./examples/magiclinkauth/magiclinkauth.go)
+- [Pasword auth](./examples//pwdauth/pwdauth.go)
+- API Key
 
 Login is initiated through the `auth.Login()` RPC or the `/api/auth/login`
 endpoint.
@@ -173,6 +176,14 @@ s := prefab.New(
   ...
 )
 ```
+
+### Authorization
+
+Building on top of the authentication plugin, `authz` allows for access controls
+to be configured at the RPC level in the protocol buffer definitions.
+
+For now, see the [examples](./examples/authz/authzexample.go) for more
+details on how it works.
 
 ### Storage
 
