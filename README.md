@@ -74,7 +74,11 @@ func main() {
 - [Plugin Model Overview](#plugin-model-overview)
 - [Authentication](#authentication)
 - [Authorization](#authorization)
+- Email
+- Event Bus
 - [Storage](#storage)
+- Templates
+- Upload
 
 ### Plugin Model Overview
 
