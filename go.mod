@@ -4,6 +4,9 @@ go 1.22.7
 
 toolchain go1.22.12
 
+// Added for PostgreSQL storage implementation
+require github.com/lib/pq v1.10.9
+
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/gertd/go-pluralize v0.2.1

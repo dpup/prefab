@@ -209,6 +209,11 @@ initialized models are stored in their own table, with a `prefab_` prefix.
 Uninitialized models are stored in `prefab_default` indexed by `ID` and
 `EntityType`.
 
+**[Postgres](./storage/postgres/)**: Postgres backed storage. Explicitly
+initialized models are stored in their own table, uninitialized models are
+stored in a default table. There is an option to have tables automatically
+created.
+
 ## 🔐 Security
 
 - [**CSRF Protection**](#csrf-protection): header for XHR and double submit cookies for form posts.
