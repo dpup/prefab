@@ -4,9 +4,8 @@ GEN_OUT := $(ROOT_DIR)/out
 
 PROTO_FILES := $(shell find $(ROOT_DIR) -name "*.proto" -not -path "*/third_party/*")
 
-TOOLS_GO := $(ROOT_DIR)/tools/tools.go
 TOOLS_OUT := $(ROOT_DIR)/tools/bin
-TOOL_PKGS := $(shell go list -e -f '{{join .Imports " "}}' ${TOOLS_GO})
+TOOL_PKGS := $(shell go tool | grep -E '^(github.com|google.golang.org)')
 TOOL_CMDS := $(foreach tool,$(notdir ${TOOL_PKGS}),${TOOLS_OUT}/${tool})
 $(foreach cmd,${TOOL_CMDS},$(eval $(notdir ${cmd})Cmd := ${cmd}))
 
@@ -32,7 +31,7 @@ test-staticcheck:
 clean-proto:
 	@rm -f gen-proto.touchfile
 	@find . -name "*.pb.go" -type f -delete
-	@find . -name "*.pb.gw.go" -type f -delete
+	@find . -name "*.pb.gw.go" -type  f -delete
 	@echo "👷🏽‍♀️ Generated proto files removed"
 
 .PHONY: gen-proto
@@ -60,11 +59,12 @@ gen-proto.touchfile: $(GEN_OUT)/openapiv2 $(PROTO_FILES) tools.touchfile
 $(GEN_OUT)/openapiv2:
 	@mkdir -p $(GEN_OUT)/openapiv2
 
-go.mod: ${TOOLS_GO}
+go.mod:
 	@go mod tidy
 	@touch go.mod
 
 ${TOOL_CMDS}: go.mod
+	@mkdir -p $(TOOLS_OUT)
 	@go build -o $@ $(filter %/$(@F),${TOOL_PKGS})
 
 .PHONY: tools
