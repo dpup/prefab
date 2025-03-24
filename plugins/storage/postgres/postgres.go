@@ -18,7 +18,6 @@
 //		prefab.WithPlugin(storage.Plugin(store)),
 //		// Other plugins...
 //	)
-//
 package postgres
 
 import (
@@ -31,7 +30,6 @@ import (
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/plugins/storage"
 	"github.com/lib/pq"
-	_ "github.com/lib/pq" // Register postgres driver
 )
 
 // Option is a functional option for configuring the store.
@@ -52,7 +50,7 @@ func WithSchema(schema string) Option {
 	}
 }
 
-// WithAutoCreateTables controls whether tables, indexes, and triggers are 
+// WithAutoCreateTables controls whether tables, indexes, and triggers are
 // automatically created. Set to false in production environments where
 // database migrations are managed separately.
 func WithAutoCreateTables(autoCreate bool) Option {
@@ -79,18 +77,18 @@ func SafeNew(connString string, opts ...Option) (storage.Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open PostgreSQL connection: %w", err)
 	}
-	
+
 	// Test the connection
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
-	
+
 	s := &store{
-		db:              db,
-		prefix:          "prefab_",
-		schema:          "public",
-		tables:          map[string]bool{},
+		db:               db,
+		prefix:           "prefab_",
+		schema:           "public",
+		tables:           map[string]bool{},
 		autoCreateTables: true, // Default to automatically creating tables
 	}
 	for _, opt := range opts {
@@ -106,10 +104,10 @@ func SafeNew(connString string, opts ...Option) (storage.Store, error) {
 }
 
 type store struct {
-	db              *sql.DB
-	prefix          string
-	schema          string
-	tables          map[string]bool
+	db               *sql.DB
+	prefix           string
+	schema           string
+	tables           map[string]bool
 	autoCreateTables bool
 }
 
@@ -117,7 +115,7 @@ type store struct {
 func (s *store) InitModel(model storage.Model) error {
 	name := storage.Name(model)
 	s.tables[name] = true
-	
+
 	// Only create the table if auto-creation is enabled
 	if s.autoCreateTables {
 		return s.ensureTable(name)
@@ -136,7 +134,7 @@ func (s *store) Read(id string, model storage.Model) error {
 
 	var query string
 	var args []interface{}
-	
+
 	if tableName, isDefault := s.tableName(model); isDefault {
 		query = "SELECT value FROM " + tableName + " WHERE id = $1 AND entity_type = $2"
 		args = []interface{}{id, storage.Name(model)}
@@ -144,7 +142,7 @@ func (s *store) Read(id string, model storage.Model) error {
 		query = "SELECT value FROM " + tableName + " WHERE id = $1"
 		args = []interface{}{id}
 	}
-	
+
 	row := s.db.QueryRow(query, args...)
 
 	var value []byte
@@ -206,7 +204,7 @@ func (s *store) Upsert(models ...storage.Model) error {
 func (s *store) Delete(model storage.Model) error {
 	var query string
 	var args []interface{}
-	
+
 	if tableName, isDefault := s.tableName(model); isDefault {
 		query = "DELETE FROM " + tableName + " WHERE id = $1 AND entity_type = $2"
 		args = []interface{}{model.PK(), storage.Name(model)}
@@ -214,7 +212,7 @@ func (s *store) Delete(model storage.Model) error {
 		query = "DELETE FROM " + tableName + " WHERE id = $1"
 		args = []interface{}{model.PK()}
 	}
-	
+
 	stmt, err := s.db.Prepare(query)
 	if err != nil {
 		return translateError(err)
@@ -225,11 +223,11 @@ func (s *store) Delete(model storage.Model) error {
 	if err != nil {
 		return translateError(err)
 	}
-	
+
 	if i, errAff := res.RowsAffected(); i == 0 || errAff != nil {
 		return errors.Wrap(storage.ErrNotFound, 0)
 	}
-	
+
 	return nil
 }
 
@@ -279,7 +277,7 @@ func (s *store) List(models any, filter storage.Model) error {
 func (s *store) Exists(id string, model storage.Model) (bool, error) {
 	var query string
 	var args []interface{}
-	
+
 	if tableName, isDefault := s.tableName(model); isDefault {
 		query = "SELECT COUNT(*) FROM " + tableName + " WHERE id = $1 AND entity_type = $2"
 		args = []interface{}{id, storage.Name(model)}
@@ -293,7 +291,7 @@ func (s *store) Exists(id string, model storage.Model) (bool, error) {
 	if err != nil {
 		return false, translateError(err)
 	}
-	
+
 	return count > 0, nil
 }
 
@@ -322,7 +320,7 @@ func (s *store) insert(upsert bool, models ...storage.Model) error {
 
 		var query string
 		var args []interface{}
-		
+
 		if tableName, isDefault := s.tableName(model); isDefault {
 			if upsert {
 				query = `
@@ -354,14 +352,14 @@ func (s *store) insert(upsert bool, models ...storage.Model) error {
 			}
 			args = []interface{}{id, value}
 		}
-		
+
 		_, err = prepareAndExec(tx, query, args...)
 		if err != nil {
 			tx.Rollback()
 			return translateError(err)
 		}
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		tx.Rollback()
 		return translateError(err)
@@ -431,7 +429,7 @@ func (s *store) ensureDefaultTable() error {
 	if err != nil {
 		return fmt.Errorf("failed to create timestamp trigger: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -515,7 +513,7 @@ func (s *store) buildListQuery(model storage.Model) (string, []interface{}) {
 			// In PostgreSQL, we use the JSON path notation for JSONB fields
 			w := fmt.Sprintf("value->>'%s' = $%d", typeField.Name, paramIdx)
 			whereClauses = append(whereClauses, w)
-			
+
 			// For postgres, we need to convert the value to string for JSONB comparison
 			var paramValue interface{}
 			if field.Kind() == reflect.Ptr {
@@ -523,7 +521,7 @@ func (s *store) buildListQuery(model storage.Model) (string, []interface{}) {
 			} else {
 				paramValue = fmt.Sprintf("%v", field.Interface())
 			}
-			
+
 			args = append(args, paramValue)
 			paramIdx++
 		}
@@ -533,7 +531,7 @@ func (s *store) buildListQuery(model storage.Model) (string, []interface{}) {
 	if len(whereClauses) > 0 {
 		query += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
-	
+
 	return query, args
 }
 
@@ -541,18 +539,18 @@ func translateError(err error) error {
 	if err == nil {
 		return nil
 	}
-	
+
 	if errors.Is(err, sql.ErrNoRows) {
 		return errors.Wrap(storage.ErrNotFound, 0)
 	}
-	
+
 	if pqErr, ok := err.(*pq.Error); ok {
 		switch pqErr.Code {
 		case "23505": // unique_violation
 			return errors.Wrap(storage.ErrAlreadyExists, 0)
 		}
 	}
-	
+
 	// If the error message contains specific phrases, map to storage errors
 	errMsg := err.Error()
 	switch {
@@ -565,7 +563,7 @@ func translateError(err error) error {
 	case strings.Contains(errMsg, "record not found"):
 		return errors.Wrap(storage.ErrNotFound, 0)
 	}
-	
+
 	// Default: wrap the error
 	return errors.MaybeWrap(err, 0)
 }

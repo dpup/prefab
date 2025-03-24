@@ -1,6 +1,6 @@
-// An example of how to use the Authz plugin.
+// An example of how to use the Authz plugin with the common builder pattern.
 //
-// $ go run examples/authzs/authzexample.go
+// $ go run examples/authz/main.go -example=common-builder
 //
 // At time of writing there is no web UI to exercise the endpoints, so you'll
 // need to use CURL (or equivalent). Use the following commands to try things
@@ -25,7 +25,7 @@
 // Save a document:
 //
 //	curl -X PUT -d '{"title": "new title", "body": "new body"}' -H"Authorization: bearer $AT" -H"X-CSRF-Protection: 1" http://localhost:8000/api/xmen/docs/3
-package main
+package commonbuilder
 
 import (
 	"context"
@@ -40,16 +40,7 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-const (
-	roleStandard = authz.Role("sys.standard")
-	roleAdmin    = authz.Role("sys.admin")
-	roleDocOwner = authz.Role("doc.owner")
-)
-
-type org struct {
-	name string
-}
-
+// Document implements the GetOwnerID method required by the common role describer
 type document struct {
 	id     string
 	author string
@@ -57,56 +48,96 @@ type document struct {
 	body   string
 }
 
-func main() {
+// GetOwnerID returns the author ID which is considered the owner
+func (d document) GetOwnerID() string {
+	return d.author
+}
+
+// Run starts the common builder example server
+func Run() {
+	// Define custom actions that map to standard CRUD operations
+	docList := authz.Action("documents.list")     // similar to authz.ActionList 
+	docView := authz.Action("documents.view")     // similar to authz.ActionRead
+	docViewMeta := authz.Action("documents.view_meta") // similar to authz.ActionRead
+	docWrite := authz.Action("documents.write")    // similar to authz.ActionUpdate
+	
+	// Create the authz plugin using the CRUD builder pattern with custom actions
+	builder := authz.NewCRUDBuilder()
+	
+	// Map our domain-specific actions to standard CRUD operations
+	builder.WithPolicy(authz.Allow, authz.RoleViewer, docList)
+	builder.WithPolicy(authz.Allow, authz.RoleViewer, docView)
+	builder.WithPolicy(authz.Allow, authz.RoleViewer, docViewMeta)
+	builder.WithPolicy(authz.Allow, authz.RoleEditor, docWrite)
+	
+	// Define our object fetchers
+	builder.WithObjectFetcher("document", fetchDocument)
+	
+	// Define a custom role describer
+	builder.WithRoleDescriber("*", func(ctx context.Context, identity auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
+		// Add domain-specific logic if needed
+		if domain != "xmen" {
+			return []authz.Role{}, nil
+		}
+		
+		// Base role for any authenticated user
+		roles := []authz.Role{authz.RoleUser}
+		
+		// Admin role for specific users
+		if identity.Email == "logan@xmen.net" {
+			roles = append(roles, authz.RoleAdmin)
+			// Admin already has all permissions, no need to check other roles
+			return roles, nil
+		}
+		
+		// Editor role for specific users
+		if identity.Email == "jean@xmen.net" {
+			roles = append(roles, authz.RoleEditor)
+		}
+		
+		// Viewer role for specific users
+		if identity.Email == "scott@xmen.net" || 
+		   identity.Email == "ororo@xmen.net" || 
+		   identity.Email == "kurt@xmen.net" {
+			roles = append(roles, authz.RoleViewer)
+		}
+		
+		// Check if user is the owner of the document
+		if owner, ok := object.(interface{ GetOwnerID() string }); ok {
+			if owner.GetOwnerID() == identity.Subject {
+				roles = append(roles, authz.RoleOwner)
+			}
+		}
+		
+		return roles, nil
+	})
+	
+	// Build the plugin
+	authzPlugin := builder.Build()
+
 	s := prefab.New(
-		// Use basic email/password auth so that we can demonstrate different users
-		// seeing different results.
+		// Configure authentication
 		prefab.WithPlugin(auth.Plugin()),
 		prefab.WithPlugin(pwdauth.Plugin(
-			pwdauth.WithAccountFinder(accountStore{}), // Static user data.
-			pwdauth.WithHasher(pwdauth.TestHasher),    // Doesn't hash passwords.
+			pwdauth.WithAccountFinder(accountStore{}),
+			pwdauth.WithHasher(pwdauth.TestHasher),
 		)),
 
-		// Set up the example policies and rules.
-		// - Any user can list document titles.
-		// - The owner or an admin can view a specific document.
-		// - Only the owner can write to a document.
-		// - For this example, roles will be additive. All authenticated users will
-		//   have the "standard" role. Then optionally "admin" and/or "owner".
-		prefab.WithPlugin(authz.Plugin(
-			authz.WithPolicy(authz.Allow, roleStandard, authz.Action("documents.view_meta")),
-			authz.WithPolicy(authz.Allow, roleStandard, authz.Action("documents.list")),
-			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.view")),
-			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.write")),
-			authz.WithPolicy(authz.Allow, roleAdmin, authz.Action("documents.view")),
-			authz.WithObjectFetcher("org", fetchOrg),
-			authz.WithObjectFetcher("document", fetchDocument),
-			authz.WithRoleDescriber("*", roleDescriber),
-		)),
-
-		// TODO: Add basic web UI to make it easier to exercise the endpoints.
+		// Add our authz plugin
+		prefab.WithPlugin(authzPlugin),
 	)
 
-	// Register the GRPC service defined in the authztest package.
+	// Register the GRPC service
 	authztest.RegisterAuthzTestServiceHandlerFromEndpoint(s.GatewayArgs())
 	authztest.RegisterAuthzTestServiceServer(s.ServiceRegistrar(), &testServer{})
 
-	// Start the server.
+	// Start the server
 	if err := s.Start(); err != nil {
 		fmt.Println(err)
 	}
 }
 
-// ObjectFetcher associated with the "org" type which comes from the Authz
-// specification in the proto description.
-func fetchOrg(ctx context.Context, key any) (any, error) {
-	if key.(string) == "xmen" {
-		return org{name: "xmen"}, nil
-	}
-	return nil, errors.NewC("org not found", codes.NotFound)
-}
-
-// Object fecher for "document" type.
+// Object fetcher for document resource
 func fetchDocument(ctx context.Context, key any) (any, error) {
 	if doc, ok := staticDocuments[key.(string)]; ok {
 		return doc, nil
@@ -114,47 +145,7 @@ func fetchDocument(ctx context.Context, key any) (any, error) {
 	return nil, errors.NewC("document not found", codes.NotFound)
 }
 
-// RoleDescriber for all objects.
-func roleDescriber(ctx context.Context, id auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
-	// Assume just one domain/org/workspace for this example.
-	switch o := object.(type) {
-	case document:
-		if domain != "xmen" {
-			return []authz.Role{}, nil
-		}
-	case org:
-		if o.name != "xmen" {
-			return []authz.Role{}, nil
-		}
-	default:
-		return nil, errors.NewC("unknown object type", codes.InvalidArgument)
-	}
-
-	if _, ok := object.(document); ok {
-		// Assume just one domain/org/workspace for this example.
-		if domain != "xmen" {
-			return []authz.Role{}, nil
-		}
-	}
-
-	// All xmen get the standard role.
-	roles := []authz.Role{roleStandard}
-
-	// Wolverine gets to be an admin.
-	if id.Email == "logan@xmen.net" {
-		roles = append(roles, roleAdmin)
-	}
-
-	// The author of a document is the owner.
-	if doc, ok := object.(document); ok && doc.author == id.Subject {
-		roles = append(roles, roleDocOwner)
-	}
-
-	return roles, nil
-}
-
-// Implements authztest.AuthzTestServiceServer so we can demonstrate the
-// policies in action. A very minimal implementation.
+// Basic implementation of the test server
 type testServer struct {
 	authztest.UnimplementedAuthzTestServiceServer
 }
@@ -183,8 +174,7 @@ func (t *testServer) SaveDocument(ctx context.Context, in *authztest.SaveDocumen
 	}, nil
 }
 
-// Static user data used by the pwdauth plugin. This allows you to login as
-// different users to see different results.
+// Account store implementation
 type accountStore struct{}
 
 func (a accountStore) FindAccount(ctx context.Context, email string) (*pwdauth.Account, error) {
@@ -196,8 +186,7 @@ func (a accountStore) FindAccount(ctx context.Context, email string) (*pwdauth.A
 	return nil, errors.Codef(codes.NotFound, "account not found")
 }
 
-// Logan is an admin, so can view all docs. Jean is author of first two docs,
-// and Scott as author of the 3rd.
+// Static data
 var staticDocuments = map[string]document{
 	"1": {id: "1", author: "3", title: "The Phoenix Saga", body: "A long time ago..."},
 	"2": {id: "2", author: "3", title: "The Dark Phoenix Saga", body: "A long time ago..."},

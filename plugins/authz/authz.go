@@ -1,6 +1,25 @@
-// Package authz provides a plugin for implementing basic access controls. It uses
-// the service descriptor to define the Authz, which is then enforced by a GRPC
-// interceptor.
+// Package authz provides a plugin for implementing role-based access control (RBAC).
+// It uses protocol buffer annotations to define authorization rules that are
+// enforced by a GRPC interceptor.
+//
+// # Getting Started
+//
+// The simplest way to get started with authorization is to use the builder pattern
+// and common configuration helpers:
+//
+//	// Create a basic CRUD authorization plugin with common roles and permissions
+//	authzPlugin := authz.NewCRUDBuilder().
+//		WithObjectFetcher("document", fetchDocument).
+//		WithRoleDescriber("document", documentRoleDescriber).
+//		Build()
+//
+//	// Add to your Prefab server
+//	server := prefab.New(
+//		prefab.WithPlugin(authzPlugin),
+//		// Other plugins and options
+//	)
+//
+// # Core Concepts
 //
 // Authz Policies are defined in terms of roles and actions, both of which are
 // application defined strings. For example, an "editor" role might be allowed
@@ -17,7 +36,7 @@
 //
 // Role Describers can also be configured to accept a `domain` from the
 // request. This is optional and is intended to simplify the implementation of
-// mutlti-tenant systems or systems where a user might be part of multiple
+// multi-tenant systems or systems where a user might be part of multiple
 // workspaces or groups, each with different permissions.
 //
 // To map an incoming request to a resource, the Authz plugin uses "Object
@@ -27,7 +46,46 @@
 //
 // RPCs can be configured with a default effect of Allow. For example, a page
 // might be configured to allow all users to view it, except those on mobile
-// devices (this is a bit of a tenuous example, but you get the idea).
+// devices.
+//
+// # Protocol Buffer Annotations
+//
+// To use authorization, you need to annotate your protocol buffer definitions:
+//
+//	rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse) {
+//	  option (prefab.authz.action) = "documents.view";
+//	  option (prefab.authz.resource) = "document";
+//	  option (prefab.authz.default_effect) = "deny"; // Optional, defaults to "deny"
+//	}
+//
+//	message GetDocumentRequest {
+//	  string org_id = 1 [(prefab.authz.domain) = true]; // Optional scope/domain
+//	  string document_id = 2 [(prefab.authz.id) = true]; // Required to identify resource
+//	}
+//
+// # Common Patterns
+//
+// This package provides several common patterns to simplify authorization setup:
+//
+// - Builder pattern: Use `NewBuilder()` for a fluent configuration interface
+// - Predefined roles: `RoleAdmin`, `RoleEditor`, `RoleViewer`, etc.
+// - Common CRUD actions: `ActionCreate`, `ActionRead`, etc.
+// - CRUD builder: `NewCRUDBuilder()` for standard roles and CRUD permissions
+//
+// # Role Hierarchy
+//
+// You can establish a role hierarchy where parent roles inherit child roles:
+//
+//	authz.WithRoleHierarchy(RoleAdmin, RoleEditor, RoleViewer, RoleUser)
+//
+// In this example, admins inherit all editor permissions, editors inherit viewer
+// permissions, and viewers inherit user permissions.
+//
+// # Examples
+//
+// For complete examples, see:
+// - examples/authz/custom/authzexample.go (fully custom configuration)
+// - examples/authz/common-builder/authzexample.go (common builder pattern)
 package authz
 
 import (

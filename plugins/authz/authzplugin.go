@@ -25,6 +25,47 @@ var (
 // Configuration options for the Authz Plugin.
 type AuthzOption func(*AuthzPlugin)
 
+// Builder provides a fluent interface for configuring the authz plugin.
+type Builder struct {
+	plugin *AuthzPlugin
+}
+
+// NewBuilder creates a new builder for the authz plugin.
+func NewBuilder() *Builder {
+	return &Builder{
+		plugin: &AuthzPlugin{},
+	}
+}
+
+// Build finalizes the builder and returns the configured plugin.
+func (b *Builder) Build() *AuthzPlugin {
+	return b.plugin
+}
+
+// WithRoleHierarchy adds a role hierarchy to the builder.
+func (b *Builder) WithRoleHierarchy(roles ...Role) *Builder {
+	b.plugin.SetRoleHierarchy(roles...)
+	return b
+}
+
+// WithPolicy adds a policy to the builder.
+func (b *Builder) WithPolicy(effect Effect, role Role, action Action) *Builder {
+	b.plugin.DefinePolicy(effect, role, action)
+	return b
+}
+
+// WithObjectFetcher adds an object fetcher to the builder.
+func (b *Builder) WithObjectFetcher(objectKey string, fetcher ObjectFetcher) *Builder {
+	b.plugin.RegisterObjectFetcher(objectKey, fetcher)
+	return b
+}
+
+// WithRoleDescriber adds a role describer to the builder.
+func (b *Builder) WithRoleDescriber(objectKey string, describer RoleDescriber) *Builder {
+	b.plugin.RegisterRoleDescriber(objectKey, describer)
+	return b
+}
+
 // Plugin returns a new AuthzPlugin.
 func Plugin(opts ...AuthzOption) *AuthzPlugin {
 	ap := &AuthzPlugin{}
