@@ -87,12 +87,12 @@ func TestUploadACL_Success(t *testing.T) {
 	// Set up a minimal auth plugin that allows dpup to upload files to the dpup
 	// folder.
 	az := authz.Plugin()
-	az.RegisterRoleDescriber(ObjectKey, func(ctx context.Context, subject auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
+	az.RegisterRoleDescriber(ObjectKey, authz.RoleDescriberFn(func(ctx context.Context, subject auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
 		if object.(string) == "dpup" { // dpup would usually come from the subject.
 			return []authz.Role{"owner"}, nil
 		}
 		return []authz.Role{}, nil
-	})
+	}))
 	az.DefinePolicy(authz.Allow, "owner", SaveAction)
 
 	r := &prefab.Registry{}
@@ -129,12 +129,12 @@ func TestUploadACL_Failure(t *testing.T) {
 	plugin := Plugin(WithBackend(be))
 
 	az := authz.Plugin()
-	az.RegisterRoleDescriber(ObjectKey, func(ctx context.Context, subject auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
+	az.RegisterRoleDescriber(ObjectKey, authz.RoleDescriberFn(func(ctx context.Context, subject auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
 		if object.(string) == "haxor" {
 			return []authz.Role{"owner"}, nil
 		}
 		return []authz.Role{}, nil
-	})
+	}))
 	az.DefinePolicy(authz.Allow, "owner", SaveAction)
 
 	r := &prefab.Registry{}
@@ -173,12 +173,12 @@ func TestDownloadACL_Success(t *testing.T) {
 
 	// Set up ACL that allows anyone to view.
 	az := authz.Plugin()
-	az.RegisterRoleDescriber(ObjectKey, func(ctx context.Context, subject auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
+	az.RegisterRoleDescriber(ObjectKey, authz.RoleDescriberFn(func(ctx context.Context, subject auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
 		if object.(string) == userID {
 			return []authz.Role{"owner"}, nil
 		}
 		return []authz.Role{"viewer"}, nil
-	})
+	}))
 	az.SetRoleHierarchy("owner", "viewer")
 	az.DefinePolicy(authz.Allow, "owner", SaveAction)
 	az.DefinePolicy(authz.Allow, "viewer", DownloadAction)
@@ -222,12 +222,12 @@ func TestDownloadACL_Failure(t *testing.T) {
 
 	// Set up ACL that only allows the owner to view it.
 	az := authz.Plugin()
-	az.RegisterRoleDescriber(ObjectKey, func(ctx context.Context, subject auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
+	az.RegisterRoleDescriber(ObjectKey, authz.RoleDescriberFn(func(ctx context.Context, subject auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
 		if object.(string) == userID {
 			return []authz.Role{"owner"}, nil
 		}
 		return []authz.Role{"viewer"}, nil
-	})
+	}))
 	az.DefinePolicy(authz.Allow, "owner", SaveAction)
 	az.DefinePolicy(authz.Allow, "owner", DownloadAction)
 

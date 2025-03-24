@@ -40,7 +40,7 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-// Document implements the GetOwnerID method required by the common role describer
+// Document implements the OwnedObject interface
 type document struct {
 	id     string
 	author string
@@ -48,75 +48,86 @@ type document struct {
 	body   string
 }
 
-// GetOwnerID returns the author ID which is considered the owner
-func (d document) GetOwnerID() string {
+// AuthzType implements the AuthzObject interface
+func (d document) AuthzType() string {
+	return "document"
+}
+
+// OwnerID implements the OwnedObject interface
+func (d document) OwnerID() string {
 	return d.author
 }
 
-// Run starts the common builder example server
+// Org implements the AuthzObject interface
+type org struct {
+	name string
+}
+
+// AuthzType returns the object type
+func (o org) AuthzType() string {
+	return "org"
+}
+
+// ScopeID implements the ScopedObject interface
+func (o org) ScopeID() string {
+	return o.name
+}
+
+// Run starts the builder example server
 func Run() {
-	// Define custom actions that map to standard CRUD operations
-	docList := authz.Action("documents.list")     // similar to authz.ActionList 
-	docView := authz.Action("documents.view")     // similar to authz.ActionRead
-	docViewMeta := authz.Action("documents.view_meta") // similar to authz.ActionRead
-	docWrite := authz.Action("documents.write")    // similar to authz.ActionUpdate
-	
+	// Define custom actions
+	docList := authz.Action("documents.list")
+	docView := authz.Action("documents.view")
+	docViewMeta := authz.Action("documents.view_meta")
+	docWrite := authz.Action("documents.write")
+
 	// Create the authz plugin using the CRUD builder pattern with custom actions
-	builder := authz.NewCRUDBuilder()
-	
-	// Map our domain-specific actions to standard CRUD operations
+	builder := authz.NewBuilder()
+
+	// Define our hierarchy. Admins inherit from editors who inherit from viewers.
+	builder.WithRoleHierarchy(authz.RoleAdmin, authz.RoleEditor, authz.RoleViewer)
+	builder.WithRoleHierarchy(authz.RoleOwner, authz.RoleEditor)
+
+	// Map our domain-specific actions to roles.
 	builder.WithPolicy(authz.Allow, authz.RoleViewer, docList)
 	builder.WithPolicy(authz.Allow, authz.RoleViewer, docView)
 	builder.WithPolicy(authz.Allow, authz.RoleViewer, docViewMeta)
+
+	// An editor can write all documents. Admins can act as editors on all docs,
+	// while owner will only act as editor on their own docs.
 	builder.WithPolicy(authz.Allow, authz.RoleEditor, docWrite)
-	
-	// Define our object fetchers
-	builder.WithObjectFetcher("document", fetchDocument)
-	
-	// Define a custom role describer
-	builder.WithRoleDescriber("*", func(ctx context.Context, identity auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
+
+	// Define our object fetchers with the function adapter
+	builder.WithObjectFetcherFn("org", fetchOrg)
+	builder.WithObjectFetcherFn("document", fetchDocument)
+
+	builder.WithRoleDescriberFn("org", func(ctx context.Context, identity auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
+		if object.(org).name == "xmen" {
+			return rolesForIdentity(identity), nil
+		}
+		return []authz.Role{}, nil
+	})
+
+	// Define a custom role describer that just looks at email address.
+	builder.WithRoleDescriberFn("document", func(ctx context.Context, identity auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
 		// Add domain-specific logic if needed
-		if domain != "xmen" {
+		if string(scope) != "xmen" {
 			return []authz.Role{}, nil
 		}
-		
+
 		// Base role for any authenticated user
-		roles := []authz.Role{authz.RoleUser}
-		
-		// Admin role for specific users
-		if identity.Email == "logan@xmen.net" {
-			roles = append(roles, authz.RoleAdmin)
-			// Admin already has all permissions, no need to check other roles
-			return roles, nil
-		}
-		
-		// Editor role for specific users
-		if identity.Email == "jean@xmen.net" {
-			roles = append(roles, authz.RoleEditor)
-		}
-		
-		// Viewer role for specific users
-		if identity.Email == "scott@xmen.net" || 
-		   identity.Email == "ororo@xmen.net" || 
-		   identity.Email == "kurt@xmen.net" {
-			roles = append(roles, authz.RoleViewer)
-		}
-		
+		roles := rolesForIdentity(identity)
+
 		// Check if user is the owner of the document
-		if owner, ok := object.(interface{ GetOwnerID() string }); ok {
-			if owner.GetOwnerID() == identity.Subject {
+		if owner, ok := object.(authz.OwnedObject); ok {
+			if owner.OwnerID() == identity.Subject {
 				roles = append(roles, authz.RoleOwner)
 			}
 		}
-		
 		return roles, nil
 	})
-	
-	// Build the plugin
-	authzPlugin := builder.Build()
 
 	s := prefab.New(
-		// Configure authentication
 		prefab.WithPlugin(auth.Plugin()),
 		prefab.WithPlugin(pwdauth.Plugin(
 			pwdauth.WithAccountFinder(accountStore{}),
@@ -124,7 +135,7 @@ func Run() {
 		)),
 
 		// Add our authz plugin
-		prefab.WithPlugin(authzPlugin),
+		prefab.WithPlugin(builder.Build()),
 	)
 
 	// Register the GRPC service
@@ -137,7 +148,38 @@ func Run() {
 	}
 }
 
-// Object fetcher for document resource
+func rolesForIdentity(identity auth.Identity) []authz.Role {
+	roles := []authz.Role{authz.RoleUser}
+
+	// Admin role for specific users
+	if identity.Email == "logan@xmen.net" {
+		roles = append(roles, authz.RoleAdmin)
+	}
+
+	// Editor role for specific users
+	if identity.Email == "jean@xmen.net" {
+		roles = append(roles, authz.RoleEditor)
+	}
+
+	// Viewer role for specific users
+	if identity.Email == "scott@xmen.net" ||
+		identity.Email == "ororo@xmen.net" ||
+		identity.Email == "kurt@xmen.net" {
+		roles = append(roles, authz.RoleViewer)
+	}
+
+	return roles
+}
+
+// ObjectFetcher implementation for org.
+func fetchOrg(ctx context.Context, key any) (any, error) {
+	if key.(string) == "xmen" {
+		return org{name: "xmen"}, nil
+	}
+	return nil, errors.NewC("org not found", codes.NotFound)
+}
+
+// ObjectFetcher implementation for document.
 func fetchDocument(ctx context.Context, key any) (any, error) {
 	if doc, ok := staticDocuments[key.(string)]; ok {
 		return doc, nil

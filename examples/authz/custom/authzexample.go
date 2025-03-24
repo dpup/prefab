@@ -46,19 +46,50 @@ const (
 	roleDocOwner = authz.Role("doc.owner")
 )
 
+// Org implements the AuthzObject interface
 type org struct {
 	name string
 }
 
+// AuthzType returns the object type
+func (o org) AuthzType() string {
+	return "org"
+}
+
+// ScopeID implements the ScopedObject interface
+func (o org) ScopeID() string {
+	return o.name
+}
+
+// Document implements the OwnedObject and ScopedObject interfaces
 type document struct {
 	id     string
 	author string
 	title  string
 	body   string
+	org    string // the organization this document belongs to
+}
+
+// AuthzType implements the AuthzObject interface
+func (d document) AuthzType() string {
+	return "document"
+}
+
+// OwnerID implements the OwnedObject interface
+func (d document) OwnerID() string {
+	return d.author
+}
+
+// ScopeID implements the ScopedObject interface
+func (d document) ScopeID() string {
+	return d.org
 }
 
 // Run starts the custom authz example server
 func Run() {
+	// Create our custom RoleDescriber implementation
+	customRoleDescriber := &CustomRoleDescriber{}
+
 	s := prefab.New(
 		// Use basic email/password auth so that we can demonstrate different users
 		// seeing different results.
@@ -80,9 +111,9 @@ func Run() {
 			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.view")),
 			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.write")),
 			authz.WithPolicy(authz.Allow, roleAdmin, authz.Action("documents.view")),
-			authz.WithObjectFetcher("org", fetchOrg),
-			authz.WithObjectFetcher("document", fetchDocument),
-			authz.WithRoleDescriber("*", roleDescriber),
+			authz.WithFunctionObjectFetcher("org", fetchOrg),
+			authz.WithFunctionObjectFetcher("document", fetchDocument),
+			authz.WithRoleDescriber("*", customRoleDescriber),
 		)),
 
 		// TODO: Add basic web UI to make it easier to exercise the endpoints.
@@ -115,33 +146,31 @@ func fetchDocument(ctx context.Context, key any) (any, error) {
 	return nil, errors.NewC("document not found", codes.NotFound)
 }
 
-// RoleDescriber for all objects.
-func roleDescriber(ctx context.Context, id auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
-	// Assume just one domain/org/workspace for this example.
-	switch o := object.(type) {
-	case document:
-		if domain != "xmen" {
+// CustomRoleDescriber implements the RoleDescriber interface
+type CustomRoleDescriber struct{}
+
+// DescribeRoles implements the RoleDescriber interface
+func (d *CustomRoleDescriber) DescribeRoles(ctx context.Context, id auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
+	// Check the scope for this object
+	if scoped, ok := object.(authz.ScopedObject); ok {
+		if scoped.ScopeID() != string(scope) {
 			return []authz.Role{}, nil
 		}
-	case org:
-		if o.name != "xmen" {
-			return []authz.Role{}, nil
-		}
-	default:
-		return nil, errors.NewC("unknown object type", codes.InvalidArgument)
 	}
 
-	// All xmen get the standard role.
+	// All authenticated users get the standard role
 	roles := []authz.Role{roleStandard}
 
-	// Wolverine gets to be an admin.
+	// Wolverine gets to be an admin
 	if id.Email == "logan@xmen.net" {
 		roles = append(roles, roleAdmin)
 	}
 
-	// The author of a document is the owner.
-	if doc, ok := object.(document); ok && doc.author == id.Subject {
-		roles = append(roles, roleDocOwner)
+	// The author of a document is the owner
+	if owned, ok := object.(authz.OwnedObject); ok {
+		if owned.OwnerID() == id.Subject {
+			roles = append(roles, roleDocOwner)
+		}
 	}
 
 	return roles, nil
@@ -193,9 +222,9 @@ func (a accountStore) FindAccount(ctx context.Context, email string) (*pwdauth.A
 // Logan is an admin, so can view all docs. Jean is author of first two docs,
 // and Scott as author of the 3rd.
 var staticDocuments = map[string]document{
-	"1": {id: "1", author: "3", title: "The Phoenix Saga", body: "A long time ago..."},
-	"2": {id: "2", author: "3", title: "The Dark Phoenix Saga", body: "A long time ago..."},
-	"3": {id: "3", author: "2", title: "Days of Future Past", body: "A long time ago..."},
+	"1": {id: "1", author: "3", title: "The Phoenix Saga", body: "A long time ago...", org: "xmen"},
+	"2": {id: "2", author: "3", title: "The Dark Phoenix Saga", body: "A long time ago...", org: "xmen"},
+	"3": {id: "3", author: "2", title: "Days of Future Past", body: "A long time ago...", org: "xmen"},
 }
 
 var staticAccounts = []*pwdauth.Account{

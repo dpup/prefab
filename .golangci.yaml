@@ -12,7 +12,6 @@ run:
   # Default: 1m
   timeout: 3m
 
-
 # This file contains only configs which differ from defaults.
 # All possible options can be found here https://github.com/golangci/golangci-lint/blob/master/.golangci.reference.yml
 linters-settings:
@@ -171,7 +170,7 @@ linters-settings:
   nolintlint:
     # Exclude following linters from requiring an explanation.
     # Default: []
-    allow-no-explanation: [funlen, gocognit, lll]
+    allow-no-explanation: [ funlen, gocognit, lll ]
     # Enable to require an explanation of nonzero length after each nolint directive.
     # Default: false
     require-explanation: true
@@ -210,13 +209,7 @@ linters-settings:
     # STxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
     # Default: ["*"]
     # NOTE(disable ST1003 because it interferes with generated proto style, e.g fooUri vs)
-    checks: ["all", "-ST1003"]
-
-  tenv:
-    # The option `all` will run against whole test files (`_test.go`) regardless of method/function signatures.
-    # Otherwise, only methods that take `*testing.T`, `*testing.B`, and `testing.TB` as arguments are checked.
-    # Default: false
-    all: true
+    checks: [ "all", "-ST1003" ]
 
   wrapcheck:
     ignoreSigs:
@@ -256,7 +249,6 @@ linters:
   - durationcheck # checks for two durations multiplied together
   - errname # checks that sentinel errors are prefixed with the Err and error types are suffixed with the Error
   - errorlint # finds code that will cause problems with the error wrapping scheme introduced in Go 1.13
-  - exportloopref # checks for pointers to enclosing loop variables
   - fatcontext # detects nested contexts in loops
   - forbidigo # forbids identifiers
   - funlen # tool for detection of long functions
@@ -292,7 +284,7 @@ linters:
   - spancheck # checks for mistakes with OpenTelemetry/Census spans
   - sqlclosecheck # checks that sql.Rows and sql.Stmt are closed
   - stylecheck # is a replacement for golint
-  - tenv # detects using os.Setenv instead of t.Setenv since Go1.17
+  - usetesting # detects using os.Setenv instead of t.Setenv since Go1.17
   - testableexamples # checks if examples are testable (have an expected output)
   - testifylint # checks usage of github.com/stretchr/testify
   - tparallel # detects inappropriate usage of t.Parallel() method in your Go test codes
@@ -301,7 +293,6 @@ linters:
   - usestdlibvars # detects the possibility to use variables/constants from the Go standard library
   - wastedassign # finds wasted assignment statements
   - whitespace # detects leading and trailing whitespace
-
   # TODO: enable in another pass.
   #- revive # fast, configurable, extensible, flexible, and beautiful linter for Go, drop-in replacement of golint
   #- nestif # reports deeply nested if statements
@@ -365,9 +356,9 @@ issues:
 
   exclude-rules:
   - source: "(noinspection|TODO)"
-    linters: [godot]
+    linters: [ godot ]
   - source: "//noinspection"
-    linters: [gocritic]
+    linters: [ gocritic ]
   - path: "(_test\\.go)"
     linters:
     - bodyclose

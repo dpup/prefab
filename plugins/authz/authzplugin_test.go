@@ -102,47 +102,61 @@ type testDocument struct {
 	body   string
 }
 
+// Implement the authz interfaces.
+func (d *testDocument) AuthzType() string { return "document" }
+func (d *testDocument) OwnerID() string   { return d.author }
+
 func TestInterceptor(t *testing.T) {
+	// Create function-based role describers and object fetchers
+	documentFetcher := func(ctx context.Context, key any) (any, error) {
+		switch key.(string) {
+		case "1":
+			return &testDocument{id: "1", author: "bob@test.com", title: "Test Document", body: "This is a test document."}, nil
+		case "2":
+			return &testDocument{id: "2", author: "betty@test.com", title: "Another Document", body: "This is another test document."}, nil
+		default:
+			return nil, errors.Codef(codes.NotFound, "document not found")
+		}
+	}
+
+	documentRoleDescriber := func(ctx context.Context, subject auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
+		doc := object.(*testDocument)
+		if subject.Email == doc.author {
+			return []authz.Role{"admin"}, nil
+		} else if subject.Email != "" {
+			return []authz.Role{"standard"}, nil
+		} else {
+			return []authz.Role{}, nil
+		}
+	}
+
+	wildFetcher := func(ctx context.Context, key any) (any, error) {
+		// For the test we don't care what gets returned, in reality the '*' might
+		// return something like the identity for the user, a session object, or
+		// a root entity such as a workspace. Key will be an empty string.
+		return 1, nil
+	}
+
+	wildRoleDescriber := func(ctx context.Context, subject auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
+		if subject == (auth.Identity{}) {
+			return []authz.Role{"anonymous"}, nil
+		} else {
+			return []authz.Role{"authenticated"}, nil
+		}
+	}
+
 	ap := authz.Plugin(
 		authz.WithPolicy(authz.Allow, authz.Role("admin"), authz.Action("documents.write")),
 		authz.WithPolicy(authz.Allow, authz.Role("admin"), authz.Action("documents.view")),
 		authz.WithPolicy(authz.Allow, authz.Role("standard"), authz.Action("documents.view")),
 		authz.WithPolicy(authz.Deny, authz.Role("nyc-employee"), authz.Action("documents.write")),
-		authz.WithObjectFetcher("document", func(ctx context.Context, key any) (any, error) {
-			switch key.(string) {
-			case "1":
-				return &testDocument{id: "1", author: "bob@test.com", title: "Test Document", body: "This is a test document."}, nil
-			case "2":
-				return &testDocument{id: "2", author: "betty@test.com", title: "Another Document", body: "This is another test document."}, nil
-			default:
-				return nil, errors.Codef(codes.NotFound, "document not found")
-			}
-		}),
-		authz.WithRoleDescriber("document", func(ctx context.Context, subject auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
-			doc := object.(*testDocument)
-			if subject.Email == doc.author {
-				return []authz.Role{"admin"}, nil
-			} else if subject.Email != "" {
-				return []authz.Role{"standard"}, nil
-			} else {
-				return []authz.Role{}, nil
-			}
-		}),
-
 		authz.WithPolicy(authz.Allow, authz.Role("authenticated"), authz.Action("self.inspect")),
-		authz.WithObjectFetcher("*", func(ctx context.Context, key any) (any, error) {
-			// For the test we don't care what gets returned, in reality the '*' might
-			// return something like the identity for the user, a session object, or
-			// a root entity such as a workspace. Key will be an empty string.
-			return 1, nil
-		}),
-		authz.WithRoleDescriber("*", func(ctx context.Context, subject auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
-			if subject == (auth.Identity{}) {
-				return []authz.Role{"anonymous"}, nil
-			} else {
-				return []authz.Role{"authenticated"}, nil
-			}
-		}),
+
+		// Register function-based objects via the helpers
+		authz.WithFunctionObjectFetcher("document", documentFetcher),
+		authz.WithFunctionRoleDescriber("document", documentRoleDescriber),
+		authz.WithFunctionObjectFetcher("*", wildFetcher),
+		authz.WithFunctionRoleDescriber("*", wildRoleDescriber),
 	)
 
 	type args struct {

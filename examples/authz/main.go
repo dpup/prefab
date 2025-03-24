@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dpup/prefab/examples/authz/common-builder"
+	commonbuilder "github.com/dpup/prefab/examples/authz/builder"
 	"github.com/dpup/prefab/examples/authz/custom"
 )
 

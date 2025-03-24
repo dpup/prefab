@@ -130,9 +130,9 @@ func (p *UploadPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 		p.az = az.(*authz.AuthzPlugin)
 		// Register an object fetcher that just passes on the folder name to the
 		// role describer.
-		p.az.RegisterObjectFetcher(ObjectKey, func(ctx context.Context, folder any) (any, error) {
+		p.az.RegisterObjectFetcher(ObjectKey, authz.ObjectFetcherFn(func(ctx context.Context, folder any) (any, error) {
 			return folder, nil
-		})
+		}))
 	}
 	if p.be == nil {
 		return errors.NewC("upload: no backend configured", codes.Internal)
@@ -164,7 +164,7 @@ func (p *UploadPlugin) handleUpload(r *http.Request) (any, error) {
 			ObjectKey:     ObjectKey,
 			Action:        SaveAction,
 			ObjectID:      folder,
-			Domain:        domain,
+			Scope:         authz.Scope(domain),
 			DefaultEffect: authz.Deny,
 			Info:          "Upload",
 		})
@@ -275,7 +275,7 @@ func (p *UploadPlugin) handleDownload(w http.ResponseWriter, r *http.Request) {
 			ObjectKey:     ObjectKey,
 			Action:        DownloadAction,
 			ObjectID:      parts[1],
-			Domain:        parts[0],
+			Scope:         authz.Scope(parts[0]),
 			DefaultEffect: authz.Deny,
 			Info:          "Upload",
 		})

@@ -66,6 +66,20 @@ func (b *Builder) WithRoleDescriber(objectKey string, describer RoleDescriber) *
 	return b
 }
 
+// WithObjectFetcherFn adds a function-based object fetcher to the builder.
+func (b *Builder) WithObjectFetcherFn(objectKey string, fetcher func(ctx context.Context, key any) (any, error)) *Builder {
+	b.plugin.RegisterObjectFetcher(objectKey, ObjectFetcherFn(fetcher))
+	return b
+}
+
+// WithRoleDescriberFn adds a function-based role describer to the builder.
+func (b *Builder) WithRoleDescriberFn(objectKey string, describer func(ctx context.Context, subject auth.Identity, object any, scope Scope) ([]Role, error)) *Builder {
+	b.plugin.RegisterRoleDescriber(objectKey, RoleDescriberFn(describer))
+	return b
+}
+
+// We can't use generic methods directly, so we'll provide package level functions instead
+
 // Plugin returns a new AuthzPlugin.
 func Plugin(opts ...AuthzOption) *AuthzPlugin {
 	ap := &AuthzPlugin{}
@@ -104,17 +118,31 @@ func WithPolicy(effect Effect, role Role, action Action) AuthzOption {
 	}
 }
 
-// WithRoleDescriber adds a role describer to the plugin.
-func WithObjectFetcher(objectKey string, fn ObjectFetcher) AuthzOption {
+// WithObjectFetcher adds an object fetcher to the plugin.
+func WithObjectFetcher(objectKey string, fetcher ObjectFetcher) AuthzOption {
 	return func(ap *AuthzPlugin) {
-		ap.RegisterObjectFetcher(objectKey, fn)
+		ap.RegisterObjectFetcher(objectKey, fetcher)
 	}
 }
 
 // WithRoleDescriber adds a role describer to the plugin.
-func WithRoleDescriber(objectKey string, fn RoleDescriber) AuthzOption {
+func WithRoleDescriber(objectKey string, describer RoleDescriber) AuthzOption {
 	return func(ap *AuthzPlugin) {
-		ap.RegisterRoleDescriber(objectKey, fn)
+		ap.RegisterRoleDescriber(objectKey, describer)
+	}
+}
+
+// WithFunctionObjectFetcher adds a function-based object fetcher to the plugin.
+func WithFunctionObjectFetcher(objectKey string, fetcher func(ctx context.Context, key any) (any, error)) AuthzOption {
+	return func(ap *AuthzPlugin) {
+		ap.RegisterObjectFetcher(objectKey, ObjectFetcherFn(fetcher))
+	}
+}
+
+// WithFunctionRoleDescriber adds a function-based role describer to the plugin.
+func WithFunctionRoleDescriber(objectKey string, describer func(ctx context.Context, subject auth.Identity, object any, scope Scope) ([]Role, error)) AuthzOption {
+	return func(ap *AuthzPlugin) {
+		ap.RegisterRoleDescriber(objectKey, RoleDescriberFn(describer))
 	}
 }
 
@@ -156,24 +184,22 @@ func (ap *AuthzPlugin) DefinePolicy(effect Effect, role Role, action Action) {
 	ap.policies[action][role] = effect
 }
 
-// RegisterObjectFetcher registers a function for fetching an object based on a
-// request parameter that was specified in the proto descriptor. '*' can be used
-// as a wildcard to match any key which doesn't have a more specific fetcher.
-func (ap *AuthzPlugin) RegisterObjectFetcher(objectKey string, fn ObjectFetcher) {
+// RegisterObjectFetcher registers an object fetcher for a specified object key.
+// '*' can be used as a wildcard to match any key which doesn't have a more specific fetcher.
+func (ap *AuthzPlugin) RegisterObjectFetcher(objectKey string, fetcher ObjectFetcher) {
 	if ap.objectFetchers == nil {
 		ap.objectFetchers = make(map[string]ObjectFetcher)
 	}
-	ap.objectFetchers[objectKey] = fn
+	ap.objectFetchers[objectKey] = fetcher
 }
 
-// RegisterRoleDescriber registers a function for describing a role relative to
-// an object.  '*' can be used as a wildcard to match any key which doesn't have
-// a more specific describer.
-func (ap *AuthzPlugin) RegisterRoleDescriber(objectKey string, fn RoleDescriber) {
+// RegisterRoleDescriber registers a role describer for a specified object key.
+// '*' can be used as a wildcard to match any key which doesn't have a more specific describer.
+func (ap *AuthzPlugin) RegisterRoleDescriber(objectKey string, describer RoleDescriber) {
 	if ap.roleDescribers == nil {
 		ap.roleDescribers = make(map[string]RoleDescriber)
 	}
-	ap.roleDescribers[objectKey] = fn
+	ap.roleDescribers[objectKey] = describer
 }
 
 // SetRoleHierarchy sets the hierarchy of roles.
@@ -217,21 +243,21 @@ func (ap *AuthzPlugin) RoleTree() map[Role][]Role {
 }
 
 func (ap *AuthzPlugin) fetcherForKey(objectKey string) ObjectFetcher {
-	if fn, ok := ap.objectFetchers[objectKey]; ok {
-		return fn
+	if fetcher, ok := ap.objectFetchers[objectKey]; ok {
+		return fetcher
 	}
-	if fn, ok := ap.objectFetchers["*"]; ok {
-		return fn
+	if fetcher, ok := ap.objectFetchers["*"]; ok {
+		return fetcher
 	}
 	return nil
 }
 
 func (ap *AuthzPlugin) describerForKey(objectKey string) RoleDescriber {
-	if fn, ok := ap.roleDescribers[objectKey]; ok {
-		return fn
+	if describer, ok := ap.roleDescribers[objectKey]; ok {
+		return describer
 	}
-	if fn, ok := ap.roleDescribers["*"]; ok {
-		return fn
+	if describer, ok := ap.roleDescribers["*"]; ok {
+		return describer
 	}
 	return nil
 }
@@ -241,7 +267,7 @@ func (ap *AuthzPlugin) describerForKey(objectKey string) RoleDescriber {
 //
 // This interceptor:
 // 1. Uses method options to get object key and action.
-// 2. Uses proto field options to get an object id and optionally domain.
+// 2. Uses proto field options to get an object id and optionally scope.
 // 3. Fetches the object based on the object key and id (ObjectFetcher).
 // 4. Gets the user's role relative to the object (RoleDescriber).
 // 5. Checks if the role can perform the action on the object.
@@ -253,8 +279,8 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 		return handler(ctx, req)
 	}
 
-	// Get the object and domain from the request object.
-	objectID, domain, err := FieldOptions(req.(proto.Message))
+	// Get the object and scope from the request object.
+	objectID, scopeStr, err := FieldOptions(req.(proto.Message))
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +288,7 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 	if err := ap.Authorize(ctx, AuthorizeParams{
 		ObjectKey:     objectKey,
 		ObjectID:      objectID,
-		Domain:        domain,
+		Scope:         Scope(scopeStr),
 		Action:        action,
 		DefaultEffect: defaultEffect,
 		Info:          info.FullMethod,
@@ -277,7 +303,7 @@ func (ap *AuthzPlugin) Interceptor(ctx context.Context, req interface{}, info *g
 type AuthorizeParams struct {
 	ObjectKey     string
 	ObjectID      any
-	Domain        string
+	Scope         Scope
 	Action        Action
 	DefaultEffect Effect
 	Info          string
@@ -299,7 +325,7 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 	}
 
 	// Fetch the object that the action is being performed on.
-	object, err := fetcher(ctx, cfg.ObjectID)
+	object, err := fetcher.FetchObject(ctx, cfg.ObjectID)
 	if err != nil {
 		return err
 	}
@@ -310,6 +336,7 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 	identity, err := auth.IdentityFromContext(ctx)
 	if err != nil {
 		if !errors.Is(err, auth.ErrNotFound) {
+			logging.Track(ctx, "authz.reason", "authentication error")
 			return err
 		}
 		// If the request is unauthenticated, still try to run the policy, but change
@@ -318,24 +345,29 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 	}
 
 	// Get the user's roles relative to the object.
-	roles, err := describer(ctx, identity, object, Domain(cfg.Domain))
+	roles, err := describer.DescribeRoles(ctx, identity, object, cfg.Scope)
 	if err != nil {
+		logging.Track(ctx, "authz.reason", "failed to describe roles")
 		return err
 	}
 
 	logging.Track(ctx, "authz.action", cfg.Action)
 	logging.Track(ctx, "authz.objectID", cfg.ObjectID)
 	logging.Track(ctx, "authz.object", object)
-	logging.Track(ctx, "authz.domain", cfg.Domain)
+	logging.Track(ctx, "authz.scope", cfg.Scope)
 	logging.Track(ctx, "authz.roles", roles)
 
 	if len(roles) == 0 {
+		logging.Track(ctx, "authz.reason", "no roles")
 		return errors.Mark(defaultError, 0)
 	}
 
 	if ap.DetermineEffect(cfg.Action, roles, cfg.DefaultEffect) == Allow {
+		logging.Track(ctx, "authz.reason", "allowed by role")
 		return nil
 	}
+
+	logging.Track(ctx, "authz.reason", "denied by role")
 	return errors.Mark(defaultError, 0)
 }
 

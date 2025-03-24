@@ -22,14 +22,14 @@ func TestPostgresStore(t *testing.T) {
 		t.Skipf("Skipping PostgreSQL tests - could not open connection: %v", err)
 		return
 	}
-	
+
 	// Test the connection
 	if err := db.Ping(); err != nil {
 		db.Close()
 		t.Skipf("Skipping PostgreSQL tests - could not ping database: %v", err)
 		return
 	}
-	
+
 	// Set up test schema
 	_, err = db.Exec("CREATE SCHEMA IF NOT EXISTS test_schema;")
 	if err != nil {
@@ -37,7 +37,7 @@ func TestPostgresStore(t *testing.T) {
 		t.Skipf("Skipping PostgreSQL tests - could not create schema: %v", err)
 		return
 	}
-	
+
 	// Clean up any existing test tables and recreate the schema
 	// This ensures a completely clean slate for each test run
 	_, err = db.Exec(`
@@ -48,7 +48,7 @@ func TestPostgresStore(t *testing.T) {
 		db.Close()
 		t.Logf("Warning: could not drop test tables: %v", err)
 	}
-	
+
 	// Close the setup connection
 	db.Close()
 
@@ -60,7 +60,7 @@ func TestPostgresStore(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to connect to PostgreSQL: %v", err)
 		}
-		
+
 		// Clean up any existing test tables and recreate the schema
 		_, err = testDB.Exec(`
 			DROP SCHEMA IF EXISTS test_schema CASCADE;
@@ -71,18 +71,18 @@ func TestPostgresStore(t *testing.T) {
 			t.Fatalf("Failed to reset test schema: %v", err)
 		}
 		testDB.Close()
-		
+
 		// Now create a fresh store for this test
 		store, err := SafeNew(
-			dsn, 
+			dsn,
 			WithPrefix("test_"),
 			WithSchema("test_schema"),
 		)
-		
+
 		if err != nil {
 			t.Fatalf("Failed to connect to PostgreSQL: %v", err)
 		}
-		
+
 		return store
 	})
 }

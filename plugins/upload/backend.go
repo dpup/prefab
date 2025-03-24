@@ -63,7 +63,7 @@ func (b *FSBackend) Save(path string, data []byte) error {
 	}
 
 	// Write file.
-	err = os.WriteFile(p, data, 0644)
+	err = os.WriteFile(p, data, 0600)
 	if err != nil {
 		return errors.WrapPrefix(err, "upload: failed to write file", 0)
 	}

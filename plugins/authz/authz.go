@@ -2,21 +2,23 @@
 // It uses protocol buffer annotations to define authorization rules that are
 // enforced by a GRPC interceptor.
 //
-// # Getting Started
+// # Getting Started.
 //
 // The simplest way to get started with authorization is to use the builder pattern
 // and common configuration helpers:
 //
-//	// Create a basic CRUD authorization plugin with common roles and permissions
+//	// Create a basic CRUD authorization plugin with common roles and permissions,
 //	authzPlugin := authz.NewCRUDBuilder().
 //		WithObjectFetcher("document", fetchDocument).
 //		WithRoleDescriber("document", documentRoleDescriber).
 //		Build()
 //
-//	// Add to your Prefab server
+//
+//
+//	// Add to your Prefab server.
 //	server := prefab.New(
 //		prefab.WithPlugin(authzPlugin),
-//		// Other plugins and options
+//		// Other plugins and options.
 //	)
 //
 // # Core Concepts
@@ -58,19 +60,22 @@
 //	  option (prefab.authz.default_effect) = "deny"; // Optional, defaults to "deny"
 //	}
 //
+//
+//
 //	message GetDocumentRequest {
-//	  string org_id = 1 [(prefab.authz.domain) = true]; // Optional scope/domain
-//	  string document_id = 2 [(prefab.authz.id) = true]; // Required to identify resource
+//	  string org_id = 1 [(prefab.authz.domain) = true]; // Optional scope/domain.
+//	  string document_id = 2 [(prefab.authz.id) = true]; // Required to identify resource.
 //	}
 //
 // # Common Patterns
 //
 // This package provides several common patterns to simplify authorization setup:
 //
-// - Builder pattern: Use `NewBuilder()` for a fluent configuration interface
-// - Predefined roles: `RoleAdmin`, `RoleEditor`, `RoleViewer`, etc.
-// - Common CRUD actions: `ActionCreate`, `ActionRead`, etc.
-// - CRUD builder: `NewCRUDBuilder()` for standard roles and CRUD permissions
+// - Builder pattern: Use `NewBuilder()` for a fluent configuration interface.
+// - Predefined roles: `RoleAdmin`, `RoleEditor`, `RoleViewer`, etc..
+// - Common CRUD actions: `ActionCreate`, `ActionRead`, etc..
+// - CRUD builder: `NewCRUDBuilder()` for standard roles and CRUD permissions.
+// - Type-safe interfaces: Use the typed helpers for compile-time type safety.
 //
 // # Role Hierarchy
 //
@@ -104,8 +109,8 @@ type Role string
 
 type Action string
 
-// TODO: Remove typedef. Rename to Scope.
-type Domain string
+// Scope defines the context in which authorization occurs (e.g., organization, workspace).
+type Scope string
 
 type Effect int
 
@@ -148,14 +153,48 @@ func (e effectList) Combine(defaultEffect Effect) Effect {
 	return defaultEffect.Reverse()
 }
 
-// Fetches an object based on a request parameter.
-type ObjectFetcher func(ctx context.Context, key any) (any, error)
+// AuthzObject is the base interface for all objects used in authorization. While
+// not strictly necessary, it is recommended to implement this interface for
+// type safety.
+type AuthzObject interface {
+	// AuthzType returns a string identifier for the object type
+	AuthzType() string
+}
 
-// Describes a role relative to a type.
-type RoleDescriber func(ctx context.Context, subject auth.Identity, object any, domain Domain) ([]Role, error)
+// OwnedObject represents objects that have an owner.
+type OwnedObject interface {
+	AuthzObject
+	// OwnerID returns the ID of the object's owner
+	OwnerID() string
+}
 
-// MethodOptions returns Authz related method options from the method descriptor
-// associated with the given info.
+// ScopedObject represents objects that belong to a specific scope.
+type ScopedObject interface {
+	AuthzObject
+	// ScopeID returns the scope ID
+	ScopeID() string
+}
+
+// ObjectFetcher is an interface for fetching objects based on a request parameter.
+type ObjectFetcher interface {
+	// FetchObject retrieves an object based on the provided key
+	FetchObject(ctx context.Context, key any) (any, error)
+}
+
+// RoleDescriber is an interface for describing roles relative to a type.
+type RoleDescriber interface {
+	// DescribeRoles determines the roles a subject has relative to an object in a scope
+	DescribeRoles(ctx context.Context, subject auth.Identity, object any, scope Scope) ([]Role, error)
+}
+
+// TypedObjectFetcher is a function type for fetching objects with type safety.
+type TypedObjectFetcher[K comparable, T any] func(ctx context.Context, key K) (T, error)
+
+// TypedRoleDescriber is a function type for describing roles with type safety.
+type TypedRoleDescriber[T any] func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error)
+
+// MethodOptions returns Authz related method options from the method descriptor.
+// associated with the given info..
 func MethodOptions(info *grpc.UnaryServerInfo) (objectKey string, action Action, defaultEffect Effect) {
 	if v, ok := serverutil.MethodOption(info, E_Resource); ok {
 		objectKey = v.(string)
@@ -180,21 +219,31 @@ func MethodOptions(info *grpc.UnaryServerInfo) (objectKey string, action Action,
 }
 
 // FieldOptions returns proto fields that are tagged with Authz related options.
+// It returns the object ID and scope string.
 func FieldOptions(req proto.Message) (any, string, error) {
 	var id any
-	var domain string
+	var scope string
 	if v, ok := serverutil.FieldOption(req, E_Id); ok {
 		if len(v) != 1 {
 			return "", "", errors.Codef(codes.Internal, "authz error: require exactly one id on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
 		id = v[0].FieldValue
 	}
+
+	// Keep checking for deprecated domain tag.
 	if v, ok := serverutil.FieldOption(req, E_Domain); ok {
 		if len(v) != 1 {
 			return "", "", errors.Codef(codes.Internal, "authz error: expected exactly one domain on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
 		}
-		// TODO: Assert string.
-		domain = v[0].FieldValue.(string)
+		scope = v[0].FieldValue.(string)
 	}
-	return id, domain, nil
+	// End deprecation.
+
+	if v, ok := serverutil.FieldOption(req, E_Scope); ok {
+		if len(v) != 1 {
+			return "", "", errors.Codef(codes.Internal, "authz error: expected exactly one scope on request descriptor: %s", req.ProtoReflect().Descriptor().FullName())
+		}
+		scope = v[0].FieldValue.(string)
+	}
+	return id, scope, nil
 }

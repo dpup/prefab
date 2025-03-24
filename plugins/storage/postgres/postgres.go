@@ -504,7 +504,7 @@ func (s *store) buildListQuery(model storage.Model) (string, []interface{}) {
 		paramIdx++
 	}
 
-	for i := 0; i < modelType.NumField(); i++ {
+	for i := range modelType.NumField() {
 		field := modelValue.Field(i)
 		typeField := modelType.Field(i)
 
@@ -544,9 +544,9 @@ func translateError(err error) error {
 		return errors.Wrap(storage.ErrNotFound, 0)
 	}
 
-	if pqErr, ok := err.(*pq.Error); ok {
-		switch pqErr.Code {
-		case "23505": // unique_violation
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		if pqErr.Code == "23505" { // unique_violation
 			return errors.Wrap(storage.ErrAlreadyExists, 0)
 		}
 	}

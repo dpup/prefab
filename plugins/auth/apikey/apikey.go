@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// PluginName is the name of this plugin
+	// PluginName is the name of this plugin.
 	PluginName = "auth_apikey"
 
 	// Constant nae used as the auth provider in API requests.

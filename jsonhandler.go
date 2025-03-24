@@ -25,6 +25,8 @@ func wrapJSONHandler(fn JSONHandler) http.Handler {
 			logging.Errorw(r.Context(), "JSON handler error", "error", err,
 				"req.method", r.Method, "req.url", r.URL.String())
 
+			// Convert the error code to int32
+			//nolint:gosec // No overflow risk as errors.Code() returns codes.Code which is already int32
 			c := int32(errors.Code(err))
 			b, ferr := JSONMarshalOptions.Marshal(&CustomErrorResponse{
 				Code:     c,

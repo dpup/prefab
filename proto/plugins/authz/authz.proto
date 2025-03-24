@@ -13,6 +13,7 @@ extend google.protobuf.MethodOptions {
 
 extend google.protobuf.FieldOptions {
   bool id = 50021;
-  bool domain = 50022;
+  bool domain = 50022; // Deprecated: use scope instead
+  bool scope = 50023;
 }
 
