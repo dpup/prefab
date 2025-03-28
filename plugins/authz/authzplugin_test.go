@@ -153,10 +153,10 @@ func TestInterceptor(t *testing.T) {
 		authz.WithPolicy(authz.Allow, authz.Role("authenticated"), authz.Action("self.inspect")),
 
 		// Register function-based objects via the helpers
-		authz.WithFunctionObjectFetcher("document", documentFetcher),
-		authz.WithFunctionRoleDescriber("document", documentRoleDescriber),
-		authz.WithFunctionObjectFetcher("*", wildFetcher),
-		authz.WithFunctionRoleDescriber("*", wildRoleDescriber),
+		authz.WithObjectFetcherFn("document", documentFetcher),
+		authz.WithRoleDescriberFn("document", documentRoleDescriber),
+		authz.WithObjectFetcherFn("*", wildFetcher),
+		authz.WithRoleDescriberFn("*", wildRoleDescriber),
 	)
 
 	type args struct {

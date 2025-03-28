@@ -132,15 +132,15 @@ func WithRoleDescriber(objectKey string, describer RoleDescriber) AuthzOption {
 	}
 }
 
-// WithFunctionObjectFetcher adds a function-based object fetcher to the plugin.
-func WithFunctionObjectFetcher(objectKey string, fetcher func(ctx context.Context, key any) (any, error)) AuthzOption {
+// WithObjectFetcherFn adds a function-based object fetcher to the plugin.
+func WithObjectFetcherFn(objectKey string, fetcher func(ctx context.Context, key any) (any, error)) AuthzOption {
 	return func(ap *AuthzPlugin) {
 		ap.RegisterObjectFetcher(objectKey, ObjectFetcherFn(fetcher))
 	}
 }
 
-// WithFunctionRoleDescriber adds a function-based role describer to the plugin.
-func WithFunctionRoleDescriber(objectKey string, describer func(ctx context.Context, subject auth.Identity, object any, scope Scope) ([]Role, error)) AuthzOption {
+// WithRoleDescriberFn adds a function-based role describer to the plugin.
+func WithRoleDescriberFn(objectKey string, describer func(ctx context.Context, subject auth.Identity, object any, scope Scope) ([]Role, error)) AuthzOption {
 	return func(ap *AuthzPlugin) {
 		ap.RegisterRoleDescriber(objectKey, RoleDescriberFn(describer))
 	}

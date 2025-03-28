@@ -111,8 +111,8 @@ func Run() {
 			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.view")),
 			authz.WithPolicy(authz.Allow, roleDocOwner, authz.Action("documents.write")),
 			authz.WithPolicy(authz.Allow, roleAdmin, authz.Action("documents.view")),
-			authz.WithFunctionObjectFetcher("org", fetchOrg),
-			authz.WithFunctionObjectFetcher("document", fetchDocument),
+			authz.WithObjectFetcherFn("org", fetchOrg),
+			authz.WithObjectFetcherFn("document", fetchDocument),
 			authz.WithRoleDescriber("*", customRoleDescriber),
 		)),
 
