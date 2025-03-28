@@ -49,6 +49,7 @@ func errorInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, 
 func trackError(ctx context.Context, err error) {
 	Track(ctx, "error.type", reflect.TypeOf(err))
 	Track(ctx, "error.http_status", errors.HTTPStatusCode(err))
+	Track(ctx, "error.message", err.Error())
 
 	// Add a minimalist stack trace to the log.
 	var prefabErr *errors.Error
