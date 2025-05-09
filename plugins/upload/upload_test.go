@@ -142,7 +142,7 @@ func TestUploadACL_Failure(t *testing.T) {
 	r.Register(az)
 	r.Register(plugin)
 
-	require.NoError(t, r.Init(context.Background()))
+	require.NoError(t, r.Init(t.Context()))
 
 	req := newSaveRequest(map[string][]byte{
 		"test.png": pngData(),
@@ -188,7 +188,7 @@ func TestDownloadACL_Success(t *testing.T) {
 	r.Register(az)
 	r.Register(plugin)
 
-	require.NoError(t, r.Init(context.Background()))
+	require.NoError(t, r.Init(t.Context()))
 
 	uploadReq := newSaveRequest(map[string][]byte{"test.png": pngData()})
 	uploadReq.URL.RawQuery = "domain=github.com&folder=dpup"
@@ -236,7 +236,7 @@ func TestDownloadACL_Failure(t *testing.T) {
 	r.Register(az)
 	r.Register(plugin)
 
-	require.NoError(t, r.Init(context.Background()))
+	require.NoError(t, r.Init(t.Context()))
 
 	uploadReq := newSaveRequest(map[string][]byte{"test.png": pngData()})
 	uploadReq.URL.RawQuery = "domain=github.com&folder=dpup"

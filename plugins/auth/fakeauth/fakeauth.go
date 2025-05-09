@@ -103,48 +103,14 @@ func (p *FakeAuthPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest
 		return nil, errors.NewC("fake login handler called for wrong provider", codes.InvalidArgument)
 	}
 
-	// Use default identity as the base
-	id := p.defaultIdentity
-
-	// Generate a unique session ID
-	id.SessionID = uuid.New().String()
-	id.AuthTime = time.Now()
-
-	// Check if we should simulate an error
-	if errorCode, ok := req.Creds["error_code"]; ok {
-		code := codes.Unknown
-		if c, err := strconv.Atoi(errorCode); err == nil {
-			code = codes.Code(c)
-		}
-
-		errorMsg := "simulated error"
-		if msg, ok := req.Creds["error_message"]; ok && msg != "" {
-			errorMsg = msg
-		}
-
-		return nil, errors.NewC(errorMsg, code)
-	}
-
-	// Override identity with any provided credentials
-	if userID, ok := req.Creds["id"]; ok && userID != "" {
-		id.Subject = userID
-	} else if subject, ok := req.Creds["subject"]; ok && subject != "" {
-		// For backward compatibility
-		id.Subject = subject
-	}
-
-	if email, ok := req.Creds["email"]; ok && email != "" {
-		id.Email = email
-	}
-	if name, ok := req.Creds["name"]; ok && name != "" {
-		id.Name = name
-	}
-	if emailVerified, ok := req.Creds["email_verified"]; ok {
-		id.EmailVerified = emailVerified == "true"
-	}
-
-	// Validate the identity (could be used to enforce test restrictions)
+	// Validate the incoming credentials (could be used to enforce test restrictions)
 	if err := p.validator(ctx, req.Creds); err != nil {
+		return nil, err
+	}
+
+	// Fakers just tell us who they are.
+	id, err := extractFakeIdentity(p, req)
+	if err != nil {
 		return nil, err
 	}
 
@@ -175,6 +141,46 @@ func (p *FakeAuthPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest
 		Issued:      true,
 		RedirectUri: req.RedirectUri,
 	}, nil
+}
+
+func extractFakeIdentity(p *FakeAuthPlugin, req *auth.LoginRequest) (auth.Identity, error) {
+	id := p.defaultIdentity
+
+	// Generate a unique session ID
+	id.SessionID = uuid.New().String()
+	id.AuthTime = time.Now()
+
+	// Check if we should simulate an error
+	if errorCode, ok := req.Creds["error_code"]; ok {
+		code := codes.Unknown
+		if c, err := strconv.Atoi(errorCode); err == nil {
+			if c >= 0 && c <= 16 {
+				code = codes.Code(c)
+			}
+		}
+
+		errorMsg := "simulated error"
+		if msg, ok := req.Creds["error_message"]; ok && msg != "" {
+			errorMsg = msg
+		}
+
+		return auth.Identity{}, errors.NewC(errorMsg, code)
+	}
+
+	// Override identity with any provided credentials
+	if userID, ok := req.Creds["id"]; ok && userID != "" {
+		id.Subject = userID
+	}
+	if email, ok := req.Creds["email"]; ok && email != "" {
+		id.Email = email
+	}
+	if name, ok := req.Creds["name"]; ok && name != "" {
+		id.Name = name
+	}
+	if emailVerified, ok := req.Creds["email_verified"]; ok {
+		id.EmailVerified = emailVerified == "true"
+	}
+	return id, nil
 }
 
 // FakeOptions provides a strongly-typed structure for configuring fake auth login.

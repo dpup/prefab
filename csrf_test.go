@@ -116,7 +116,7 @@ func TestCsrfMetadataAnnotator(t *testing.T) {
 
 	// Simulate handling the request, though we're not serving anything real.
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		md := csrfMetadataAnnotator(context.Background(), r)
+		md := csrfMetadataAnnotator(t.Context(), r)
 
 		// Extract the csrf_token value from the metadata
 		values := md.Get(csrfParam)
@@ -140,7 +140,7 @@ func TestCsrfTokenFromCookie(t *testing.T) {
 	// Mock cookies in the same way that GRPC maps HTTP headers to metadata.
 	cookie := &http.Cookie{Name: csrfCookie, Value: testToken}
 	md := metadata.New(map[string]string{"grpcgateway-cookie": cookie.String()})
-	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx := metadata.NewIncomingContext(t.Context(), md)
 
 	retrievedToken := csrfTokenFromCookie(ctx)
 
@@ -150,7 +150,7 @@ func TestCsrfTokenFromCookie(t *testing.T) {
 }
 
 func TestCsrfTokenFromCookie_NoCookie(t *testing.T) {
-	ctx := context.Background() // No cookies embedded
+	ctx := t.Context() // No cookies embedded
 	retrievedToken := csrfTokenFromCookie(ctx)
 	if retrievedToken != "" {
 		t.Errorf("Expected CSRF token to be empty, got %s", retrievedToken)
@@ -160,7 +160,7 @@ func TestCsrfTokenFromCookie_NoCookie(t *testing.T) {
 func TestSendCSRFToken(t *testing.T) {
 	signingKey := []byte("test_signing_key")
 	mockTransport := &mockServerTransportStream{}
-	ctx := grpc.NewContextWithServerTransportStream(context.Background(), mockTransport)
+	ctx := grpc.NewContextWithServerTransportStream(t.Context(), mockTransport)
 	generatedToken := SendCSRFToken(ctx, signingKey)
 	if generatedToken == "" {
 		t.Errorf("Expected a generated CSRF token, got an empty string")
@@ -178,7 +178,7 @@ func TestSendCSRFToken(t *testing.T) {
 
 func TestVerifyCSRF_EverythingMissing(t *testing.T) {
 	signingKey := []byte("test_signing_key")
-	ctx := createContextWithCSRF("", "", "")
+	ctx := createContextWithCSRF(t, "", "", "")
 	if err := VerifyCSRF(ctx, signingKey); err == nil {
 		t.Error("VerifyCSRF passed when it should have failed")
 	}
@@ -187,7 +187,7 @@ func TestVerifyCSRF_EverythingMissing(t *testing.T) {
 func TestVerifyCSRF_MissingCookie(t *testing.T) {
 	signingKey := []byte("test_signing_key")
 	ct := generateCSRFToken(signingKey)
-	ctx := createContextWithCSRF("", ct, "")
+	ctx := createContextWithCSRF(t, "", ct, "")
 	if err := VerifyCSRF(ctx, signingKey); err == nil {
 		t.Error("VerifyCSRF passed when it should have failed")
 	}
@@ -197,7 +197,7 @@ func TestVerifyCSRF_CookieParamMismatch(t *testing.T) {
 	signingKey := []byte("test_signing_key")
 	ct1 := generateCSRFToken(signingKey)
 	ct2 := generateCSRFToken([]byte("attacker_key"))
-	ctx := createContextWithCSRF("", ct1, ct2)
+	ctx := createContextWithCSRF(t, "", ct1, ct2)
 	if err := VerifyCSRF(ctx, signingKey); err == nil {
 		t.Error("VerifyCSRF passed when it should have failed")
 	}
@@ -205,7 +205,7 @@ func TestVerifyCSRF_CookieParamMismatch(t *testing.T) {
 
 func TestVerifyCSRF_BadKey(t *testing.T) {
 	ct := generateCSRFToken([]byte("attacker_key"))
-	ctx := createContextWithCSRF("", ct, ct)
+	ctx := createContextWithCSRF(t, "", ct, ct)
 	if err := VerifyCSRF(ctx, []byte("real_key")); err == nil {
 		t.Error("VerifyCSRF passed when it should have failed")
 	}
@@ -213,7 +213,7 @@ func TestVerifyCSRF_BadKey(t *testing.T) {
 
 func TestVerifyCSRF_Success_XHRHeader(t *testing.T) {
 	signingKey := []byte("test_signing_key")
-	ctx := createContextWithCSRF("1", "", "")
+	ctx := createContextWithCSRF(t, "1", "", "")
 	if err := VerifyCSRF(ctx, signingKey); err != nil {
 		t.Errorf("VerifyCSRF failed when it should have succeeded: %v", err)
 	}
@@ -222,13 +222,13 @@ func TestVerifyCSRF_Success_XHRHeader(t *testing.T) {
 func TestVerifyCSRF_Success_MatchingParamAndCookie(t *testing.T) {
 	signingKey := []byte("test_signing_key")
 	ct := generateCSRFToken(signingKey)
-	ctx := createContextWithCSRF("", ct, ct)
+	ctx := createContextWithCSRF(t, "", ct, ct)
 	if err := VerifyCSRF(ctx, signingKey); err != nil {
 		t.Errorf("VerifyCSRF failed when it should have succeeded: %v", err)
 	}
 }
 
-func createContextWithCSRF(headerValue, paramValue, cookieValue string) context.Context {
+func createContextWithCSRF(t *testing.T, headerValue, paramValue, cookieValue string) context.Context {
 	md := metadata.New(map[string]string{})
 	if headerValue != "" {
 		md.Set("pf-header-x-csrf-protection", headerValue)
@@ -240,7 +240,7 @@ func createContextWithCSRF(headerValue, paramValue, cookieValue string) context.
 		cookie := &http.Cookie{Name: csrfCookie, Value: cookieValue}
 		md.Set("grpcgateway-cookie", cookie.String())
 	}
-	return metadata.NewIncomingContext(context.Background(), md)
+	return metadata.NewIncomingContext(t.Context(), md)
 }
 
 type mockServerTransportStream struct {

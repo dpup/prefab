@@ -1,7 +1,6 @@
 package serverutil
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -78,14 +77,14 @@ func TestHttpMethodAndMetadataAnnotator(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	md := HttpMetadataAnnotator(context.Background(), req)
-	ctx := metadata.NewIncomingContext(context.Background(), md)
+	md := HttpMetadataAnnotator(t.Context(), req)
+	ctx := metadata.NewIncomingContext(t.Context(), md)
 
 	if method := HTTPMethod(ctx); method != "POST" {
 		t.Errorf("Expected HTTP method 'POST', got '%s'", method)
 	}
 
-	if method := HTTPMethod(context.Background()); method != "" {
+	if method := HTTPMethod(t.Context()); method != "" {
 		t.Errorf("Expected no HTTP method, got '%s'", method)
 	}
 }
@@ -137,7 +136,7 @@ func TestHttpHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := metadata.NewIncomingContext(context.Background(), tt.contextMetadata)
+			ctx := metadata.NewIncomingContext(t.Context(), tt.contextMetadata)
 			if got := HTTPHeader(ctx, tt.header); got != tt.want {
 				t.Errorf("HttpHeader() = %v, want %v", got, tt.want)
 			}

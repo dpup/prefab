@@ -1,7 +1,6 @@
 package prefab
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,7 +38,7 @@ func TestJSONHandlerError(t *testing.T) {
 	httpHandler := wrapJSONHandler(customHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req = req.WithContext(logging.EnsureLogger(context.Background()))
+	req = req.WithContext(logging.EnsureLogger(t.Context()))
 	rr := httptest.NewRecorder()
 	httpHandler.ServeHTTP(rr, req)
 

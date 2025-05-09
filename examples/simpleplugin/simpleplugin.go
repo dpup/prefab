@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/dpup/prefab"
+	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/examples/simpleserver/simpleservice"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugins/storage"
@@ -62,6 +63,8 @@ func (s *samplePlugin) ServerOptions() []prefab.ServerOption {
 
 // From prefab.InitializablePlugin, stores a reference to the storage plugin for
 // use by the interceptor.
+//
+//nolint:unparam // return value is always nil, but we need it to satisfy the interface.
 func (s *samplePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	s.store = r.Get(storage.PluginName).(storage.Store)
 	logging.Info(ctx, "Sample Plugin initialized!")
@@ -74,13 +77,11 @@ func (s *samplePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 //
 // FWIW Neither implementation is safe for prod.
 func (s *samplePlugin) interceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-
 	// Add request fields in the form `req.field`
 	if msg, ok := req.(proto.Message); ok {
 		m := msg.ProtoReflect()
 		fields := m.Descriptor().Fields()
-		fieldsLen := fields.Len()
-		for i := 0; i < fieldsLen; i++ {
+		for i := range fields.Len() {
 			fd := fields.Get(i)
 			v := m.Get(fd)
 			fieldName := fmt.Sprintf("req.%s", fd.Name())
@@ -91,7 +92,7 @@ func (s *samplePlugin) interceptor(ctx context.Context, req any, info *grpc.Unar
 
 	// Get the current request count for this method.
 	var stats Stats
-	if err := s.store.Read(info.FullMethod, &stats); err == storage.ErrNotFound {
+	if err := s.store.Read(info.FullMethod, &stats); errors.Is(err, storage.ErrNotFound) {
 		stats = Stats{Method: info.FullMethod, Count: 0}
 	} else if err != nil {
 		logging.Errorw(ctx, "error getting stats", "err", err)

@@ -18,7 +18,7 @@ func TestFakeAuthPlugin_handleLogin(t *testing.T) {
 
 	// We'll test just the handleLogin function directly
 	t.Run("login with default identity", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Call handleLogin directly
 		resp, err := plugin.handleLogin(ctx, &auth.LoginRequest{
@@ -40,7 +40,7 @@ func TestFakeAuthPlugin_handleLogin(t *testing.T) {
 	})
 
 	t.Run("login with custom identity using id", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		customSubject := "custom-123"
 		customEmail := "custom@example.com"
 		customName := "Custom User"
@@ -71,7 +71,7 @@ func TestFakeAuthPlugin_handleLogin(t *testing.T) {
 	})
 
 	t.Run("login with simulated error", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Call handleLogin with error simulation
 		_, err := plugin.handleLogin(ctx, &auth.LoginRequest{
@@ -99,7 +99,7 @@ func TestFakeAuthPlugin_handleLogin(t *testing.T) {
 	})
 
 	t.Run("validation rejects login", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Create plugin with rejecting validator
 		rejectingPlugin := Plugin(WithIdentityValidator(func(ctx context.Context, creds map[string]string) error {
@@ -124,7 +124,7 @@ func TestFakeAuthPlugin_handleLogin(t *testing.T) {
 	})
 
 	t.Run("wrong provider", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Call handleLogin with wrong provider
 		_, err := plugin.handleLogin(ctx, &auth.LoginRequest{
@@ -159,7 +159,7 @@ func TestMustLogin(t *testing.T) {
 
 	// Test with new FakeOptions struct
 	emailVerified := true
-	token := MustLogin(context.Background(), mockClient, FakeOptions{
+	token := MustLogin(t.Context(), mockClient, FakeOptions{
 		ID:            "test-id-123",
 		Email:         "test@example.com",
 		Name:          "Test User",
@@ -169,7 +169,6 @@ func TestMustLogin(t *testing.T) {
 	if token != "test-token" {
 		t.Errorf("Expected 'test-token', got '%s'", token)
 	}
-
 }
 
 // Test error handling with FakeOptions
@@ -210,7 +209,7 @@ func TestMustLogin_Error(t *testing.T) {
 	}()
 
 	// This should cause a panic that will be caught by the deferred recovery
-	MustLogin(context.Background(), mockClient, FakeOptions{
+	MustLogin(t.Context(), mockClient, FakeOptions{
 		ID:           "test-error",
 		ErrorCode:    codes.PermissionDenied,
 		ErrorMessage: "custom error",

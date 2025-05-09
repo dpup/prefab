@@ -258,7 +258,7 @@ func TestInterceptor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := auth.WithIdentityForTest(context.Background(), tt.args.identity)
+			ctx := auth.WithIdentityForTest(t.Context(), tt.args.identity)
 			handlerCalled := false
 			handlerResponse := &authztest.Response{Success: true}
 			handler := func(ctx context.Context, req interface{}) (interface{}, error) {

@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var ctx = context.Background()
-
 type TestPlugin struct {
 	name string
 	deps []string
@@ -31,9 +29,10 @@ func (tp *TestPlugin) Init(ctx context.Context, r *Registry) error {
 var initOrder []string
 
 func TestInit(t *testing.T) {
+	ctx := t.Context()
+
 	// Resetting initOrder for the test
 	initOrder = []string{}
-
 	r := &Registry{}
 
 	// Register plugins with dependencies
@@ -54,6 +53,8 @@ func TestInit(t *testing.T) {
 }
 
 func TestCycleDetection(t *testing.T) {
+	ctx := t.Context()
+
 	// Resetting initOrder for the test
 	initOrder = []string{}
 
@@ -69,6 +70,8 @@ func TestCycleDetection(t *testing.T) {
 }
 
 func TestMissingDependency(t *testing.T) {
+	ctx := t.Context()
+
 	// Resetting initOrder for the test
 	initOrder = []string{}
 

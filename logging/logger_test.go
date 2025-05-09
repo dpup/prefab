@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +13,7 @@ func TestTrack(t *testing.T) {
 	observedZapCore, observedLogs := observer.New(zap.InfoLevel)
 	observedLogger := zap.New(observedZapCore)
 
-	ctx := With(context.Background(), &ZapLogger{z: observedLogger.Sugar()})
+	ctx := With(t.Context(), &ZapLogger{z: observedLogger.Sugar()})
 	Track(ctx, "foo", "bar") // Should be passed on to child logger.
 
 	ctx2 := With(ctx, FromContext(ctx).Named("nested"))
