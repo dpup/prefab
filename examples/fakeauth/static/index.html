@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fake Auth Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .json-display {
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .checkbox-container input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+        }
+        .checkbox-container label {
+            display: inline;
+            font-weight: normal;
+        }
+        .status {
+            margin-left: 10px;
+            font-size: 14px;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .error {
+            color: #f44336;
+        }
+        .info {
+            color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fake Auth Example</h1>
+    <p>This example demonstrates how to use the fake auth plugin for testing authentication flows.</p>
+
+    <!-- Login Section -->
+    <div class="card">
+        <h2>Login with Fake Auth</h2>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="id">User ID:</label>
+                <input type="text" id="id" name="id" placeholder="test-user-123">
+            </div>
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" placeholder="test@example.com">
+            </div>
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" placeholder="Test User">
+            </div>
+            <div class="form-group">
+                <label for="email-verified">Email Verified:</label>
+                <select id="email-verified" name="email_verified">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+            <div class="checkbox-container">
+                <input type="checkbox" id="simulate-error" name="simulate-error">
+                <label for="simulate-error">Simulate Error</label>
+            </div>
+            <div id="error-options" style="display: none; border-left: 4px solid #f44336; padding-left: 10px; margin-bottom: 15px;">
+                <div class="form-group">
+                    <label for="error-code">Error Code:</label>
+                    <select id="error-code" name="error_code">
+                        <option value="3">Invalid Argument (3)</option>
+                        <option value="7">Permission Denied (7)</option>
+                        <option value="16">Unauthenticated (16)</option>
+                        <option value="2">Unknown (2)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="error-message">Error Message:</label>
+                    <input type="text" id="error-message" name="error_message" placeholder="Custom error message">
+                </div>
+            </div>
+            <button type="submit" id="login-button">Login</button>
+        </form>
+    </div>
+
+    <!-- Login Response Section -->
+    <div class="card">
+        <div class="header">
+            <h2>Login Response</h2>
+        </div>
+        <div id="login-response" class="json-display">No login attempt yet</div>
+    </div>
+
+    <!-- Current Identity Section -->
+    <div class="card">
+        <div class="header">
+            <h2>Current Identity</h2>
+            <button id="refresh-identity">Refresh</button>
+        </div>
+        <div id="identity-display" class="json-display">Not authenticated</div>
+    </div>
+    
+    <!-- Session Token Section -->
+    <div class="card">
+        <div class="header">
+            <h2>Session Token</h2>
+            <button id="copy-token" disabled>Copy Token</button>
+        </div>
+        <div>
+            <textarea id="token-display" 
+                      style="width: 100%; height: 80px; font-family: monospace; font-size: 12px;" 
+                      readonly 
+                      placeholder="No session token available. Login with issue_token: true to get a token."></textarea>
+            <div style="margin-top: 10px; font-size: 13px; color: #666;">
+                This JWT token can be used in the Authorization header for API requests:<br>
+                <code style="background: #eee; padding: 3px; border-radius: 3px;">Authorization: Bearer &lt;token&gt;</code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variable to store the current session token
+        let sessionToken = null;
+        
+        // Elements
+        const loginForm = document.getElementById('login-form');
+        const loginButton = document.getElementById('login-button');
+        const refreshIdentityButton = document.getElementById('refresh-identity');
+        const copyTokenButton = document.getElementById('copy-token');
+        const simulateErrorCheckbox = document.getElementById('simulate-error');
+        const errorOptions = document.getElementById('error-options');
+        const loginResponseDisplay = document.getElementById('login-response');
+        const identityDisplay = document.getElementById('identity-display');
+        const tokenDisplay = document.getElementById('token-display');
+        
+        // Toggle error options when checkbox is clicked
+        simulateErrorCheckbox.addEventListener('change', function() {
+            errorOptions.style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Login form submission
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Disable buttons during request
+            loginButton.disabled = true;
+            loginButton.textContent = 'Logging in...';
+            
+            // Collect form data
+            const creds = {
+                id: document.getElementById('id').value,
+                email: document.getElementById('email').value,
+                name: document.getElementById('name').value,
+                email_verified: document.getElementById('email-verified').value
+            };
+
+            // Add error simulation if enabled
+            if (simulateErrorCheckbox.checked) {
+                creds.error_code = document.getElementById('error-code').value;
+                creds.error_message = document.getElementById('error-message').value;
+            }
+
+            // Filter out empty values
+            Object.keys(creds).forEach(key => {
+                if (!creds[key]) delete creds[key];
+            });
+
+            // Make login request with issue_token: true
+            fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Protection': '1'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    provider: 'fakeauth',
+                    creds: creds,
+                    issue_token: true
+                })
+            })
+            .then(response => {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        return {
+                            ok: response.ok,
+                            status: response.status,
+                            data: data
+                        };
+                    });
+                } else {
+                    return response.text().then(text => {
+                        return {
+                            ok: response.ok,
+                            status: response.status,
+                            data: text
+                        };
+                    });
+                }
+            })
+            .then(result => {
+                // Update login response display
+                if (typeof result.data === 'object') {
+                    loginResponseDisplay.textContent = JSON.stringify(result.data, null, 2);
+                } else {
+                    loginResponseDisplay.textContent = result.data;
+                }
+                
+                // If success, store the token and update the token display
+                if (result.ok && result.data && result.data.token) {
+                    sessionToken = result.data.token;
+                    tokenDisplay.value = sessionToken;
+                    copyTokenButton.disabled = false;
+                } else {
+                    // Clear token display on error
+                    sessionToken = null;
+                    tokenDisplay.value = '';
+                    copyTokenButton.disabled = true;
+                }
+                
+                // Refresh identity display regardless of login success/failure
+                refreshIdentity();
+            })
+            .catch(error => {
+                loginResponseDisplay.textContent = `Error: ${error.message}`;
+                console.error('Login error:', error);
+            })
+            .finally(() => {
+                // Re-enable button
+                loginButton.disabled = false;
+                loginButton.textContent = 'Login';
+            });
+        });
+
+        // Refresh identity button
+        refreshIdentityButton.addEventListener('click', function() {
+            refreshIdentity();
+        });
+
+        // Function to refresh identity display
+        function refreshIdentity() {
+            refreshIdentityButton.disabled = true;
+            refreshIdentityButton.textContent = 'Refreshing...';
+
+            // Prepare headers with CSRF protection
+            const headers = {
+                'X-CSRF-Protection': '1'
+            };
+
+            // Add Authorization header only if we have a token
+            if (sessionToken) {
+                headers['Authorization'] = `Bearer ${sessionToken}`;
+            }
+
+            fetch('/api/auth/me', {
+                credentials: 'include',
+                headers: headers
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                identityDisplay.textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                identityDisplay.textContent = 'Not authenticated';
+                console.error('Identity check failed:', error);
+            })
+            .finally(() => {
+                refreshIdentityButton.disabled = false;
+                refreshIdentityButton.textContent = 'Refresh';
+            });
+        }
+
+        // Copy token button
+        copyTokenButton.addEventListener('click', function() {
+            if (sessionToken) {
+                tokenDisplay.select();
+                document.execCommand('copy');
+                
+                const originalText = this.textContent;
+                this.textContent = 'Copied!';
+                
+                setTimeout(() => {
+                    this.textContent = originalText;
+                }, 1500);
+            }
+        });
+
+        // Initialize by checking identity on page load
+        refreshIdentity();
+    </script>
+</body>
+</html>

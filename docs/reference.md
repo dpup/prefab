@@ -41,6 +41,7 @@ import (
     "github.com/dpup/prefab/plugins/auth/google"    // OAuth
     "github.com/dpup/prefab/plugins/auth/magiclink" // Email magic links
     "github.com/dpup/prefab/plugins/auth/pwdauth"   // Password auth
+    "github.com/dpup/prefab/plugins/auth/fakeauth"  // Fake auth for testing
 )
 
 // Google OAuth authentication
@@ -64,6 +65,21 @@ s := prefab.New(
     prefab.WithPlugin(email.Plugin()),
     prefab.WithPlugin(templates.Plugin()),
     prefab.WithPlugin(magiclink.Plugin()),
+)
+
+// Fake authentication for testing
+s := prefab.New(
+    prefab.WithPlugin(auth.Plugin()),
+    prefab.WithPlugin(fake.Plugin(
+        // Optionally customize default identity
+        fake.WithDefaultIdentity(auth.Identity{
+            Subject: "test-user-123",
+            Email:   "test@example.com",
+            Name:    "Test User",
+        }),
+        // Optionally add validation
+        fake.WithIdentityValidator(validateTestIdentity),
+    )),
 )
 ```
 

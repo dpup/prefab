@@ -36,6 +36,7 @@ Authentication providers include:
 - Magic Link email-based auth (`magiclink.Plugin()`)
 - Password authentication (`pwdauth.Plugin()`)
 - API Key authentication (`apikey.Plugin()`)
+- Fake authentication for testing (`fakeauth.Plugin()`) - not for production use
 
 ### Authorization (authz)
 

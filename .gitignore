@@ -9,3 +9,4 @@ tools/bin
 *.s3db
 
 .DS_Store
+**/.claude/settings.local.json

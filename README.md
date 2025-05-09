@@ -123,7 +123,8 @@ provider should be registered. The following providers are currently included.
 
 - [Google SSO](./examples/googleauth/googleauth.go)
 - [Magiclink passwordless login](./examples/magiclinkauth/magiclinkauth.go)
-- [Pasword auth](./examples//pwdauth/pwdauth.go)
+- [Pasword auth](./examples/pwdauth/pwdauth.go)
+- [Fake auth](./examples/fakeauth/fakeauth.go)
 - API Key
 
 Login is initiated through the `auth.Login()` RPC or the `/api/auth/login`
