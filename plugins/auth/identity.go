@@ -45,7 +45,9 @@ type Identity struct {
 }
 
 // IdentityExtractor is a function which returns a user identity from a given
-// context. Providers should return ErrNotFound if no identity is found.
+// context. Providers should return ErrNotFound if no identity is found. By default,
+// JWT identities are extracted from the `Authorization` header, and then from
+// cookies. If no identity is found, the next registered extractor is called.
 type IdentityExtractor func(ctx context.Context) (Identity, error)
 
 type identityExtractorsKey struct{}
