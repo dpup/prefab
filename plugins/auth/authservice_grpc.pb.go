@@ -21,7 +21,6 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AuthService_Login_FullMethodName    = "/prefab.auth.AuthService/Login"
 	AuthService_Logout_FullMethodName   = "/prefab.auth.AuthService/Logout"
-	AuthService_Config_FullMethodName   = "/prefab.auth.AuthService/Config"
 	AuthService_Identity_FullMethodName = "/prefab.auth.AuthService/Identity"
 )
 
@@ -37,9 +36,6 @@ type AuthServiceClient interface {
 	// identity token will remain valid until its expiry. Token invalidatation is
 	// supported via the addition of a blocklist.
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
-	// Config returns auth related configuration information that is safe for
-	// unauthenticated users to access.
-	Config(ctx context.Context, in *ConfigRequest, opts ...grpc.CallOption) (*ConfigResponse, error)
 	// Identity returns information about the authenticated user.
 	Identity(ctx context.Context, in *IdentityRequest, opts ...grpc.CallOption) (*IdentityResponse, error)
 }
@@ -72,16 +68,6 @@ func (c *authServiceClient) Logout(ctx context.Context, in *LogoutRequest, opts 
 	return out, nil
 }
 
-func (c *authServiceClient) Config(ctx context.Context, in *ConfigRequest, opts ...grpc.CallOption) (*ConfigResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ConfigResponse)
-	err := c.cc.Invoke(ctx, AuthService_Config_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *authServiceClient) Identity(ctx context.Context, in *IdentityRequest, opts ...grpc.CallOption) (*IdentityResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IdentityResponse)
@@ -104,9 +90,6 @@ type AuthServiceServer interface {
 	// identity token will remain valid until its expiry. Token invalidatation is
 	// supported via the addition of a blocklist.
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
-	// Config returns auth related configuration information that is safe for
-	// unauthenticated users to access.
-	Config(context.Context, *ConfigRequest) (*ConfigResponse, error)
 	// Identity returns information about the authenticated user.
 	Identity(context.Context, *IdentityRequest) (*IdentityResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
@@ -124,9 +107,6 @@ func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*Lo
 }
 func (UnimplementedAuthServiceServer) Logout(context.Context, *LogoutRequest) (*LogoutResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Logout not implemented")
-}
-func (UnimplementedAuthServiceServer) Config(context.Context, *ConfigRequest) (*ConfigResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Config not implemented")
 }
 func (UnimplementedAuthServiceServer) Identity(context.Context, *IdentityRequest) (*IdentityResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Identity not implemented")
@@ -188,24 +168,6 @@ func _AuthService_Logout_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AuthService_Config_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConfigRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).Config(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_Config_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).Config(ctx, req.(*ConfigRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _AuthService_Identity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IdentityRequest)
 	if err := dec(in); err != nil {
@@ -238,10 +200,6 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Logout",
 			Handler:    _AuthService_Logout_Handler,
-		},
-		{
-			MethodName: "Config",
-			Handler:    _AuthService_Config_Handler,
 		},
 		{
 			MethodName: "Identity",

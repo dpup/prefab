@@ -32,20 +32,13 @@ service AuthService {
     };
   }
 
-  // Config returns auth related configuration information that is safe for
-  // unauthenticated users to access.
-  rpc Config(ConfigRequest) returns (ConfigResponse) {
-    option (google.api.http) = {
-      get: "/api/auth/config"
-    };
-  }
-
   // Identity returns information about the authenticated user.
   rpc Identity(IdentityRequest) returns (IdentityResponse) {
     option (google.api.http) = {
       get: "/api/auth/me"
     };
   }
+
 }
 
 // A client request to authenticate the user. For instance:
