@@ -78,6 +78,7 @@ func New(opts ...ServerOption) *Server {
 
 type builder struct {
 	baseContext     context.Context
+	logger          logging.Logger
 	host            string
 	port            int
 	incomingHeaders []string
@@ -134,7 +135,12 @@ func (b *builder) build() *Server {
 	)
 
 	// Ensure that a logger is available.
-	ctx := logging.EnsureLogger(b.baseContext)
+	ctx := b.baseContext
+	if b.logger != nil {
+		ctx = logging.With(ctx, b.logger)
+	} else {
+		ctx = logging.EnsureLogger(ctx)
+	}
 
 	s := &Server{
 		baseContext: ctx,
@@ -211,6 +217,21 @@ func (b *builder) isSecure() bool {
 func WithContext(ctx context.Context) ServerOption {
 	return func(b *builder) {
 		b.baseContext = ctx
+	}
+}
+
+// WithLogger sets the logger for the server. This logger will be attached to
+// the base context and used for all server operations and request handling.
+//
+// Example:
+//
+//	server := prefab.New(
+//	    prefab.WithLogger(logging.NewProdLogger()),
+//	    // other options...
+//	)
+func WithLogger(logger logging.Logger) ServerOption {
+	return func(b *builder) {
+		b.logger = logger
 	}
 }
 
