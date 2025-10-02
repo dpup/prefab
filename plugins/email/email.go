@@ -27,6 +27,21 @@ import (
 // Constant name for identifying the email plugin.
 const PluginName = "email"
 
+// Sender is an interface for sending emails. This abstraction allows for
+// testing without requiring a real SMTP connection.
+type Sender interface {
+	DialAndSend(*gomail.Message) error
+}
+
+// gomailDialer wraps gomail.Dialer to implement the Sender interface.
+type gomailDialer struct {
+	dialer *gomail.Dialer
+}
+
+func (g *gomailDialer) DialAndSend(msg *gomail.Message) error {
+	return g.dialer.DialAndSend(msg)
+}
+
 // EmailOptions customize the configuration of the email plugin.
 type EmailOption func(*EmailPlugin)
 
@@ -47,9 +62,16 @@ func WithFrom(from string) EmailOption {
 	}
 }
 
+// WithSender configures a custom Sender implementation. This is primarily
+// useful for testing, allowing you to inject a mock sender.
+func WithSender(sender Sender) EmailOption {
+	return func(p *EmailPlugin) {
+		p.sender = sender
+	}
+}
+
 // Plugin returns a new EmailPlugin.
 func Plugin(opts ...EmailOption) *EmailPlugin {
-	// TODO: Make smtp optional and allow a gomail.SendFunc to be configured.
 	cfg := prefab.Config
 	p := &EmailPlugin{
 		from:         cfg.String("email.from"),
@@ -71,6 +93,7 @@ type EmailPlugin struct {
 	smtpPort     int
 	smtpUsername string
 	smtpPassword string
+	sender       Sender
 }
 
 // From prefab.Plugin.
@@ -106,8 +129,16 @@ func (p *EmailPlugin) Send(ctx context.Context, msg *gomail.Message) error {
 	if len(msg.GetHeader("From")) == 0 {
 		msg.SetHeader("From", p.from)
 	}
-	d := gomail.NewDialer(p.smtpHost, p.smtpPort, p.smtpUsername, p.smtpPassword)
-	if err := d.DialAndSend(msg); err != nil {
+
+	// Use injected sender if available, otherwise create default gomail dialer
+	sender := p.sender
+	if sender == nil {
+		sender = &gomailDialer{
+			dialer: gomail.NewDialer(p.smtpHost, p.smtpPort, p.smtpUsername, p.smtpPassword),
+		}
+	}
+
+	if err := sender.DialAndSend(msg); err != nil {
 		return err
 	}
 	return nil
