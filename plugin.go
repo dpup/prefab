@@ -38,8 +38,9 @@ type ShutdownPlugin interface {
 
 // Registry manages plugins and their dependencies.
 type Registry struct {
-	plugins map[string]Plugin
-	keys    []string
+	plugins   map[string]Plugin
+	keys      []string
+	initOrder []string // Track initialization order for proper shutdown
 }
 
 // Get a plugin.
@@ -86,12 +87,16 @@ func (r *Registry) Init(ctx context.Context) error {
 }
 
 // Shutdown any plugins that implement the shutdown interface.
+// Plugins are shut down in reverse initialization order to ensure that
+// dependencies are still available when a plugin shuts down.
 func (r *Registry) Shutdown(ctx context.Context) error {
 	if r.plugins == nil {
 		return nil
 	}
 
-	for _, key := range r.keys {
+	// Iterate in reverse initialization order
+	for i := len(r.initOrder) - 1; i >= 0; i-- {
+		key := r.initOrder[i]
 		if p, ok := r.plugins[key].(ShutdownPlugin); ok {
 			if err := p.Shutdown(ctx); err != nil {
 				return err
@@ -152,10 +157,22 @@ func (r *Registry) initPlugin(ctx context.Context, key string, initialized map[s
 		return fmt.Errorf("plugin '%v' not registered", key)
 	}
 
+	// Initialize required dependencies first
 	if d, ok := plugin.(DependentPlugin); ok {
 		for _, dep := range d.Deps() {
 			if err := r.initPlugin(ctx, dep, initialized); err != nil {
 				return err
+			}
+		}
+	}
+
+	// Initialize optional dependencies if they are registered
+	if d, ok := plugin.(OptionalDependentPlugin); ok {
+		for _, dep := range d.OptDeps() {
+			if _, exists := r.plugins[dep]; exists {
+				if err := r.initPlugin(ctx, dep, initialized); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -167,5 +184,6 @@ func (r *Registry) initPlugin(ctx context.Context, key string, initialized map[s
 	}
 
 	initialized[key] = true
+	r.initOrder = append(r.initOrder, key)
 	return nil
 }

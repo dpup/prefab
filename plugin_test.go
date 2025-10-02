@@ -84,3 +84,242 @@ func TestMissingDependency(t *testing.T) {
 	err := r.Init(ctx)
 	assert.EqualError(t, err, "plugin: missing dependency, 'XX' not registered")
 }
+
+type TestPluginWithOptDeps struct {
+	name    string
+	deps    []string
+	optDeps []string
+}
+
+func (tp *TestPluginWithOptDeps) Name() string {
+	return tp.name
+}
+
+func (tp *TestPluginWithOptDeps) Deps() []string {
+	return tp.deps
+}
+
+func (tp *TestPluginWithOptDeps) OptDeps() []string {
+	return tp.optDeps
+}
+
+func (tp *TestPluginWithOptDeps) Init(ctx context.Context, r *Registry) error {
+	initOrder = append(initOrder, tp.name)
+	return nil
+}
+
+// TestOptionalDependencyInitOrder verifies that optional dependencies are
+// initialized before the plugin that declares them, if they are registered.
+func TestOptionalDependencyInitOrder(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("optional dependency initialized first when registered", func(t *testing.T) {
+		initOrder = []string{}
+		r := &Registry{}
+
+		// Plugin A has optional dependency on B
+		// If B is registered, it should initialize before A
+		r.Register(&TestPluginWithOptDeps{name: "A", optDeps: []string{"B"}})
+		r.Register(&TestPlugin{name: "B"})
+
+		err := r.Init(ctx)
+		require.NoError(t, err)
+
+		// B should initialize before A
+		assert.Equal(t, []string{"B", "A"}, initOrder)
+	})
+
+	t.Run("optional dependency not required if missing", func(t *testing.T) {
+		initOrder = []string{}
+		r := &Registry{}
+
+		// Plugin A has optional dependency on B, but B is not registered
+		// This should not cause an error
+		r.Register(&TestPluginWithOptDeps{name: "A", optDeps: []string{"B"}})
+
+		err := r.Init(ctx)
+		require.NoError(t, err)
+
+		// Only A should initialize
+		assert.Equal(t, []string{"A"}, initOrder)
+	})
+
+	t.Run("optional dependencies with transitive required deps", func(t *testing.T) {
+		initOrder = []string{}
+		r := &Registry{}
+
+		// A has optional dep on B
+		// B has required dep on C
+		// C has required dep on D
+		// Expected order: D, C, B, A
+		r.Register(&TestPluginWithOptDeps{name: "A", optDeps: []string{"B"}})
+		r.Register(&TestPlugin{name: "B", deps: []string{"C"}})
+		r.Register(&TestPlugin{name: "C", deps: []string{"D"}})
+		r.Register(&TestPlugin{name: "D"})
+
+		err := r.Init(ctx)
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"D", "C", "B", "A"}, initOrder)
+	})
+
+	t.Run("mixed required and optional dependencies", func(t *testing.T) {
+		initOrder = []string{}
+		r := &Registry{}
+
+		// A has required dep on B and optional dep on C
+		// Both should initialize before A
+		// B has no deps, C has no deps
+		// Order should be: B, C, A (or C, B, A - both are valid)
+		r.Register(&TestPluginWithOptDeps{name: "A", deps: []string{"B"}, optDeps: []string{"C"}})
+		r.Register(&TestPlugin{name: "B"})
+		r.Register(&TestPlugin{name: "C"})
+
+		err := r.Init(ctx)
+		require.NoError(t, err)
+
+		// A should be last
+		assert.Equal(t, "A", initOrder[2])
+		// B and C should both come before A
+		assert.Contains(t, initOrder[:2], "B")
+		assert.Contains(t, initOrder[:2], "C")
+	})
+
+	t.Run("optional dependency cycle detection", func(t *testing.T) {
+		initOrder = []string{}
+		r := &Registry{}
+
+		// Create a cycle using optional dependencies
+		// A optionally depends on B, B optionally depends on A
+		r.Register(&TestPluginWithOptDeps{name: "A", optDeps: []string{"B"}})
+		r.Register(&TestPluginWithOptDeps{name: "B", optDeps: []string{"A"}})
+
+		err := r.Init(ctx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cycle")
+	})
+
+	t.Run("registration order independence with optional deps", func(t *testing.T) {
+		// This is the key test - demonstrates the bug that we're fixing
+		// Currently, if A is registered before Storage, A may initialize first
+		// even though it has an optional dependency on Storage
+
+		t.Run("storage registered first", func(t *testing.T) {
+			initOrder = []string{}
+			r := &Registry{}
+
+			// Register in "good" order
+			r.Register(&TestPlugin{name: "Storage"})
+			r.Register(&TestPluginWithOptDeps{name: "Auth", optDeps: []string{"Storage"}})
+
+			err := r.Init(ctx)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"Storage", "Auth"}, initOrder)
+		})
+
+		t.Run("auth registered first", func(t *testing.T) {
+			initOrder = []string{}
+			r := &Registry{}
+
+			// Register in "bad" order - this should still work correctly
+			r.Register(&TestPluginWithOptDeps{name: "Auth", optDeps: []string{"Storage"}})
+			r.Register(&TestPlugin{name: "Storage"})
+
+			err := r.Init(ctx)
+			require.NoError(t, err)
+
+			// This is what we want to ensure: Storage still initializes before Auth
+			// even though Auth was registered first
+			assert.Equal(t, []string{"Storage", "Auth"}, initOrder)
+		})
+	})
+}
+
+type TestShutdownPlugin struct {
+	name string
+	deps []string
+}
+
+func (tp *TestShutdownPlugin) Name() string {
+	return tp.name
+}
+
+func (tp *TestShutdownPlugin) Deps() []string {
+	return tp.deps
+}
+
+func (tp *TestShutdownPlugin) Init(ctx context.Context, r *Registry) error {
+	initOrder = append(initOrder, tp.name)
+	return nil
+}
+
+func (tp *TestShutdownPlugin) Shutdown(ctx context.Context) error {
+	shutdownOrder = append(shutdownOrder, tp.name)
+	return nil
+}
+
+var shutdownOrder []string
+
+// TestShutdownOrder verifies that plugins shut down in reverse dependency order.
+// If A depends on B, then A should shut down before B (so B is still available).
+func TestShutdownOrder(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("shutdown in reverse initialization order", func(t *testing.T) {
+		initOrder = []string{}
+		shutdownOrder = []string{}
+		r := &Registry{}
+
+		// Register in a different order than dependency order
+		// to expose the bug
+		// D <- C <- B <- A (dependency chain)
+		// Register order: D, C, A, B (mixed up)
+		// Init order will be: D, C, B, A (dependency order)
+		// Current buggy shutdown: D, C, A, B (registration order) - WRONG!
+		// Correct shutdown should be: A, B, C, D (reverse init order)
+		r.Register(&TestShutdownPlugin{name: "D"})
+		r.Register(&TestShutdownPlugin{name: "C", deps: []string{"D"}})
+		r.Register(&TestShutdownPlugin{name: "A", deps: []string{"B", "C"}})
+		r.Register(&TestShutdownPlugin{name: "B", deps: []string{"C", "D"}})
+
+		err := r.Init(ctx)
+		require.NoError(t, err)
+
+		err = r.Shutdown(ctx)
+		require.NoError(t, err)
+
+		// Verify init order (dependency order)
+		t.Logf("Init order: %v", initOrder)
+		assert.Equal(t, []string{"D", "C", "B", "A"}, initOrder)
+
+		// Verify shutdown is in reverse init order
+		// A should shut down first (it depends on B and C)
+		// Then B (depends on C and D)
+		// Then C (depends on D)
+		// Finally D (no dependencies)
+		t.Logf("Shutdown order: %v", shutdownOrder)
+		assert.Equal(t, []string{"A", "B", "C", "D"}, shutdownOrder)
+	})
+
+	t.Run("shutdown only affects plugins that implement ShutdownPlugin", func(t *testing.T) {
+		initOrder = []string{}
+		shutdownOrder = []string{}
+		r := &Registry{}
+
+		// Mix of plugins with and without shutdown
+		r.Register(&TestShutdownPlugin{name: "A"})
+		r.Register(&TestPlugin{name: "B"}) // No shutdown
+		r.Register(&TestShutdownPlugin{name: "C"})
+
+		err := r.Init(ctx)
+		require.NoError(t, err)
+
+		err = r.Shutdown(ctx)
+		require.NoError(t, err)
+
+		// Only A and C should be in shutdown order
+		assert.Contains(t, shutdownOrder, "A")
+		assert.Contains(t, shutdownOrder, "C")
+		assert.NotContains(t, shutdownOrder, "B")
+	})
+}
