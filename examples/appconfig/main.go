@@ -7,10 +7,12 @@
 // 3. Via environment variables (PF__MYAPP__*)
 //
 // Run with:
-//   go run examples/appconfig/main.go
+//
+//	go run examples/appconfig/main.go
 //
 // Or with environment overrides:
-//   PF__MYAPP__CACHE_REFRESH_INTERVAL=30s go run examples/appconfig/main.go
+//
+//	PF__MYAPP__CACHE_REFRESH_INTERVAL=30s go run examples/appconfig/main.go
 package main
 
 import (

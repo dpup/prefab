@@ -13,7 +13,13 @@ export PATH := $(TOOLS_OUT):$(PATH)
 
 .PHONY: lint
 lint:
-	@golangci-lint run 
+	@golangci-lint run
+
+.PHONY: fix
+fix:
+	@echo "🔧 Running golangci-lint with --fix..."
+	@golangci-lint run --fix
+	@echo "✅ Auto-fixes applied"
 
 .PHONY: test 
 test: test-staticcheck test-vet test-unit
