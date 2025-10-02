@@ -1,7 +1,6 @@
 package magiclink
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -74,7 +73,7 @@ func TestMagicLinkPlugin_Deps(t *testing.T) {
 }
 
 func TestMagicLinkPlugin_Init(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name          string
@@ -132,7 +131,7 @@ func TestMagicLinkPlugin_Init(t *testing.T) {
 }
 
 func TestMagicLinkPlugin_handleLogin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	signingKey := []byte("test-signing-key")
 
 	tests := []struct {
@@ -353,7 +352,7 @@ func TestWithExpiration(t *testing.T) {
 }
 
 func TestHandleToken_TokenValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	signingKey := []byte("test-signing-key")
 
 	p := Plugin(

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"testing"
 
 	"github.com/dpup/prefab/plugins/storage"
@@ -62,7 +61,7 @@ func TestIsBlocked_WithContext(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check with context
-	ctx := WithBlockist(context.Background(), bl)
+	ctx := WithBlockist(t.Context(), bl)
 	blocked, err := IsBlocked(ctx, "token123")
 	require.NoError(t, err)
 	assert.True(t, blocked)
@@ -74,7 +73,7 @@ func TestIsBlocked_WithContext(t *testing.T) {
 }
 
 func TestIsBlocked_NoBlocklistInContext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Should return false when no blocklist is present
 	blocked, err := IsBlocked(ctx, "any-token")
@@ -86,7 +85,7 @@ func TestMaybeBlock(t *testing.T) {
 	store := memstore.New()
 	bl := NewBlocklist(store)
 
-	ctx := WithBlockist(context.Background(), bl)
+	ctx := WithBlockist(t.Context(), bl)
 
 	// Block via MaybeBlock
 	err := MaybeBlock(ctx, "token789")
@@ -99,7 +98,7 @@ func TestMaybeBlock(t *testing.T) {
 }
 
 func TestMaybeBlock_NoBlocklistInContext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Should not error when no blocklist is present
 	err := MaybeBlock(ctx, "any-token")

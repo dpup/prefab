@@ -65,7 +65,7 @@ func TestPwdAuthPlugin_Deps(t *testing.T) {
 }
 
 func TestPwdAuthPlugin_Init(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name          string
@@ -108,7 +108,7 @@ func TestPwdAuthPlugin_Init(t *testing.T) {
 }
 
 func TestPwdAuthPlugin_handleLogin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
 
 	tests := []struct {

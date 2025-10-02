@@ -195,7 +195,7 @@ func TestOptionalDependencyInitOrder(t *testing.T) {
 		r.Register(&TestPluginWithOptDeps{name: "B", optDeps: []string{"A"}})
 
 		err := r.Init(ctx)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cycle")
 	})
 

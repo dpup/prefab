@@ -122,3 +122,178 @@ func TestBus_SubscriberPanic(t *testing.T) {
 
 	// TODO: Check for error in logs.
 }
+
+func TestBus_WorkerPoolConcurrency(t *testing.T) {
+	bus := NewBus(logging.EnsureLogger(t.Context()))
+
+	var mu sync.Mutex
+	var concurrent int
+	var maxConcurrent int
+
+	for range 200 {
+		bus.Subscribe("topic", func(ctx context.Context, data any) error {
+			mu.Lock()
+			concurrent++
+			if concurrent > maxConcurrent {
+				maxConcurrent = concurrent
+			}
+			mu.Unlock()
+
+			time.Sleep(time.Millisecond) // Simulate work
+
+			mu.Lock()
+			concurrent--
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	bus.Publish("topic", "hello")
+	require.NoError(t, bus.Wait(logging.EnsureLogger(t.Context())))
+
+	// With 200 subscribers and 100 workers, max concurrent should be ~100
+	t.Logf("Max concurrent subscribers: %d", maxConcurrent)
+	assert.LessOrEqual(t, maxConcurrent, 100, "should not exceed worker pool size")
+}
+
+func TestBus_WorkerPoolLimit(t *testing.T) {
+	ctx := logging.EnsureLogger(t.Context())
+	bus := NewBus(ctx, WithWorkerPool(10))
+
+	var called int
+	var mu sync.Mutex
+
+	// Add many subscribers
+	for range 100 {
+		bus.Subscribe("topic", func(ctx context.Context, data any) error {
+			mu.Lock()
+			called++
+			mu.Unlock()
+			time.Sleep(time.Millisecond * 10)
+			return nil
+		})
+	}
+
+	// Publish event
+	bus.Publish("topic", "hello")
+
+	// Wait for completion
+	require.NoError(t, bus.Wait(ctx))
+
+	// All 100 subscribers should have been called
+	assert.Equal(t, 100, called, "all subscribers should be processed by worker pool")
+}
+
+func TestBus_HighLoad(t *testing.T) {
+	ctx := logging.EnsureLogger(t.Context())
+	bus := NewBus(ctx, WithWorkerPool(50))
+
+	var processed sync.WaitGroup
+	processed.Add(1000)
+
+	// Add 1000 subscribers
+	for range 1000 {
+		bus.Subscribe("topic", func(ctx context.Context, data any) error {
+			processed.Done()
+			return nil
+		})
+	}
+
+	// Publish event
+	bus.Publish("topic", "hello")
+
+	// Wait for all to complete
+	done := make(chan struct{})
+	go func() {
+		processed.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(time.Second * 5):
+		t.Fatal("timeout waiting for high load processing")
+	}
+
+	assert.NoError(t, bus.Wait(ctx))
+}
+
+func TestBus_GracefulShutdown(t *testing.T) {
+	ctx := logging.EnsureLogger(t.Context())
+	bus := NewBus(ctx, WithWorkerPool(10)).(*Bus)
+
+	var completed int
+	var mu sync.Mutex
+
+	// Add subscribers that take time
+	for range 50 {
+		bus.Subscribe("topic", func(ctx context.Context, data any) error {
+			time.Sleep(time.Millisecond * 10)
+			mu.Lock()
+			completed++
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Publish event
+	bus.Publish("topic", "hello")
+
+	// Give workers time to start processing
+	time.Sleep(time.Millisecond * 5)
+
+	// Shutdown should wait for all jobs to complete
+	require.NoError(t, bus.Shutdown(ctx))
+
+	mu.Lock()
+	final := completed
+	mu.Unlock()
+
+	assert.Equal(t, 50, final, "all subscribers should complete")
+}
+
+func TestBus_LegacyMode(t *testing.T) {
+	// Test with workers=0 (unbounded goroutines, legacy behavior)
+	ctx := logging.EnsureLogger(t.Context())
+	bus := NewBus(ctx, WithWorkerPool(0))
+
+	var called int
+	var mu sync.Mutex
+
+	for range 10 {
+		bus.Subscribe("topic", func(ctx context.Context, data any) error {
+			mu.Lock()
+			called++
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	bus.Publish("topic", "hello")
+	require.NoError(t, bus.Wait(ctx))
+
+	assert.Equal(t, 10, called)
+}
+
+func TestBus_CustomWorkerPoolSize(t *testing.T) {
+	ctx := logging.EnsureLogger(t.Context())
+	bus := NewBus(ctx, WithWorkerPool(5))
+
+	var called int
+	var mu sync.Mutex
+
+	for range 20 {
+		bus.Subscribe("topic", func(ctx context.Context, data any) error {
+			mu.Lock()
+			called++
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	bus.Publish("topic", "hello")
+	require.NoError(t, bus.Wait(ctx))
+
+	assert.Equal(t, 20, called, "all subscribers should be called")
+}

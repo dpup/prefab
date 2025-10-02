@@ -1,7 +1,6 @@
 package email
 
 import (
-	"context"
 	"testing"
 
 	"github.com/dpup/prefab"
@@ -13,10 +12,10 @@ import (
 
 // mockSender implements the Sender interface for testing.
 type mockSender struct {
-	called       bool
-	err          error
-	lastMessage  *gomail.Message
-	callCount    int
+	called      bool
+	err         error
+	lastMessage *gomail.Message
+	callCount   int
 }
 
 func (m *mockSender) DialAndSend(msg *gomail.Message) error {
@@ -78,7 +77,7 @@ func TestEmailPlugin_Name(t *testing.T) {
 }
 
 func TestEmailPlugin_Init(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	registry := &prefab.Registry{}
 
 	tests := []struct {
@@ -190,7 +189,7 @@ func TestWithSender(t *testing.T) {
 }
 
 func TestEmailPlugin_Send(t *testing.T) {
-	ctx := logging.EnsureLogger(context.Background())
+	ctx := logging.EnsureLogger(t.Context())
 
 	tests := []struct {
 		name           string
@@ -319,7 +318,7 @@ func TestEmailPlugin_Send(t *testing.T) {
 func TestEmailPlugin_Send_WithDefaultDialer(t *testing.T) {
 	// This test verifies that when no custom sender is provided,
 	// the plugin creates a gomailDialer at Send time.
-	ctx := logging.EnsureLogger(context.Background())
+	ctx := logging.EnsureLogger(t.Context())
 
 	p := Plugin(
 		WithFrom("test@example.com"),

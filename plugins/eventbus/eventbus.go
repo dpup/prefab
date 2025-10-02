@@ -64,6 +64,17 @@ func (p *EventBusPlugin) ServerOptions() []prefab.ServerOption {
 
 // From prefab.ShutdownPlugin.
 func (p *EventBusPlugin) Shutdown(ctx context.Context) error {
+	// If the underlying bus has a Shutdown method (like *Bus), call it
+	// to close the worker pool gracefully
+	if bus, ok := p.EventBus.(*Bus); ok {
+		err := bus.Shutdown(ctx)
+		if err == nil {
+			logging.Info(ctx, "👍 Event bus drained")
+		}
+		return err
+	}
+
+	// Otherwise, just wait for completion (legacy behavior)
 	err := p.Wait(ctx)
 	if err == nil {
 		logging.Info(ctx, "👍 Event bus drained")

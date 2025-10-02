@@ -2,6 +2,7 @@ package apikey
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -57,7 +58,7 @@ func TestAPIPlugin_Deps(t *testing.T) {
 }
 
 func TestAPIPlugin_Init(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create a mock auth plugin
 	authPlugin := auth.Plugin()
@@ -129,11 +130,11 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 		{
 			name: "no authorization header",
 			setupContext: func() context.Context {
-				return context.Background()
+				return t.Context()
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				t.Fatal("keyFunc should not be called")
-				return nil, nil
+				return nil, errors.New("should not be called")
 			},
 			expectedError: true,
 			expectedCode:  codes.Unauthenticated,
@@ -142,11 +143,11 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 			name: "empty authorization header",
 			setupContext: func() context.Context {
 				md := metadata.New(map[string]string{"authorization": ""})
-				return metadata.NewIncomingContext(context.Background(), md)
+				return metadata.NewIncomingContext(t.Context(), md)
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				t.Fatal("keyFunc should not be called")
-				return nil, nil
+				return nil, errors.New("should not be called")
 			},
 			expectedError: true,
 			expectedCode:  codes.Unauthenticated,
@@ -155,11 +156,11 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 			name: "wrong prefix - bearer token",
 			setupContext: func() context.Context {
 				md := metadata.New(map[string]string{"authorization": "Bearer some-jwt-token"})
-				return metadata.NewIncomingContext(context.Background(), md)
+				return metadata.NewIncomingContext(t.Context(), md)
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				t.Fatal("keyFunc should not be called")
-				return nil, nil
+				return nil, errors.New("should not be called")
 			},
 			keyPrefix:     "pak",
 			expectedError: true,
@@ -169,11 +170,11 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 			name: "wrong prefix - different api key",
 			setupContext: func() context.Context {
 				md := metadata.New(map[string]string{"authorization": "other_abc123"})
-				return metadata.NewIncomingContext(context.Background(), md)
+				return metadata.NewIncomingContext(t.Context(), md)
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				t.Fatal("keyFunc should not be called")
-				return nil, nil
+				return nil, errors.New("should not be called")
 			},
 			keyPrefix:     "pak",
 			expectedError: true,
@@ -183,7 +184,7 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 			name: "valid key - successful lookup",
 			setupContext: func() context.Context {
 				md := metadata.New(map[string]string{"authorization": "pak_validkey123"})
-				return metadata.NewIncomingContext(context.Background(), md)
+				return metadata.NewIncomingContext(t.Context(), md)
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				assert.Equal(t, "validkey123", key)
@@ -210,7 +211,7 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 			name: "valid key - lookup returns not found",
 			setupContext: func() context.Context {
 				md := metadata.New(map[string]string{"authorization": "pak_invalidkey"})
-				return metadata.NewIncomingContext(context.Background(), md)
+				return metadata.NewIncomingContext(t.Context(), md)
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				assert.Equal(t, "invalidkey", key)
@@ -224,7 +225,7 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 			name: "valid key - lookup returns internal error",
 			setupContext: func() context.Context {
 				md := metadata.New(map[string]string{"authorization": "pak_errorkey"})
-				return metadata.NewIncomingContext(context.Background(), md)
+				return metadata.NewIncomingContext(t.Context(), md)
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				assert.Equal(t, "errorkey", key)
@@ -238,7 +239,7 @@ func TestAPIPlugin_fetchIdentity(t *testing.T) {
 			name: "custom prefix",
 			setupContext: func() context.Context {
 				md := metadata.New(map[string]string{"authorization": "myapi_customkey"})
-				return metadata.NewIncomingContext(context.Background(), md)
+				return metadata.NewIncomingContext(t.Context(), md)
 			},
 			keyFunc: func(ctx context.Context, key string) (*KeyOwner, error) {
 				assert.Equal(t, "customkey", key)
@@ -295,14 +296,14 @@ func TestWithKeyFunc(t *testing.T) {
 	called := false
 	keyFunc := func(ctx context.Context, key string) (*KeyOwner, error) {
 		called = true
-		return nil, nil
+		return nil, errors.New("should not be called")
 	}
 
 	p := Plugin(WithKeyFunc(keyFunc))
 	assert.NotNil(t, p.keyOwnerFunc)
 
 	// Verify the function was set by calling it
-	_, _ = p.keyOwnerFunc(context.Background(), "test")
+	_, _ = p.keyOwnerFunc(t.Context(), "test")
 	assert.True(t, called)
 }
 
