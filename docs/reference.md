@@ -292,10 +292,12 @@ s := prefab.New(
 
 ## Configuration
 
+Prefab provides flexible configuration through YAML files, environment variables, and functional options. All configuration is managed through a global `prefab.Config` instance powered by Koanf.
+
 ### Via YAML
 
 ```yaml
-# config.yaml
+# config.yaml or prefab.yaml
 server:
   host: 0.0.0.0
   port: 8080
@@ -307,34 +309,131 @@ auth:
   google:
     id: your-google-client-id
     secret: your-google-client-secret
+
+# Add your own application-specific configuration
+myapp:
+  cacheRefreshInterval: 5m
+  maxRetries: 3
+  enableFeatureX: true
 ```
 
 ```go
-s := prefab.New(
-    prefab.WithConfigFile("./config.yaml"),
-)
+prefab.LoadConfigFile("./config.yaml")
+
+s := prefab.New()
+
+// Access your custom config anywhere in your code
+interval := prefab.ConfigDuration("myapp.cacheRefreshInterval")
+retries := prefab.ConfigInt("myapp.maxRetries")
+enabled := prefab.ConfigBool("myapp.enableFeatureX")
 ```
 
 ### Via Environment Variables
 
+Environment variables use the `PF__` prefix with double underscores for nesting:
+
 ```bash
-export SERVER_PORT=9000
-export AUTH_SIGNING_KEY=your-secret-key
-export AUTH_GOOGLE_ID=your-google-client-id
-export AUTH_GOOGLE_SECRET=your-google-client-secret
+# Prefab configuration
+export PF__SERVER__PORT=9000
+export PF__AUTH__SIGNING_KEY=your-secret-key
+export PF__AUTH__GOOGLE__ID=your-google-client-id
+export PF__AUTH__GOOGLE__SECRET=your-google-client-secret
+
+# Your application configuration
+export PF__MYAPP__CACHE_REFRESH_INTERVAL=10m
+export PF__MYAPP__MAX_RETRIES=5
+export PF__MYAPP__ENABLE_FEATURE_X=true
 ```
+
+Environment variable naming convention:
+- Double underscores (`__`) separate config levels: `PF__SERVER__PORT` → `server.port`
+- Single underscores (`_`) within a segment become camelCase:
+  - `PF__SERVER__INCOMING_HEADERS` → `server.incomingHeaders`
+  - `PF__FOO_BAR__BAZ` → `fooBar.baz`
+
+**⚠️ Warning**: Environment variable transformation works like this:
+- Env var `PF__MYAPP__MAX_RETRIES` → config key `myapp.maxRetries` (camelCase)
+- Env var `PF__MYAPP__MAXRETRIES` → config key `myapp.maxretries` (lowercase)
+
+If your YAML uses snake_case, it converts to camelCase internally, so:
+- YAML `max_retries` → internal key `maxRetries` → env var `PF__MYAPP__MAX_RETRIES`
+
+**Best practice**: Use snake_case in YAML so the structure matches environment variables.
 
 ### Via Functional Options
 
 ```go
 s := prefab.New(
+    // Prefab options
     prefab.WithPort(8080),
     prefab.WithSecurityHeaders(prefab.SecurityHeaders{
         XFrameOptions: "DENY",
         HStsExpiration: 31536000 * time.Second,
     }),
+
 )
+
+// Load application config before creating server
+prefab.LoadConfigDefaults(map[string]interface{}{
+    "myapp.cacheRefreshInterval": "5m",
+    "myapp.maxRetries": 3,
+    "myapp.enableFeatureX": true,
+})
+prefab.LoadConfigFile("./app.yaml")
 ```
+
+### Configuration Hierarchy
+
+Configuration is **process-global** and loaded eagerly. Sources are applied in this order (later sources override earlier):
+
+1. Prefab's built-in defaults (loaded in `init()`)
+2. Auto-discovered `prefab.yaml` (loaded in `init()`)
+3. Environment variables with PF__ prefix (loaded in `init()`)
+4. Application defaults (loaded immediately via `WithConfigDefaults()`)
+5. Additional config files (loaded immediately via `WithConfigFile()`)
+6. Functional options (applied during server construction)
+
+**Important**: `WithConfigDefaults()` and `WithConfigFile()` load config **immediately** when called, making values available right away before `s.Start()`.
+
+### Extending Configuration
+
+Applications can easily add their own configuration using the same system:
+
+```go
+func main() {
+    // Set application defaults
+    prefab.LoadConfigDefaults(map[string]interface{}{
+        "myapp.database.host": "localhost",
+        "myapp.database.port": 5432,
+        "myapp.cacheRefreshInterval": "5m",
+    })
+
+    // Load config file (can override defaults)
+    prefab.LoadConfigFile("./config.yaml")
+
+    // Create server
+    s := prefab.New()
+
+    // Access config anywhere
+    dbHost := prefab.ConfigString("myapp.database.host")
+    dbPort := prefab.ConfigInt("myapp.database.port")
+    cacheInterval := prefab.ConfigDuration("myapp.cacheRefreshInterval")
+
+    // ... register services ...
+
+    if err := s.Start(); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+**Best practices:**
+- Use a consistent namespace prefix (e.g., `myapp.`) for your configuration
+- Provide sensible defaults via `LoadConfigDefaults()`
+- Use YAML for environment-specific config
+- Use environment variables for secrets and deployment overrides
+- Validate required config on startup
+- For testable code, inject config values as dependencies rather than reading from the global config in business logic
 
 ## Custom Plugins
 

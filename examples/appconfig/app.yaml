@@ -1,0 +1,50 @@
+# Example application configuration file
+#
+# This file shows how to extend Prefab's configuration with your own
+# application-specific settings. All settings here can be overridden
+# by environment variables using the PF__ prefix.
+#
+# Environment variable mapping:
+#   - Double underscores (__) separate config levels
+#   - Single underscores (_) within a segment become camelCase
+#   - Example: PF__MYAPP__CACHE_REFRESH_INTERVAL maps to myapp.cacheRefreshInterval
+#
+# Best practice: Use simple lowercase or snake_case keys to avoid confusion
+# with the camelCase transformation.
+
+# Standard Prefab configuration
+server:
+  port: 8080
+
+# Your application configuration
+myapp:
+  name: "My Application (from YAML)"
+
+  # Duration values - use Go duration strings
+  cacheRefreshInterval: 10m
+
+  # Numeric values
+  maxRetries: 5
+
+  # Boolean flags
+  enableFeatureX: true
+
+  # String arrays
+  allowedHosts:
+    - localhost
+    - example.com
+    - api.example.com
+
+  # Nested configuration
+  database:
+    host: localhost
+    port: 5432
+    name: myapp_production
+    maxConnections: 100
+    timeout: 30s
+
+  # Feature flags
+  features:
+    experimental: false
+    betaAccess: true
+    newDashboard: false
