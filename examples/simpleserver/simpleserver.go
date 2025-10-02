@@ -14,8 +14,11 @@ func main() {
 		prefab.WithHTTPHandler("/", http.HandlerFunc(ack)),
 	)
 
-	simpleservice.RegisterSimpleServiceHandlerFromEndpoint(s.GatewayArgs())
-	simpleservice.RegisterSimpleServiceServer(s.ServiceRegistrar(), simpleservice.New())
+	s.RegisterService(
+		&simpleservice.SimpleService_ServiceDesc,
+		simpleservice.RegisterSimpleServiceHandler,
+		simpleservice.New(),
+	)
 
 	if err := s.Start(); err != nil {
 		fmt.Println(err)

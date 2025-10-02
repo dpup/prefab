@@ -22,8 +22,11 @@ func main() {
 	)
 
 	// Register the GRPC service handlers from the other example.
-	simpleservice.RegisterSimpleServiceHandlerFromEndpoint(s.GatewayArgs())
-	simpleservice.RegisterSimpleServiceServer(s.ServiceRegistrar(), simpleservice.New())
+	s.RegisterService(
+		&simpleservice.SimpleService_ServiceDesc,
+		simpleservice.RegisterSimpleServiceHandler,
+		simpleservice.New(),
+	)
 
 	// Guidance for people who don't read the example code.
 	fmt.Println("")

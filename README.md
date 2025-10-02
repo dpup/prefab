@@ -61,8 +61,11 @@ import (
 
 func main() {
 	s := prefab.New()
-	RegisterFooBarHandlerFromEndpoint(s.GatewayArgs())
-	RegisterFooBarServer(s.ServiceRegistrar(), &foobarImpl{})
+	s.RegisterService(
+		&FooBar_ServiceDesc,
+		RegisterFooBarHandler,
+		&foobarImpl{},
+	)
 	if err := s.Start(); err != nil {
 		fmt.Println(err)
 	}

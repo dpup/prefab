@@ -139,8 +139,11 @@ func Run() {
 	)
 
 	// Register the GRPC service
-	authztest.RegisterAuthzTestServiceHandlerFromEndpoint(s.GatewayArgs())
-	authztest.RegisterAuthzTestServiceServer(s.ServiceRegistrar(), &testServer{})
+	s.RegisterService(
+		&authztest.AuthzTestService_ServiceDesc,
+		authztest.RegisterAuthzTestServiceHandler,
+		&testServer{},
+	)
 
 	// Start the server
 	if err := s.Start(); err != nil {

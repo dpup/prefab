@@ -23,8 +23,11 @@ func main() {
     s := prefab.New()
 
     // Register your gRPC service and gateway
-    yourservice.RegisterYourServiceHandlerFromEndpoint(s.GatewayArgs())
-    yourservice.RegisterYourServiceServer(s.ServiceRegistrar(), &yourServiceImpl{})
+    s.RegisterService(
+        &yourservice.YourService_ServiceDesc,
+        yourservice.RegisterYourServiceHandler,
+        &yourServiceImpl{},
+    )
 
     // Start the server
     if err := s.Start(); err != nil {
@@ -49,18 +52,25 @@ s := prefab.New(
 
 ### Registering Services
 
-For gRPC services defined in your proto files:
+For gRPC services defined in your proto files, use the `RegisterService` method:
 
-1. Register the gateway handler:
+```go
+// With gateway
+s.RegisterService(
+    &yourservice.YourService_ServiceDesc,
+    yourservice.RegisterYourServiceHandler,
+    &yourServiceImpl{},
+)
 
-   ```go
-   yourservice.RegisterYourServiceHandlerFromEndpoint(s.GatewayArgs())
-   ```
+// Without gateway (pass nil for the registerGateway parameter)
+s.RegisterService(
+    &yourservice.YourService_ServiceDesc,
+    nil,
+    &yourServiceImpl{},
+)
+```
 
-2. Register the service implementation:
-   ```go
-   yourservice.RegisterYourServiceServer(s.ServiceRegistrar(), &yourServiceImpl{})
-   ```
+This single call replaces the traditional two-step pattern and handles both the gRPC service registration and the optional HTTP/JSON gateway registration.
 
 ### Starting the Server
 

@@ -20,8 +20,11 @@ func main() {
     )
 
     // Register service and gateway
-    yourservice.RegisterYourServiceHandlerFromEndpoint(s.GatewayArgs())
-    yourservice.RegisterYourServiceServer(s.ServiceRegistrar(), &yourServiceImpl{})
+    s.RegisterService(
+        &yourservice.YourService_ServiceDesc,
+        yourservice.RegisterYourServiceHandler,
+        &yourServiceImpl{},
+    )
 
     // Start the server - this blocks until shutdown
     if err := s.Start(); err != nil {

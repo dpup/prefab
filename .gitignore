@@ -10,3 +10,4 @@ tools/bin
 
 .DS_Store
 **/.claude/settings.local.json
+.private-journal

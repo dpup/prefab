@@ -58,8 +58,11 @@ func main() {
     )
 
     // Register your service
-    yourservice.RegisterYourServiceHandlerFromEndpoint(s.GatewayArgs())
-    yourservice.RegisterYourServiceServer(s.ServiceRegistrar(), &serviceImpl{})
+    s.RegisterService(
+        &yourservice.YourService_ServiceDesc,
+        yourservice.RegisterYourServiceHandler,
+        &serviceImpl{},
+    )
 
     // Start the server
     if err := s.Start(); err != nil {
