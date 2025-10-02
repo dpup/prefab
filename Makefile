@@ -21,7 +21,7 @@ fix:
 	@golangci-lint run --fix
 	@echo "✅ Auto-fixes applied"
 
-.PHONY: test 
+.PHONY: test
 test: test-staticcheck test-vet test-unit
 
 test-unit: gen-proto
@@ -33,12 +33,45 @@ test-vet:
 test-staticcheck:
 	@staticcheck ./...
 
+.PHONY: test-coverage
+test-coverage: gen-proto
+	@TARGET_PATH="$(if $(TARGET),$(TARGET),./...)"; \
+	if [ "$(PORCELAIN)" = "1" ]; then \
+		echo "🧪 Generating test coverage report..."; \
+		go test $$TARGET_PATH -coverprofile cover.out.tmp; \
+		cat cover.out.tmp | grep -v ".pb.go" | grep -v ".pb.gw.go" > cover.out; \
+		rm cover.out.tmp; \
+		go tool cover -func cover.out; \
+		echo ""; \
+		echo "📊 Full coverage report saved to cover.out"; \
+		echo "💡 View HTML report with: go tool cover -html=cover.out"; \
+	else \
+		echo "🧪 Running tests with coverage..."; \
+		echo ""; \
+		go test $$TARGET_PATH -coverprofile cover.out.tmp; \
+		cat cover.out.tmp | grep -v ".pb.go" | grep -v ".pb.gw.go" > cover.out; \
+		rm cover.out.tmp; \
+		echo ""; \
+		echo "📊 Coverage Summary (excluding generated files):"; \
+		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+		go tool cover -func cover.out | tail -1; \
+		echo ""; \
+		echo "💾 Full report saved to cover.out"; \
+		echo "💡 View detailed HTML report: go tool cover -html=cover.out"; \
+		echo "🤖 Machine-readable output: make test-coverage PORCELAIN=1"; \
+	fi
+
 .PHONY: clean-proto
 clean-proto:
 	@rm -f gen-proto.touchfile
 	@find . -name "*.pb.go" -type f -delete
 	@find . -name "*.pb.gw.go" -type  f -delete
 	@echo "👷🏽‍♀️ Generated proto files removed"
+
+.PHONY: clean-coverage
+clean-coverage:
+	@rm -f cover.out cover.out.tmp
+	@echo "🧹 Coverage files removed"
 
 .PHONY: gen-proto
 gen-proto: gen-proto.touchfile
