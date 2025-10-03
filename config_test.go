@@ -41,7 +41,3 @@ func TestTransformEnv(t *testing.T) {
 		})
 	}
 }
-
-func TestRandomString(t *testing.T) {
-	t.Log(randomString(32))
-}

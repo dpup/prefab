@@ -28,9 +28,10 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - ConfigMustString(), ConfigMustInt(), ConfigMustDurationRange() for required values
 - Validators for ports, URLs, durations, integers
 - Automatic validation at server startup (catches errors before production traffic)
+- Security warning for missing JWT signing key (in auth plugin, not config)
 - 100% test coverage for validation functions
 - Documentation added to configuration.md and reference.md
-- Overall coverage: 35.5% → 41.9%
+- Overall coverage: 35.5% → 41.7%
 
 **✅ EventBus Improvements:**
 - Added configurable rate limiting to prevent goroutine exhaustion
@@ -526,10 +527,11 @@ These enhance developer experience and code quality:
     - Centralized validation logic in validation.go
     - All validators have 100% test coverage
 
-14. **Warn About Insecure Defaults**
-    - Log warning when using generated JWT signing key
-    - Prevents token validation breaking on restart
-    - Note: Detection logic was too fragile, skipped for now
+14. ✅ **COMPLETED: Warn About Insecure Defaults** (plugins/auth/authplugin.go:47-54)
+    - Moved random key generation to auth plugin (consumer of config)
+    - Warns only when config is actually missing (no fragile detection)
+    - Clean separation: config doesn't set insecure defaults
+    - Warning message guides users to set PF__AUTH__SIGNING_KEY
 
 15. **Add Storage Backend Comparison Guide**
     - When to use memstore vs sqlite vs postgres

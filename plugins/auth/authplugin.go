@@ -2,6 +2,9 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"log"
 	"time"
 
 	"github.com/dpup/prefab"
@@ -41,10 +44,19 @@ func WithBlocklist(bl Blocklist) AuthOption {
 
 // Plugin returns a new AuthPlugin.
 func Plugin(opts ...AuthOption) *AuthPlugin {
+	// Get signing key from config, or generate a random one with a warning
+	signingKey := prefab.ConfigString("auth.signingKey")
+	if signingKey == "" {
+		signingKey = randomSigningKey()
+		log.Println("⚠️  WARNING: Using randomly generated JWT signing key. " +
+			"Tokens will be invalidated on server restart. " +
+			"Set PF__AUTH__SIGNING_KEY environment variable or auth.signingKey in prefab.yaml for production.")
+	}
+
 	ap := &AuthPlugin{
 		authService:   &impl{},
-		jwtSigningKey: prefab.Config.String("auth.signingKey"),
-		jwtExpiration: prefab.Config.MustDuration("auth.expiration"),
+		jwtSigningKey: signingKey,
+		jwtExpiration: prefab.ConfigMustDuration("auth.expiration"),
 		identityExtractors: []IdentityExtractor{
 			identityFromAuthHeader,
 			identityFromCookie,
@@ -54,6 +66,14 @@ func Plugin(opts ...AuthOption) *AuthPlugin {
 		opt(ap)
 	}
 	return ap
+}
+
+func randomSigningKey() string {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic("failed to generate random signing key: " + err.Error())
+	}
+	return hex.EncodeToString(key)
 }
 
 // AuthPlugin exposes plugin interfaces that register and manage the AuthService

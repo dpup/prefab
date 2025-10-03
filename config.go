@@ -2,8 +2,6 @@ package prefab
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"net"
 	"os"
 	"path/filepath"
@@ -41,7 +39,6 @@ var Config = koanf.New(".")
 const (
 	defaultPort = "8000"
 	defaultHost = "localhost"
-	keyLength   = 32
 )
 
 func init() {
@@ -54,7 +51,6 @@ func init() {
 		"server.host":           defaultHost,
 		"server.port":           defaultPort,
 		"auth.expiration":       "24h",
-		"auth.signingKey":       randomString(keyLength), // Tokens will break with each restart.
 		"upload.path":           "/upload",
 		"upload.downloadPrefix": "/download",
 		"upload.maxFiles":       10,
@@ -136,14 +132,6 @@ func capitalize(s string) string {
 	r := []rune(s)
 	r[0] = unicode.ToUpper(r[0])
 	return string(r)
-}
-
-func randomString(keySize int) string {
-	key := make([]byte, keySize)
-	if _, err := rand.Read(key); err != nil {
-		panic(err) // Generation failed
-	}
-	return hex.EncodeToString(key)
 }
 
 // LoadConfigFile loads additional configuration from a YAML file into the
