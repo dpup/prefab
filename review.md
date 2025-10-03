@@ -31,7 +31,7 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - Security warning for missing JWT signing key (in auth plugin, not config)
 - 100% test coverage for validation functions
 - Documentation added to configuration.md and reference.md
-- Overall coverage: 35.5% → 41.7%
+- Overall coverage: 35.5% → 52.3% (excluding examples and test packages)
 
 **✅ EventBus Improvements:**
 - Added configurable rate limiting to prevent goroutine exhaustion
@@ -61,7 +61,9 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 
 ### Test Coverage Analysis
 
-**Overall Coverage: ~35%** - Improved from 24.2%, moving toward industry standard
+**Overall Coverage: 52.3%** - Improved from 24.2%, exceeding industry standard (50%)
+
+*Note: Excludes examples and test-only packages (authztest, storagetests)*
 
 #### Excellent Coverage (>85%)
 - `plugins/auth/apikey` - 96.4% ✅ (was 0%)

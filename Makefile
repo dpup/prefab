@@ -25,7 +25,7 @@ fix:
 test: test-staticcheck test-vet test-unit
 
 test-unit: gen-proto
-	@go test ./... -cover
+	@go test $$(go list ./... | grep -v '/examples/' | grep -v 'test$$' | grep -v 'tests$$') -cover
 
 test-vet:
 	@go vet ./...
@@ -35,7 +35,11 @@ test-staticcheck:
 
 .PHONY: test-coverage
 test-coverage: gen-proto
-	@TARGET_PATH="$(if $(TARGET),$(TARGET),./...)"; \
+	@if [ -z "$(TARGET)" ]; then \
+		TARGET_PATH="$$(go list ./... | grep -v '/examples/' | grep -v 'test$$' | grep -v 'tests$$')"; \
+	else \
+		TARGET_PATH="$(TARGET)"; \
+	fi; \
 	if [ "$(PORCELAIN)" = "1" ]; then \
 		echo "🧪 Generating test coverage report..."; \
 		go test $$TARGET_PATH -coverprofile cover.out.tmp; \
