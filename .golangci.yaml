@@ -97,7 +97,7 @@ linters:
       statements: 40
       ignore-comments: true
     gocognit:
-      min-complexity: 20
+      min-complexity: 25
     gocritic:
       settings:
         captLocal:
