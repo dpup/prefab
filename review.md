@@ -37,7 +37,14 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - Templates plugin: 0% → 94.3% (comprehensive tests with temp directories)
 - Logging package: 13.1% → 90.1% (interceptors, context tracking, field accumulation)
 - Auth package (core): 14.6% → 82.6% (plugin lifecycle, service handlers, config injection)
-- Overall coverage: 35.5% → 65.1% (excluding examples and test packages)
+  - Enhanced cookie tests using mock gRPC transport stream
+  - Verifies HTTP/HTTPS secure flag behavior
+  - 100% coverage for SendIdentityCookie with proper verification
+- Serverutil package: 37.7% → 68.9% (cookie/header handling, context utilities)
+  - SendCookie, SendHeader, SendStatusCode with mock transport
+  - CookiesFromIncomingContext, ParseCookies with various edge cases
+  - WithAddress/AddressFromContext context utilities
+- Overall coverage: 35.5% → 65.8% (excluding examples and test packages)
 - Added go-sqlmock for database testing without requiring real PostgreSQL
 - Crossed 60% and 65% coverage thresholds! 🎉
 
@@ -45,6 +52,11 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - Added configurable rate limiting to prevent goroutine exhaustion
 - Default limit of 100 concurrent event handlers
 - Backward compatible with existing code
+
+**✅ Build System Improvements:**
+- Updated Makefile to support `make lint TARGET=./path/to/package`
+- Consistent with test-coverage TARGET parameter
+- Enables targeted linting for faster feedback during development
 
 **Previous Session Improvements:**
 - Fixed optional dependency initialization bug in plugin system
@@ -54,9 +66,28 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - Overall project: 24.2% → ~35%
 
 **Next Recommended Tasks:**
-1. Add upload plugin tests (54.4% coverage → target 70%+)
-2. Increase serverutil coverage (37.7% coverage → target 50%+)
-3. Increase prefab core coverage (41.7% coverage → target 50%+)
+
+**Priority Analysis (by impact and difficulty):**
+
+1. ✅ **Serverutil package tests** (37.7% → 68.9%) - **COMPLETED**
+   - High impact: Critical infrastructure used across all plugins
+   - Completed tests for cookie/header handling, context utilities
+   - Remaining uncovered: MethodOption, FieldOption (proto reflection, complex to test)
+
+2. **Upload plugin tests** (54.4% → 70%+) - **RECOMMENDED NEXT**
+   - High impact: User-facing feature
+   - Medium difficulty: File handling, storage integration
+   - Already has some coverage, building on existing tests
+   - Estimated effort: 3-4 hours
+
+3. **Prefab core (builder.go) tests** (41.7% → 50%+)
+   - High impact: Core server construction
+   - High difficulty: Integration testing, requires full server lifecycle
+   - Builder has 0% coverage but is integration-heavy
+   - Strategy: Focus on builder options (With* functions) that are unit-testable
+   - Estimated effort: 4-6 hours
+
+**Recommendation: Upload plugin next** - User-facing feature with existing test structure to build upon.
 
 ---
 
@@ -70,7 +101,7 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 
 ### Test Coverage Analysis
 
-**Overall Coverage: 65.1%** - Improved from 24.2%, well above industry standard (50%)
+**Overall Coverage: 65.8%** - Improved from 24.2%, well above industry standard (50%)
 
 *Note: Excludes examples and test-only packages (authztest, storagetests)*
 
@@ -88,13 +119,13 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - `plugins/auth/fakeauth` - 79.7%
 - `plugins/storage/postgres` - 76.1% ✅ (was 0%)
 - `plugins/eventbus` - 75.7%
+- `serverutil` - 68.9% ✅ (was 37.7%)
 - `plugins/auth/magiclink` - 58.3% ✅ (was 0%)
 - `plugins/storage` - 55.6%
 - `plugins/upload` - 54.4%
 - `plugins/auth/google` - 50.0% ✅ (was 0%)
 
 #### Remaining Gaps
-- `serverutil` - 37.7%
 - `prefab` (core) - 41.7%
 
 ### Recommendations: Testing
@@ -149,8 +180,15 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
    - Blocklist integration
    - Coverage: 14.6% → 82.6%
 
+8. ✅ **COMPLETED: Serverutil package tests**
+   - Cookie handling (SendCookie, CookiesFromIncomingContext, ParseCookies)
+   - Header manipulation (SendHeader, SendStatusCode)
+   - Context utilities (WithAddress, AddressFromContext)
+   - Mock gRPC transport stream for comprehensive testing
+   - Coverage: 37.7% → 68.9%
+
 **Priority 1 - High**
-8. Increase upload plugin coverage from 54.4% to >70%
+9. Increase upload plugin coverage from 54.4% to >70%
    - File upload handling
    - Storage integration
    - Validation logic
