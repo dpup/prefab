@@ -106,11 +106,14 @@ func main() {
     server := prefab.New(
         prefab.WithPort(8080),
     )
-    
+
     // Register the service and gateway
-    helloservice.RegisterHelloServiceHandlerFromEndpoint(server.GatewayArgs())
-    helloservice.RegisterHelloServiceServer(server.ServiceRegistrar(), helloservice.NewServer())
-    
+    server.RegisterService(
+        &helloservice.HelloService_ServiceDesc,
+        helloservice.RegisterHelloServiceHandler,
+        helloservice.NewServer(),
+    )
+
     // Start the server
     fmt.Println("Server starting on :8080")
     if err := server.Start(); err != nil {
