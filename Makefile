@@ -13,7 +13,11 @@ export PATH := $(TOOLS_OUT):$(PATH)
 
 .PHONY: lint
 lint:
-	@golangci-lint run
+	@if [ -z "$(TARGET)" ]; then \
+		golangci-lint run; \
+	else \
+		golangci-lint run $(TARGET)/...; \
+	fi
 
 .PHONY: fix
 fix:
