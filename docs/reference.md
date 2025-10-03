@@ -465,7 +465,16 @@ func (p *myPlugin) ServerOptions() []prefab.ServerOption {
 
 // Initialize plugin
 func (p *myPlugin) Init(ctx context.Context, r *prefab.Registry) error {
+    // Option 1: Get by name with type assertion
     p.dependency = r.Get("anotherplugin").(anotherPlugin)
+
+    // Option 2: Get by type
+    dep, ok := prefab.GetPlugin[anotherPlugin](r)
+    if !ok {
+        return fmt.Errorf("failed to get anotherplugin")
+    }
+    p.dependency = dep
+
     return nil
 }
 

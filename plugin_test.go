@@ -323,3 +323,64 @@ func TestShutdownOrder(t *testing.T) {
 		assert.NotContains(t, shutdownOrder, "B")
 	})
 }
+
+// TestGetPlugin verifies type-based plugin retrieval.
+func TestGetPlugin(t *testing.T) {
+	t.Run("find plugin by type", func(t *testing.T) {
+		r := &Registry{}
+		plugin := &TestPlugin{name: "test"}
+		r.Register(plugin)
+
+		result, ok := GetPlugin[*TestPlugin](r)
+		assert.True(t, ok, "should find plugin by type")
+		assert.Equal(t, plugin, result)
+		assert.Equal(t, "test", result.Name())
+	})
+
+	t.Run("plugin not found", func(t *testing.T) {
+		r := &Registry{}
+		r.Register(&TestPlugin{name: "test"})
+
+		result, ok := GetPlugin[*TestShutdownPlugin](r)
+		assert.False(t, ok, "should return false when no plugin matches type")
+		assert.Nil(t, result)
+	})
+
+	t.Run("empty registry", func(t *testing.T) {
+		r := &Registry{}
+
+		result, ok := GetPlugin[*TestPlugin](r)
+		assert.False(t, ok, "should return false for empty registry")
+		assert.Nil(t, result)
+	})
+
+	t.Run("multiple plugins returns first match", func(t *testing.T) {
+		r := &Registry{}
+		plugin1 := &TestPlugin{name: "first"}
+		plugin2 := &TestPlugin{name: "second"}
+		other := &TestShutdownPlugin{name: "other"}
+
+		r.Register(other)
+		r.Register(plugin1)
+		r.Register(plugin2)
+
+		result, ok := GetPlugin[*TestPlugin](r)
+		assert.True(t, ok, "should find plugin")
+		assert.NotNil(t, result)
+		// Should return one of the TestPlugin instances
+		assert.True(t, result.Name() == "first" || result.Name() == "second")
+	})
+
+	t.Run("find among mixed types", func(t *testing.T) {
+		r := &Registry{}
+		r.Register(&TestPlugin{name: "a"})
+		target := &TestShutdownPlugin{name: "target"}
+		r.Register(target)
+		r.Register(&TestPlugin{name: "b"})
+
+		result, ok := GetPlugin[*TestShutdownPlugin](r)
+		assert.True(t, ok, "should find the shutdown plugin")
+		assert.Equal(t, target, result)
+		assert.Equal(t, "target", result.Name())
+	})
+}

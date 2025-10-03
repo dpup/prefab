@@ -51,6 +51,29 @@ func (r *Registry) Get(key string) Plugin {
 	return nil
 }
 
+// GetPlugin retrieves a plugin by type.
+// Returns the typed plugin and a boolean indicating success.
+//
+// Example:
+//
+//	if store, ok := GetPlugin[*storage.StoragePlugin](r); ok {
+//	    // use store
+//	}
+func GetPlugin[T Plugin](r *Registry) (T, bool) {
+	var zero T
+	if r.plugins == nil {
+		return zero, false
+	}
+
+	for _, p := range r.plugins {
+		if typed, ok := p.(T); ok {
+			return typed, true
+		}
+	}
+
+	return zero, false
+}
+
 // Register a plugin.
 func (r *Registry) Register(plugin Plugin) {
 	if r.plugins == nil {
