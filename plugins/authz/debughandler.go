@@ -1,6 +1,9 @@
 package authz
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // DebugHandler renders information about registered policies and roles.
 func (ap *AuthzPlugin) DebugHandler(resp http.ResponseWriter, req *http.Request) {
@@ -84,8 +87,13 @@ func getPrefix(isRoot, isTail bool) string {
 }
 
 func pad(str string, n int) string {
-	for i := n - len(str); i > 0; i-- {
-		str += " "
+	padding := n - len(str)
+	if padding <= 0 {
+		return str
 	}
-	return str
+	var sb strings.Builder
+	sb.Grow(n)
+	sb.WriteString(str)
+	sb.WriteString(strings.Repeat(" ", padding))
+	return sb.String()
 }
