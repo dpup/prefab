@@ -19,6 +19,10 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - 100% test coverage with comprehensive test cases
 - Updated reference documentation with examples
 
+**✅ Performance Optimizations:**
+- Reduced error stack allocation from 50 to 15 frames
+- Saves ~280 bytes per error (typical usage only needs 5 frames)
+
 **✅ EventBus Improvements:**
 - Added configurable rate limiting to prevent goroutine exhaustion
 - Default limit of 100 concurrent event handlers
@@ -493,9 +497,10 @@ These improvements significantly enhance reliability and maintainability:
 
 These enhance developer experience and code quality:
 
-10. **Reduce Error Stack Allocation** (errors/errors.go)
-    - Reduce default from 50 to 10-15 frames
-    - Saves ~320 bytes per error allocation
+10. ✅ **COMPLETED: Reduce Error Stack Allocation** (errors/errors.go:59)
+    - Reduced MaxStackDepth from 50 to 15 frames
+    - Saves ~280 bytes per error allocation (35 frames × 8 bytes)
+    - Typical usage only needs 5 frames, so 15 provides plenty of headroom
 
 11. **Fix String Concatenation** (authz/debughandler.go:86-90)
     - Replace loop concatenation with `strings.Builder`

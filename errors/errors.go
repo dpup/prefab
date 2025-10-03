@@ -56,7 +56,7 @@ import (
 )
 
 // The maximum number of stackframes on any error.
-var MaxStackDepth = 50
+var MaxStackDepth = 15
 
 // Error is an error with an attached stacktrace. It can be used
 // wherever the builtin error interface is expected.
