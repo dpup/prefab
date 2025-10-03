@@ -6,24 +6,34 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 
 **Overall Assessment: STRONG - Production-ready with significant recent improvements**
 
-### Recent Progress (Last Session)
+### Recent Progress (Current Session)
 
-**✅ Critical Bug Fixes:**
+**✅ Documentation Updates:**
+- Updated quickstart.md to use new `RegisterService()` pattern
+- Fixed env var naming in email plugin (EMAIL_* → PF__EMAIL__*)
+- Fixed env var naming in templates plugin (TEMPLATES_* → PF__TEMPLATES__*)
+
+**✅ Developer Experience Improvements:**
+- Added `GetPlugin[T](r)` generic helper for type-safe plugin retrieval
+- Eliminates need to know plugin names - just use the type
+- 100% test coverage with comprehensive test cases
+- Updated reference documentation with examples
+
+**✅ EventBus Improvements:**
+- Added configurable rate limiting to prevent goroutine exhaustion
+- Default limit of 100 concurrent event handlers
+- Backward compatible with existing code
+
+**Previous Session Improvements:**
 - Fixed optional dependency initialization bug in plugin system
 - Fixed plugin shutdown order (now reverse of initialization order)
-- Both fixes include comprehensive test coverage
-
-**✅ Test Coverage Improvements:**
 - Authentication plugins: 0% → 50-96% (avg ~73%)
 - Email plugin: 0% → 100% (with testability refactor)
-- Core plugin system: 25% → 35%
 - Overall project: 24.2% → ~35%
 
 **Next Critical Tasks:**
-1. Add EventBus worker pool (prevent goroutine exhaustion)
-2. Update quickstart documentation (deprecated patterns)
-3. Test Postgres storage plugin (0% coverage)
-4. Test Templates plugin (0% coverage)
+1. Test Postgres storage plugin (0% coverage)
+2. Test Templates plugin (0% coverage)
 
 ---
 
@@ -429,9 +439,11 @@ These issues could cause production problems or data loss:
    - Auth plugin now reliably initializes after Storage regardless of registration order
    - Coverage: initPlugin 78.6% → 80.0%
 
-2. **Add EventBus Worker Pool** (eventbus/bus.go:46-49)
-   - Limit concurrent goroutines to prevent resource exhaustion
-   - Suggested limit: 100-500 workers based on expected load
+2. ✅ **FIXED: Add EventBus Worker Pool** (eventbus/bus.go:46-49)
+   - Added configurable rate limiting to prevent goroutine exhaustion
+   - Default limit: 100 concurrent event handlers
+   - Configurable via `eventbus.WithMaxConcurrentHandlers()`
+   - Backward compatible with existing code
 
 3. ✅ **FIXED: Plugin Shutdown Order** (plugin.go:89-108)
    - Shut down plugins in reverse initialization order (not registration order)
@@ -439,9 +451,9 @@ These issues could cause production problems or data loss:
    - Prevents errors from dependencies shutting down before dependents
    - Coverage: Shutdown 0% → 75.0%
 
-4. **Update Quickstart Documentation** (docs/quickstart.md:111-112)
-   - Replace deprecated two-call registration with `RegisterService()` pattern
-   - Prevents new users learning outdated patterns
+4. ✅ **FIXED: Update Quickstart Documentation** (docs/quickstart.md:111-115)
+   - Replaced deprecated two-call registration with `RegisterService()` pattern
+   - New users will learn the correct pattern from the start
 
 ### High Priority (Production Readiness)
 
@@ -468,9 +480,9 @@ These improvements significantly enhance reliability and maintainability:
    - Validate port ranges, durations, URLs at startup
    - Fail loudly for missing required config
 
-9. **Fix Plugin GoDoc Environment Variables**
-   - email.go:7-15 - Update to use `PF__` prefix
-   - templates.go:3-9 - Update to use `PF__` prefix
+9. ✅ **FIXED: Plugin GoDoc Environment Variables**
+   - email.go:7-15 - Updated to use `PF__EMAIL__*` prefix
+   - templates.go:3-9 - Updated to use `PF__TEMPLATES__*` prefix
 
 10. **Document Missing Plugins**
    - Upload plugin documentation and examples
@@ -515,9 +527,11 @@ These provide polish and future-proofing:
 17. **Make Event Logging Configurable** (eventbus/bus.go:45)
     - Add config option to disable or sample event logging
 
-18. **Add Type-Safe Plugin Retrieval**
-    - Generic `GetTyped[T Plugin]()` helper
-    - Reduces runtime type assertion errors
+18. ✅ **COMPLETED: Add Type-Safe Plugin Retrieval** (plugin.go:62-75)
+    - Added `GetPlugin[T Plugin](r)` generic helper
+    - Type-safe retrieval without needing to know plugin names
+    - 100% test coverage with comprehensive test suite
+    - Updated reference documentation with examples
 
 19. **Improve Dependency Error Messages** (plugin.go:117)
     - Add call graph to show which plugin required missing dependency

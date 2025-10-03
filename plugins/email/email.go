@@ -4,15 +4,15 @@
 // SMTP can be configured using global configuration, either as ENV or from
 // a configuration file.
 //
-// |---------------------|---------------------|
-// | Env                 | JSON                |
-// | --------------------|---------------------|
-// | EMAIL_FROM          | email.from          |
-// | EMAIL_SMTP_HOST     | email.smtp.host     |
-// | EMAIL_SMTP_PORT     | email.smtp.port     |
-// | EMAIL_SMTP_USERNAME | email.smtp.username |
-// | EMAIL_SMTP_PASSWORD | email.smtp.password |
-// |---------------------|---------------------|
+// |-------------------------|---------------------|
+// | Env                     | JSON                |
+// | ------------------------|---------------------|
+// | PF__EMAIL__FROM         | email.from          |
+// | PF__EMAIL__SMTP__HOST   | email.smtp.host     |
+// | PF__EMAIL__SMTP__PORT   | email.smtp.port     |
+// | PF__EMAIL__SMTP__USER   | email.smtp.username |
+// | PF__EMAIL__SMTP__PASS   | email.smtp.password |
+// |-------------------------|---------------------|
 package email
 
 import (

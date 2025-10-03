@@ -1,12 +1,12 @@
 // Package templates provides plugins access to Go templates.
 //
 // Configuration:
-// |-----------------------|-----------------------|
-// | Env                   | JSON                  |
-// | ----------------------|-----------------------|
-// | TEMPLATES_ALWAYSPARSE | templates.alwaysparse |
-// | TEMPLATES_DIRS        | templates.dirs        |
-// |-----------------------|-----------------------|
+// |-----------------------------------|-----------------------|
+// | Env                               | JSON                  |
+// | ----------------------------------|-----------------------|
+// | PF__TEMPLATES__ALWAYSPARSE        | templates.alwaysparse |
+// | PF__TEMPLATES__DIRS               | templates.dirs        |
+// |-----------------------------------|-----------------------|
 package templates
 
 import (
