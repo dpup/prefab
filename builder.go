@@ -40,6 +40,11 @@ var JSONMarshalOptions = protojson.MarshalOptions{
 
 // New returns a new server.
 func New(opts ...ServerOption) *Server {
+	// Validate configuration before building the server
+	if errors := ValidateConfig(); len(errors) > 0 {
+		panic(FormatValidationErrors(errors))
+	}
+
 	b := &builder{
 		host:            Config.String("server.host"),
 		port:            Config.Int("server.port"),

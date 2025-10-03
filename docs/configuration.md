@@ -560,3 +560,99 @@ email:
     username: user
     password: pass
 ```
+
+## Configuration Validation
+
+Prefab automatically validates critical configuration values at server startup to catch misconfigurations early.
+
+### Automatic Validation
+
+When you call `prefab.New()`, the following validations are performed:
+
+- **server.port**: Must be between 1 and 65535
+- **server.host**: Cannot be empty
+- **server.maxMsgSizeBytes**: Must be positive if set
+- **server.security.hstsExpiration**: Must be positive if set
+- **server.security.corsMaxAge**: Must be non-negative if set
+- **auth.expiration**: Must be positive if set
+
+If any validation fails, the server will panic with a clear error message:
+
+```
+Configuration validation failed:
+  - server.port: must be between 1 and 65535, got: 70000
+  - auth.expiration: must be positive, got: -1h
+
+Fix these errors in prefab.yaml or environment variables and try again.
+```
+
+### Required Configuration Values
+
+Use the `ConfigMust*` functions to require configuration values:
+
+```go
+// Require a non-empty string
+apiKey := prefab.ConfigMustString("myapp.apiKey",
+    "Set PF__MYAPP__API_KEY environment variable")
+
+// Require an integer within a range
+timeout := prefab.ConfigMustInt("myapp.timeout", 1, 300)
+
+// Require a duration within a range
+interval := prefab.ConfigMustDurationRange("myapp.interval",
+    time.Second, time.Hour)
+```
+
+These functions will panic at startup with helpful error messages if the configuration is missing or invalid.
+
+### Custom Validation
+
+You can add custom validation for your own configuration:
+
+```go
+func main() {
+    // Validate your config after loading
+    if !prefab.ConfigExists("myapp.apiKey") {
+        panic("myapp.apiKey is required")
+    }
+
+    port := prefab.ConfigInt("myapp.database.port")
+    if err := prefab.ValidatePort(port); err != nil {
+        panic(fmt.Sprintf("myapp.database.port: %v", err))
+    }
+
+    // Now create the server
+    s := prefab.New()
+    // ...
+}
+```
+
+### Available Validators
+
+Prefab provides several validators you can use:
+
+```go
+// Validate a port number (1-65535)
+err := prefab.ValidatePort(8080)
+
+// Validate an integer range
+err := prefab.ValidateIntRange(value, min, max)
+
+// Validate a positive integer
+err := prefab.ValidatePositiveInt(count)
+
+// Validate a duration range
+err := prefab.ValidateDurationRange(duration, min, max)
+
+// Validate a positive duration
+err := prefab.ValidatePositiveDuration(timeout)
+
+// Validate a non-negative duration
+err := prefab.ValidateNonNegativeDuration(delay)
+
+// Validate a URL
+err := prefab.ValidateURL("https://example.com")
+
+// Validate a non-empty string
+err := prefab.ValidateNonEmpty(name)
+```

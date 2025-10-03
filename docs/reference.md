@@ -430,12 +430,45 @@ func main() {
 }
 ```
 
+### Configuration Validation
+
+Prefab automatically validates critical configuration at startup. You can also add validation for your own config:
+
+```go
+func main() {
+    // Load configuration
+    prefab.LoadConfigDefaults(map[string]interface{}{
+        "myapp.apiKey": "",  // Will be required
+        "myapp.timeout": 30,
+    })
+
+    // Validate required configuration
+    apiKey := prefab.ConfigMustString("myapp.apiKey",
+        "Set PF__MYAPP__API_KEY environment variable")
+
+    // Validate with range checking
+    timeout := prefab.ConfigMustInt("myapp.timeout", 1, 300)
+
+    // Custom validation
+    port := prefab.ConfigInt("myapp.database.port")
+    if err := prefab.ValidatePort(port); err != nil {
+        panic(fmt.Sprintf("myapp.database.port: %v", err))
+    }
+
+    // Create server (also performs automatic validation)
+    s := prefab.New()
+
+    // ... rest of setup ...
+}
+```
+
 **Best practices:**
 - Use a consistent namespace prefix (e.g., `myapp.`) for your configuration
 - Provide sensible defaults via `LoadConfigDefaults()`
 - Use YAML for environment-specific config
 - Use environment variables for secrets and deployment overrides
-- Validate required config on startup
+- **Validate required config on startup** using `ConfigMust*` functions
+- Use `ValidatePort()`, `ValidateURL()` etc. for common validations
 - For testable code, inject config values as dependencies rather than reading from the global config in business logic
 
 ## Custom Plugins

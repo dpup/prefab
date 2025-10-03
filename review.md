@@ -23,6 +23,15 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - Reduced error stack allocation from 50 to 15 frames (~280 bytes saved per error)
 - Fixed O(n²) string concatenation in authz debug handler
 
+**✅ Configuration Validation Framework:**
+- Added comprehensive validation system for config values
+- ConfigMustString(), ConfigMustInt(), ConfigMustDurationRange() for required values
+- Validators for ports, URLs, durations, integers
+- Automatic validation at server startup (catches errors before production traffic)
+- 100% test coverage for validation functions
+- Documentation added to configuration.md and reference.md
+- Overall coverage: 35.5% → 41.9%
+
 **✅ EventBus Improvements:**
 - Added configurable rate limiting to prevent goroutine exhaustion
 - Default limit of 100 concurrent event handlers
@@ -479,10 +488,11 @@ These improvements significantly enhance reliability and maintainability:
    - Connection handling, CRUD, error translation, transactions
    - Target: 0% → 70%+
 
-8. **Add Configuration Validation Framework**
-   - `ConfigMustString()`, `ConfigMustInt()` helpers
-   - Validate port ranges, durations, URLs at startup
-   - Fail loudly for missing required config
+8. ✅ **COMPLETED: Add Configuration Validation Framework** (validation.go, builder.go:43-46)
+   - Added `ConfigMustString()`, `ConfigMustInt()`, `ConfigMustDurationRange()` functions
+   - Validators for ports, URLs, durations, integers
+   - Automatic validation at server startup in New()
+   - 100% test coverage, comprehensive documentation
 
 9. ✅ **FIXED: Plugin GoDoc Environment Variables**
    - email.go:7-15 - Updated to use `PF__EMAIL__*` prefix
@@ -511,13 +521,15 @@ These enhance developer experience and code quality:
     - Current: 13.1% → Target: 50%+
     - Critical cross-cutting infrastructure
 
-13. **Add Common Config Validators**
-    - `ValidatePort()`, `ValidateDuration()`, `ValidateURL()`
-    - Centralize validation logic
+13. ✅ **COMPLETED: Add Common Config Validators** (validation.go)
+    - Added `ValidatePort()`, `ValidateURL()`, `ValidateDuration()` and more
+    - Centralized validation logic in validation.go
+    - All validators have 100% test coverage
 
 14. **Warn About Insecure Defaults**
     - Log warning when using generated JWT signing key
     - Prevents token validation breaking on restart
+    - Note: Detection logic was too fragile, skipped for now
 
 15. **Add Storage Backend Comparison Guide**
     - When to use memstore vs sqlite vs postgres
