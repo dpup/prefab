@@ -31,7 +31,13 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - Security warning for missing JWT signing key (in auth plugin, not config)
 - 100% test coverage for validation functions
 - Documentation added to configuration.md and reference.md
-- Overall coverage: 35.5% → 52.3% (excluding examples and test packages)
+
+**✅ Test Coverage Improvements:**
+- Postgres storage plugin: 0% → 76.1% (using sqlmock for unit tests)
+- Templates plugin: 0% → 94.3% (comprehensive tests with temp directories)
+- Overall coverage: 35.5% → 60.6% (excluding examples and test packages)
+- Added go-sqlmock for database testing without requiring real PostgreSQL
+- Crossed 60% coverage threshold! 🎉
 
 **✅ EventBus Improvements:**
 - Added configurable rate limiting to prevent goroutine exhaustion
@@ -45,9 +51,10 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - Email plugin: 0% → 100% (with testability refactor)
 - Overall project: 24.2% → ~35%
 
-**Next Critical Tasks:**
-1. Test Postgres storage plugin (0% coverage)
-2. Test Templates plugin (0% coverage)
+**Next Recommended Tasks:**
+1. Add logging package tests (13.1% coverage → target 50%+)
+2. Add upload plugin tests (54.4% coverage → target 70%+)
+3. Increase core auth plugin coverage (14.6% coverage → target 50%+)
 
 ---
 
@@ -61,31 +68,32 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 
 ### Test Coverage Analysis
 
-**Overall Coverage: 52.3%** - Improved from 24.2%, exceeding industry standard (50%)
+**Overall Coverage: 60.6%** - Improved from 24.2%, well above industry standard (50%)
 
 *Note: Excludes examples and test-only packages (authztest, storagetests)*
 
 #### Excellent Coverage (>85%)
 - `plugins/auth/apikey` - 96.4% ✅ (was 0%)
 - `plugins/storage/memstore` - 96.5%
+- `plugins/templates` - 94.3% ✅ (was 0%)
 - `plugins/auth/pwdauth` - 88.9% ✅ (was 0%)
 - `plugins/storage/sqlite` - 87.6%
 - `plugins/email` - 100.0% ✅ (was 0%)
 
 #### Good Coverage (50-85%)
 - `plugins/auth/fakeauth` - 79.7%
-- `plugins/eventbus` - 71.4%
+- `plugins/storage/postgres` - 76.1% ✅ (was 0%)
+- `plugins/eventbus` - 75.7%
 - `plugins/auth/magiclink` - 58.3% ✅ (was 0%)
+- `plugins/storage` - 55.6%
+- `plugins/upload` - 54.4%
 - `plugins/auth/google` - 50.0% ✅ (was 0%)
-- `prefab` (core) - 34.8% ✅ (was ~25%)
 
-#### Remaining Gaps (0% coverage)
-- **Templates Plugin**: 0% coverage
-- **Postgres Storage**: 0% coverage
-
-#### Infrastructure Gaps
+#### Remaining Gaps
+- `plugins/auth` (core) - 14.6% (authentication service implementation)
 - `logging` - 13.1% (critical cross-cutting concern)
-- `plugins/auth` (core) - 14.8%
+- `serverutil` - 37.7%
+- `prefab` (core) - 41.7%
 
 ### Recommendations: Testing
 
@@ -107,21 +115,23 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
    - Fixed shutdown order bug
    - Added comprehensive tests for both
 
-**Priority 1 - Critical**
-4. Test postgres storage plugin
-   - Connection handling
-   - CRUD operations
-   - Error translation
-   - Transaction handling
-   - Target: 0% → 70%+
+4. ✅ **COMPLETED: Postgres storage plugin tests**
+   - Connection handling with sqlmock
+   - CRUD operations (Create, Read, Update, Upsert, Delete)
+   - Error translation for all database errors
+   - DDL operations (ensureDefaultTable, ensureTable)
+   - Query building (buildListQuery)
+   - Coverage: 0% → 76.1%
 
-**Priority 2 - High**
-5. Add templates plugin tests
-   - Template rendering
+5. ✅ **COMPLETED: Templates plugin tests**
+   - Template rendering with various data types
    - Template loading and caching
-   - Error scenarios
-   - Target: 0% → 60%+
+   - AlwaysParse option for dynamic reloading
+   - Subdirectory scanning
+   - Error scenarios (invalid syntax, missing templates)
+   - Coverage: 0% → 94.3%
 
+**Priority 1 - High**
 6. Increase logging package coverage from 13.1% to >50%
    - Interceptor behavior
    - Context tracking
@@ -487,9 +497,11 @@ These improvements significantly enhance reliability and maintainability:
    - Coverage: 0% → 100.0%
    - Backward compatible (external interface unchanged)
 
-7. **Add Postgres Storage Tests**
-   - Connection handling, CRUD, error translation, transactions
-   - Target: 0% → 70%+
+7. ✅ **COMPLETED: Add Postgres Storage Tests**
+   - Using sqlmock for unit tests without requiring real database
+   - CRUD operations, error translation, DDL operations
+   - Coverage: 0% → 76.1%
+   - Maintains existing integration test for end-to-end validation
 
 8. ✅ **COMPLETED: Add Configuration Validation Framework** (validation.go, builder.go:43-46)
    - Added `ConfigMustString()`, `ConfigMustInt()`, `ConfigMustDurationRange()` functions
