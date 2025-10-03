@@ -44,9 +44,14 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
   - SendCookie, SendHeader, SendStatusCode with mock transport
   - CookiesFromIncomingContext, ParseCookies with various edge cases
   - WithAddress/AddressFromContext context utilities
-- Overall coverage: 35.5% → 65.8% (excluding examples and test packages)
+- Upload plugin: 54.4% → 92.0% (file upload/download, backends, validation)
+  - FSBackend filesystem operations (save, get, directory creation)
+  - Upload/download handler error cases (wrong method, invalid paths)
+  - File type validation and backend error handling
+  - Download prefix configuration
+- Overall coverage: 35.5% → 67.0% (excluding examples and test packages)
 - Added go-sqlmock for database testing without requiring real PostgreSQL
-- Crossed 60% and 65% coverage thresholds! 🎉
+- Crossed 60%, 65%, and approaching 70% coverage thresholds! 🎉
 
 **✅ EventBus Improvements:**
 - Added configurable rate limiting to prevent goroutine exhaustion
@@ -74,13 +79,13 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
    - Completed tests for cookie/header handling, context utilities
    - Remaining uncovered: MethodOption, FieldOption (proto reflection, complex to test)
 
-2. **Upload plugin tests** (54.4% → 70%+) - **RECOMMENDED NEXT**
+2. ✅ **Upload plugin tests** (54.4% → 92.0%) - **COMPLETED**
    - High impact: User-facing feature
-   - Medium difficulty: File handling, storage integration
-   - Already has some coverage, building on existing tests
-   - Estimated effort: 3-4 hours
+   - Completed comprehensive tests for file handling, storage backends
+   - FSBackend, upload/download handlers, validation, error cases
+   - Fixed pre-existing gocognit linter directive
 
-3. **Prefab core (builder.go) tests** (41.7% → 50%+)
+3. **Prefab core (builder.go) tests** (41.7% → 50%+) - **RECOMMENDED NEXT**
    - High impact: Core server construction
    - High difficulty: Integration testing, requires full server lifecycle
    - Builder has 0% coverage but is integration-heavy
@@ -101,7 +106,7 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 
 ### Test Coverage Analysis
 
-**Overall Coverage: 65.8%** - Improved from 24.2%, well above industry standard (50%)
+**Overall Coverage: 67.0%** - Improved from 24.2%, well above industry standard (50%)
 
 *Note: Excludes examples and test-only packages (authztest, storagetests)*
 
@@ -110,6 +115,7 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - `plugins/auth/apikey` - 96.4% ✅ (was 0%)
 - `plugins/storage/memstore` - 96.5%
 - `plugins/templates` - 94.3% ✅ (was 0%)
+- `plugins/upload` - 92.0% ✅ (was 54.4%)
 - `plugins/logging` - 90.1% ✅ (was 13.1%)
 - `plugins/auth/pwdauth` - 88.9% ✅ (was 0%)
 - `plugins/storage/sqlite` - 87.6%
@@ -122,7 +128,6 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
 - `serverutil` - 68.9% ✅ (was 37.7%)
 - `plugins/auth/magiclink` - 58.3% ✅ (was 0%)
 - `plugins/storage` - 55.6%
-- `plugins/upload` - 54.4%
 - `plugins/auth/google` - 50.0% ✅ (was 0%)
 
 #### Remaining Gaps
@@ -187,11 +192,19 @@ Prefab is a well-architected, production-ready Go library for building gRPC serv
    - Mock gRPC transport stream for comprehensive testing
    - Coverage: 37.7% → 68.9%
 
+9. ✅ **COMPLETED: Upload plugin tests**
+   - FSBackend filesystem operations (save, get, error handling)
+   - Upload handler error cases (wrong method, invalid paths, backend failures)
+   - Download handler error cases (file not found, path validation)
+   - File type validation and configuration options
+   - Integration tests for upload/download flow
+   - Coverage: 54.4% → 92.0%
+
 **Priority 1 - High**
-9. Increase upload plugin coverage from 54.4% to >70%
-   - File upload handling
-   - Storage integration
-   - Validation logic
+10. Increase prefab core coverage from 41.7% to >50%
+   - Builder pattern functions (With* options)
+   - Server lifecycle management
+   - Integration testing
 
 **Priority 3 - Medium**
 7. Set minimum coverage threshold (50%) for non-example packages

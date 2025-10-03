@@ -141,8 +141,6 @@ func (p *UploadPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 }
 
 // Handles the multipart form data and forwards to the upload service.
-//
-//nolint:gocognit // IMO breaking this up more would hurt readability.
 func (p *UploadPlugin) handleUpload(r *http.Request) (any, error) {
 	if r.Method != http.MethodPost {
 		return nil, errors.NewC("upload: method not allowed", codes.Unimplemented)
