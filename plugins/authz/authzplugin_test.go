@@ -80,6 +80,15 @@ func TestAuthzPlugin_determineEffect(t *testing.T) {
 			},
 			want: authz.Deny,
 		},
+		{
+			name: "AWS IAM: Explicit deny should block even with allow from another role (default allow)",
+			args: args{
+				action:        "delete",
+				roles:         []authz.Role{"admin", "readonly"},
+				defaultEffect: authz.Allow,
+			},
+			want: authz.Deny,
+		},
 	}
 
 	for _, tt := range tests {
@@ -87,6 +96,8 @@ func TestAuthzPlugin_determineEffect(t *testing.T) {
 			ap := authz.Plugin(
 				authz.WithPolicy(authz.Allow, authz.Role("admin"), authz.Action("write")),
 				authz.WithPolicy(authz.Deny, authz.Role("nyc-employee"), authz.Action("write")),
+				authz.WithPolicy(authz.Allow, authz.Role("admin"), authz.Action("delete")),
+				authz.WithPolicy(authz.Deny, authz.Role("readonly"), authz.Action("delete")),
 			)
 			if got := ap.DetermineEffect(tt.args.action, tt.args.roles, tt.args.defaultEffect); got != tt.want {
 				t.Errorf("AuthzPlugin.determineEffect() = %v, want %v", got, tt.want)

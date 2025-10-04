@@ -195,6 +195,27 @@ Prefab's authorization system uses proto options to define access control rules 
    6. It checks if any policy allows or denies the action for the user's roles
    7. It applies the default effect if no policy matches
 
+4. **Policy Evaluation Precedence**:
+
+   Prefab uses AWS IAM-style precedence for clear, predictable authorization:
+
+   1. **Explicit Deny wins**: If ANY of the user's roles has a Deny policy for the action, access is denied
+   2. **Explicit Allow wins**: If no Deny exists and ANY role has an Allow policy, access is granted
+   3. **Default effect**: If no policies match any role, use the `default_effect` from the RPC method
+
+   **Benefits:**
+   - Create "blocklist" roles that override other permissions (e.g., suspended users)
+   - Grant permissions safely knowing deny policies provide ultimate control
+   - Predictable behavior aligned with industry standards (AWS IAM)
+
+   **Example:**
+   ```go
+   // User has roles: [editor, suspended]
+   authz.WithPolicy(authz.Allow, roleEditor, Action("documents.write"))
+   authz.WithPolicy(authz.Deny, roleSuspended, Action("*"))
+   // Result: Denied (explicit deny wins over allow)
+   ```
+
 This declarative approach allows authorization rules to be clearly defined at the API design level while implementation details are handled by the server code.
 
 #### Server Code Setup

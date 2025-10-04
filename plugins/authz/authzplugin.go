@@ -371,13 +371,21 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 	return errors.Mark(defaultError, 0)
 }
 
-// DetermineEffect checks to see if there are any policies which explicitly
-// apply to this role and action. If there are, then all roles must explicitly
-// revert the default effect.
+// DetermineEffect determines if a user can perform an action using AWS IAM-style precedence:
 //
-// In otherwords, if an RPC is default deny and two roles explicitly match a
-// policy, then both roles must allow access. This can be used to create
-// exclusion groups: e.g. all admins, except nyc-admins.
+// 1. Explicit Deny: If ANY role has a Deny policy for the action → Deny
+// 2. Explicit Allow: If ANY role has an Allow policy (and no Deny) → Allow
+// 3. Default Effect: If no policies match → Use the RPC's default_effect
+//
+// This precedence model makes authorization predictable and secure:
+// - Deny policies can block access even when other roles would grant it
+// - Useful for creating "blocklist" roles or temporary access restrictions
+// - Aligns with AWS IAM and other industry-standard access control systems
+//
+// Example: User has roles [admin, blocked-user]
+//   - Policy: admin → Allow write
+//   - Policy: blocked-user → Deny write
+//   - Result: Deny (explicit deny wins)
 func (ap *AuthzPlugin) DetermineEffect(action Action, roles []Role, defaultEffect Effect) Effect {
 	if len(roles) == 0 {
 		return defaultEffect

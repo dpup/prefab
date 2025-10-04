@@ -135,22 +135,36 @@ func (e Effect) String() string {
 
 type effectList []Effect
 
-// Combine returns the combined effect of a list of effects. If the list is empty,
-// the default effect is returned. If the list contains the default effect, the
-// default effect is returned. Otherwise, the default effect is reversed.
+// Combine returns the combined effect using AWS IAM-style precedence:
+// 1. Explicit Deny always wins (security first)
+// 2. Explicit Allow wins if no Deny exists
+// 3. Default effect if no policies match
 //
-// In otherwords, the entire list must be the reverse of the default effect for
-// it to override the default.
+// This provides intuitive, predictable authorization:
+// - Deny policies can block access even if other roles grant it
+// - Allow policies grant access unless explicitly denied
+// - Safe defaults protect resources when no policies match
 func (e effectList) Combine(defaultEffect Effect) Effect {
 	if len(e) == 0 {
 		return defaultEffect
 	}
+
+	// Step 1: Explicit Deny always wins
 	for _, effect := range e {
-		if effect == defaultEffect {
-			return defaultEffect
+		if effect == Deny {
+			return Deny
 		}
 	}
-	return defaultEffect.Reverse()
+
+	// Step 2: If no Deny, any Allow wins
+	for _, effect := range e {
+		if effect == Allow {
+			return Allow
+		}
+	}
+
+	// Step 3: No policies matched (should not reach here if effects is non-empty)
+	return defaultEffect
 }
 
 // AuthzObject is the base interface for all objects used in authorization. While
