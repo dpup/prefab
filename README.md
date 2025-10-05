@@ -187,11 +187,16 @@ s := prefab.New(
 
 ### Authorization
 
-Building on top of the authentication plugin, `authz` allows for access controls
-to be configured at the RPC level in the protocol buffer definitions.
+The `authz` plugin provides declarative, protocol-buffer-based access control using AWS IAM-style precedence (Deny > Allow > Default).
 
-For now, see the [examples](./examples/authz/authzexample.go) for more
-details on how it works.
+**Key Features:**
+- **Proto-based configuration**: Define access rules directly in your `.proto` files
+- **Role-based access control (RBAC)**: Context-dependent roles determined by your business logic
+- **Composable patterns**: Type-safe patterns for object fetchers and role describers eliminate boilerplate
+- **Enhanced debugging**: Rich error messages, audit logging, and detailed policy evaluation tracking
+- **Scope support**: Multi-tenant authorization with workspace/organization scoping
+
+See [docs/authz.md](./docs/authz.md) for comprehensive documentation and [examples](./examples/authz/) for complete working examples.
 
 ### Storage
 
