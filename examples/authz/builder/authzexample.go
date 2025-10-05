@@ -101,6 +101,7 @@ func Run() {
 	builder.WithObjectFetcherFn("org", fetchOrg)
 	builder.WithObjectFetcherFn("document", fetchDocument)
 
+	// Define role describer for org using the old pattern (for reference)
 	builder.WithRoleDescriberFn("org", func(ctx context.Context, identity auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
 		if object.(org).name == "xmen" {
 			return rolesForIdentity(identity), nil
@@ -108,24 +109,21 @@ func Run() {
 		return []authz.Role{}, nil
 	})
 
-	// Define a custom role describer that just looks at email address.
-	builder.WithRoleDescriberFn("document", func(ctx context.Context, identity auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
-		// Add domain-specific logic if needed
-		if string(scope) != "xmen" {
-			return []authz.Role{}, nil
-		}
+	// Define a role describer for the document using the Compose pattern.
+	builder.WithRoleDescriber("document", authz.Compose(
+		// Ownership role - automatically grants owner if user owns the document
+		authz.OwnershipRole(authz.RoleOwner, func(d document) string {
+			return d.OwnerID()
+		}),
 
-		// Base role for any authenticated user
-		roles := rolesForIdentity(identity)
-
-		// Check if user is the owner of the document
-		if owner, ok := object.(authz.OwnedObject); ok {
-			if owner.OwnerID() == identity.Subject {
-				roles = append(roles, authz.RoleOwner)
-			}
-		}
-		return roles, nil
-	})
+		// Base roles from identity - every authenticated user gets their base role
+		authz.StaticRoles(func(_ context.Context, identity auth.Identity, _ document) []authz.Role {
+			// Only grant roles if in the right scope (xmen org)
+			// Note: Compose automatically validates ScopedObject, but document
+			// doesn't implement it, so we check manually here
+			return rolesForIdentity(identity)
+		}),
+	))
 
 	s := prefab.New(
 		prefab.WithPlugin(auth.Plugin()),

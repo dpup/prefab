@@ -36,10 +36,11 @@
 // other attributes. For example, an "admin" role could only be granted if the
 // request comes from a specific IP address.
 //
-// Role Describers can also be configured to accept a `domain` from the
+// Role Describers can also be configured to accept a `scope` from the
 // request. This is optional and is intended to simplify the implementation of
 // multi-tenant systems or systems where a user might be part of multiple
-// workspaces or groups, each with different permissions.
+// workspaces or groups, each with different permissions. The scope represents
+// the "container" of the object being accessed (e.g., Document=Object, Folder=Scope).
 //
 // To map an incoming request to a resource, the Authz plugin uses "Object
 // Fetchers". Fetchers can be registered against a key, which can be an
@@ -63,7 +64,7 @@
 //
 //
 //	message GetDocumentRequest {
-//	  string org_id = 1 [(prefab.authz.domain) = true]; // Optional scope/domain.
+//	  string org_id = 1 [(prefab.authz.scope) = true]; // Optional scope (e.g., workspace, org).
 //	  string document_id = 2 [(prefab.authz.id) = true]; // Required to identify resource.
 //	}
 //
@@ -76,6 +77,47 @@
 // - Common CRUD actions: `ActionCreate`, `ActionRead`, etc..
 // - CRUD builder: `NewCRUDBuilder()` for standard roles and CRUD permissions.
 // - Type-safe interfaces: Use the typed helpers for compile-time type safety.
+//
+// # Role Describer Patterns
+//
+// The package provides composable, type-safe patterns for building role describers
+// that eliminate boilerplate and manual type assertions:
+//
+//	authz.Compose(
+//	    // Grant owner role if user owns the document
+//	    authz.OwnershipRole(authz.RoleOwner, func(doc *Document) string {
+//	        return doc.OwnerID
+//	    }),
+//
+//	    // Grant viewer role if document is published
+//	    authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc *Document) bool {
+//	        return doc.Published
+//	    }),
+//
+//	    // Grant roles based on organization membership
+//	    authz.MembershipRoles(
+//	        func(doc *Document) string { return doc.OrgID },
+//	        func(ctx context.Context, orgID string, identity auth.Identity) ([]authz.Role, error) {
+//	            org, err := fetchOrg(ctx, orgID)
+//	            if err != nil {
+//	                return nil, err
+//	            }
+//	            return org.GetUserRoles(ctx, identity.Subject)
+//	        },
+//	    ),
+//	)
+//
+// Available patterns:
+// - Compose: Combines multiple describers with automatic scope validation
+// - OwnershipRole: Grants role if user owns the resource
+// - ConditionalRole: Grants role based on async predicate (for database queries)
+// - StaticRole: Grants role based on sync predicate (for simple conditions)
+// - StaticRoles: Returns multiple roles based on conditions
+// - GlobalRole: Grants role based on context only (e.g., superuser checks)
+// - MembershipRoles: Grants roles based on parent resource membership
+// - ScopeRoles: Grants roles based on scope relationship
+//
+// See patterns.go for detailed documentation on each pattern.
 //
 // # Role Hierarchy
 //
@@ -90,7 +132,8 @@
 //
 // For complete examples, see:
 // - examples/authz/custom/authzexample.go (fully custom configuration)
-// - examples/authz/common-builder/authzexample.go (common builder pattern)
+// - examples/authz/builder/authzexample.go (common builder pattern)
+// - examples/authz/patterns/authzexample.go (role describer patterns)
 package authz
 
 import (

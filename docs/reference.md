@@ -293,6 +293,103 @@ func roleDescriber(ctx context.Context, identity auth.Identity, object any, doma
 }
 ```
 
+#### Role Describer Patterns
+
+Prefab provides composable, type-safe patterns for building role describers that eliminate boilerplate code, manual type assertions, and provide automatic scope validation:
+
+```go
+// OLD PATTERN: Manual type assertions and scope validation
+builder.WithRoleDescriberFn("document", func(ctx context.Context, identity auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
+    // Manual type assertion
+    doc, ok := object.(*Document)
+    if !ok {
+        return nil, errors.NewC("expected Document", codes.Internal)
+    }
+
+    // Manual scope validation
+    if string(scope) != doc.WorkspaceID {
+        return []authz.Role{}, nil
+    }
+
+    var roles []authz.Role
+    if doc.OwnerID == identity.Subject {
+        roles = append(roles, authz.RoleOwner)
+    }
+    return roles, nil
+})
+
+// NEW PATTERN: Composable, type-safe patterns
+builder.WithRoleDescriber("document", authz.Compose(
+    // Grant owner role if user owns the document
+    authz.OwnershipRole(authz.RoleOwner, func(doc *Document) string {
+        return doc.OwnerID
+    }),
+
+    // Grant viewer role if document is published
+    authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc *Document) bool {
+        return doc.Published
+    }),
+
+    // Grant roles based on workspace membership
+    authz.MembershipRoles(
+        func(doc *Document) string { return doc.WorkspaceID },
+        func(ctx context.Context, workspaceID string, identity auth.Identity) ([]authz.Role, error) {
+            workspace, err := fetchWorkspace(ctx, workspaceID)
+            if err != nil {
+                return nil, err
+            }
+            return workspace.GetUserRoles(ctx, identity.Subject)
+        },
+    ),
+))
+```
+
+**Available Patterns:**
+
+- **Compose**: Combines multiple describers with automatic scope validation for `ScopedObject`
+- **OwnershipRole**: Grants role if user owns the resource
+- **ConditionalRole**: Grants role based on async predicate (for database queries)
+- **StaticRole**: Grants role based on sync predicate (for simple conditions)
+- **StaticRoles**: Returns multiple roles based on conditions
+- **GlobalRole**: Grants role based on context only (e.g., superuser checks)
+- **MembershipRoles**: Grants roles based on parent resource membership
+- **ScopeRoles**: Grants roles based on scope relationship (validates scope matches)
+
+**Scope Semantics:**
+
+The `scope` parameter represents the "container" of the object being accessed. For example:
+- Document = Object, Folder = Scope
+- Note = Object, Workspace = Scope
+- File = Object, Organization = Scope
+
+When using `Compose` with objects that implement `ScopedObject`, scope validation is automatic. If the object's `ScopeID()` doesn't match the request scope, empty roles are returned.
+
+**Custom Roles:**
+
+Roles are just strings, so you can define your own:
+
+```go
+const (
+    reviewer = authz.Role("reviewer")
+    contributor = authz.Role("contributor")
+)
+
+authz.Compose(
+    // Use framework roles
+    authz.OwnershipRole(authz.RoleOwner, func(pr *PullRequest) string { return pr.AuthorID }),
+
+    // Use custom roles
+    authz.ConditionalRole(reviewer, func(_ context.Context, identity auth.Identity, pr *PullRequest, _ authz.Scope) (bool, error) {
+        for _, r := range pr.Reviewers {
+            if r == identity.Subject {
+                return true, nil
+            }
+        }
+        return false, nil
+    }),
+)
+```
+
 ### Storage
 
 ```go
