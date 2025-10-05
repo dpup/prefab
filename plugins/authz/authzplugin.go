@@ -397,18 +397,26 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 	}
 
 	if finalEffect == Allow {
-		decision.Reason = "allowed by policy"
-		logging.Track(ctx, "authz.reason", decision.Reason)
-
-		// Call audit logger if configured
-		if ap.auditLogger != nil {
-			ap.auditLogger(ctx, decision)
-		}
-
-		return nil
+		return ap.handleAllowed(ctx, decision)
 	}
 
-	// Access denied - build explanation for user
+	return ap.handleDenied(ctx, decision, roles, evaluatedPolicies, cfg.Action, defaultError)
+}
+
+// handleAllowed processes an allowed authorization decision.
+func (ap *AuthzPlugin) handleAllowed(ctx context.Context, decision AuthzDecision) error {
+	decision.Reason = "allowed by policy"
+	logging.Track(ctx, "authz.reason", decision.Reason)
+
+	if ap.auditLogger != nil {
+		ap.auditLogger(ctx, decision)
+	}
+
+	return nil
+}
+
+// handleDenied processes a denied authorization decision.
+func (ap *AuthzPlugin) handleDenied(ctx context.Context, decision AuthzDecision, roles []Role, evaluatedPolicies []PolicyEvaluation, action Action, defaultError error) error {
 	if len(roles) == 0 {
 		decision.Reason = "no roles"
 	} else {
@@ -416,13 +424,11 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 	}
 	logging.Track(ctx, "authz.reason", decision.Reason)
 
-	// Call audit logger if configured
 	if ap.auditLogger != nil {
 		ap.auditLogger(ctx, decision)
 	}
 
-	// Build user-friendly denial explanation
-	explanation := buildDenialExplanation(cfg.Action, roles, evaluatedPolicies, cfg.DefaultEffect)
+	explanation := buildDenialExplanation(action, roles, evaluatedPolicies)
 	return errors.WithUserPresentableMessage(
 		errors.Mark(defaultError, 0),
 		"Access denied: %s", explanation,
@@ -430,7 +436,7 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 }
 
 // buildDenialExplanation creates a human-readable explanation for why access was denied.
-func buildDenialExplanation(action Action, roles []Role, evaluated []PolicyEvaluation, defaultEffect Effect) string {
+func buildDenialExplanation(action Action, roles []Role, evaluated []PolicyEvaluation) string {
 	if len(roles) == 0 {
 		return "no roles assigned"
 	}
