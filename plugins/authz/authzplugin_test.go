@@ -99,7 +99,8 @@ func TestAuthzPlugin_determineEffect(t *testing.T) {
 				authz.WithPolicy(authz.Allow, authz.Role("admin"), authz.Action("delete")),
 				authz.WithPolicy(authz.Deny, authz.Role("readonly"), authz.Action("delete")),
 			)
-			if got := ap.DetermineEffect(tt.args.action, tt.args.roles, tt.args.defaultEffect); got != tt.want {
+			got, _ := ap.DetermineEffect(tt.args.action, tt.args.roles, tt.args.defaultEffect)
+			if got != tt.want {
 				t.Errorf("AuthzPlugin.determineEffect() = %v, want %v", got, tt.want)
 			}
 		})
@@ -379,4 +380,109 @@ func TestAuthzPlugin_RoleHierarchy_Cycle(t *testing.T) {
 		ap.SetRoleHierarchy(owner, admin, editor)
 		ap.SetRoleHierarchy(editor, owner)
 	}, "expect panic when creating a cycle")
+}
+
+func TestDetermineEffectWithPolicyEvaluation(t *testing.T) {
+	ap := authz.Plugin(
+		authz.WithPolicy(authz.Allow, authz.Role("editor"), authz.Action("write")),
+		authz.WithPolicy(authz.Deny, authz.Role("suspended"), authz.Action("write")),
+		authz.WithPolicy(authz.Allow, authz.Role("admin"), authz.Action("delete")),
+	)
+
+	tests := []struct {
+		name               string
+		action             authz.Action
+		roles              []authz.Role
+		defaultEffect      authz.Effect
+		wantEffect         authz.Effect
+		wantEvaluatedCount int
+	}{
+		{
+			name:               "explicit deny wins",
+			action:             authz.Action("write"),
+			roles:              []authz.Role{"editor", "suspended"},
+			defaultEffect:      authz.Deny,
+			wantEffect:         authz.Deny,
+			wantEvaluatedCount: 2,
+		},
+		{
+			name:               "explicit allow with no deny",
+			action:             authz.Action("write"),
+			roles:              []authz.Role{"editor"},
+			defaultEffect:      authz.Deny,
+			wantEffect:         authz.Allow,
+			wantEvaluatedCount: 1,
+		},
+		{
+			name:               "simple allow policy",
+			action:             authz.Action("delete"),
+			roles:              []authz.Role{"admin"},
+			defaultEffect:      authz.Deny,
+			wantEffect:         authz.Allow,
+			wantEvaluatedCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			effect, evaluated := ap.DetermineEffect(tt.action, tt.roles, tt.defaultEffect)
+			if effect != tt.wantEffect {
+				t.Errorf("effect = %v, want %v", effect, tt.wantEffect)
+			}
+			if len(evaluated) != tt.wantEvaluatedCount {
+				t.Errorf("evaluated policies count = %d, want %d", len(evaluated), tt.wantEvaluatedCount)
+			}
+		})
+	}
+}
+
+func TestWithAuditLogger(t *testing.T) {
+	var auditedDecisions []authz.AuthzDecision
+
+	ap := authz.Plugin(
+		authz.WithPolicy(authz.Allow, authz.Role("viewer"), authz.Action("read")),
+		authz.WithAuditLogger(func(ctx context.Context, decision authz.AuthzDecision) {
+			auditedDecisions = append(auditedDecisions, decision)
+		}),
+		authz.WithObjectFetcher("test", authz.AsObjectFetcher(
+			authz.MapFetcher(map[string]*testDocument{
+				"1": {id: "1", author: "alice", title: "Test", body: "test"},
+			}),
+		)),
+		authz.WithRoleDescriber("test", authz.Compose(
+			authz.StaticRole(authz.Role("viewer"), func(_ context.Context, _ auth.Identity, _ *testDocument) bool {
+				return true
+			}),
+		)),
+	)
+
+	ctx := auth.WithIdentityForTest(t.Context(), auth.Identity{Subject: "user1", Provider: "test"})
+
+	// Test allowed access
+	err := ap.Authorize(ctx, authz.AuthorizeParams{
+		ObjectKey:     "test",
+		ObjectID:      "1",
+		Action:        authz.Action("read"),
+		DefaultEffect: authz.Deny,
+		Info:          "test",
+	})
+
+	if err != nil {
+		t.Errorf("expected access to be allowed, got error: %v", err)
+	}
+
+	if len(auditedDecisions) != 1 {
+		t.Fatalf("expected 1 audit log entry, got %d", len(auditedDecisions))
+	}
+
+	decision := auditedDecisions[0]
+	if decision.Effect != authz.Allow {
+		t.Errorf("decision.Effect = %v, want Allow", decision.Effect)
+	}
+	if len(decision.Roles) != 1 || decision.Roles[0] != authz.Role("viewer") {
+		t.Errorf("decision.Roles = %v, want [viewer]", decision.Roles)
+	}
+	if len(decision.EvaluatedPolicies) == 0 {
+		t.Error("decision.EvaluatedPolicies is empty, expected at least one")
+	}
 }

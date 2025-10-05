@@ -231,6 +231,27 @@ func (e Effect) String() string {
 
 type effectList []Effect
 
+// PolicyEvaluation represents a single policy evaluation result.
+type PolicyEvaluation struct {
+	Role   Role
+	Effect Effect
+}
+
+// AuthzDecision captures the complete authorization decision context.
+// This is useful for debugging, audit logging, and providing detailed error messages.
+type AuthzDecision struct {
+	Action            Action
+	Resource          string
+	ObjectID          any
+	Scope             Scope
+	Identity          auth.Identity
+	Roles             []Role
+	Effect            Effect
+	DefaultEffect     Effect
+	Reason            string
+	EvaluatedPolicies []PolicyEvaluation
+}
+
 // Combine returns the combined effect using AWS IAM-style precedence:
 // 1. Explicit Deny always wins (security first)
 // 2. Explicit Allow wins if no Deny exists

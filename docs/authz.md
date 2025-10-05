@@ -699,14 +699,85 @@ The authz plugin provides a debug endpoint at `/debug/authz` that shows:
 - Role hierarchy
 - Registered object fetchers and role describers
 
-### Logging
+### Structured Logging
 
-Authorization decisions are logged with structured fields:
+Authorization decisions are logged with structured fields for debugging:
 - `authz.action` - The action being evaluated
 - `authz.resource` - The resource type
+- `authz.objectID` - The ID of the object being accessed
+- `authz.scope` - The scope (if specified)
 - `authz.roles` - The roles assigned to the user
-- `authz.effect` - The final effect (allow/deny)
+- `authz.evaluated_policies` - List of policies that were evaluated (role + effect)
+- `authz.effect` - The final effect (ALLOW/DENY)
 - `authz.reason` - Why access was granted or denied
+
+**Example log output:**
+```json
+{
+  "authz.action": "documents.write",
+  "authz.resource": "document",
+  "authz.objectID": "doc-123",
+  "authz.roles": ["editor", "suspended"],
+  "authz.evaluated_policies": [
+    {"role": "editor", "effect": "ALLOW"},
+    {"role": "suspended", "effect": "DENY"}
+  ],
+  "authz.effect": "DENY",
+  "authz.reason": "denied by policy"
+}
+```
+
+### Enhanced Error Messages
+
+When access is denied, users receive clear, actionable error messages:
+
+**Before:**
+```
+Error: you are not authorized to perform this action
+```
+
+**After:**
+```
+Error: Access denied: explicitly denied by role 'suspended'
+```
+
+The error message explains why access was denied based on the evaluated policies:
+- "no roles assigned" - User has no roles for this resource
+- "no policies match action 'X' for your roles" - No policies cover this action
+- "explicitly denied by role 'X'" - A deny policy blocked access
+- "action 'X' not explicitly allowed (default: deny)" - No allow policy matched
+
+### Audit Logging
+
+Configure an audit logger to receive all authorization decisions for compliance and security monitoring:
+
+```go
+authz.WithAuditLogger(func(ctx context.Context, decision authz.AuthzDecision) {
+    log.Printf("authz: user=%s action=%s resource=%s:%s effect=%s",
+        decision.Identity.Subject,
+        decision.Action,
+        decision.Resource,
+        decision.ObjectID,
+        decision.Effect)
+
+    // Send to audit system
+    auditSystem.LogAuthzDecision(ctx, decision)
+})
+```
+
+The `AuthzDecision` contains:
+- `Action` - The action that was attempted
+- `Resource` - The resource type
+- `ObjectID` - The resource identifier
+- `Scope` - The scope (if specified)
+- `Identity` - The authenticated user's identity
+- `Roles` - The roles assigned to the user
+- `Effect` - The final decision (Allow or Deny)
+- `DefaultEffect` - The default effect from the RPC
+- `Reason` - Human-readable reason for the decision
+- `EvaluatedPolicies` - List of policies that were checked
+
+The audit logger is called for **both allowed and denied requests**, providing complete visibility.
 
 ## Complete Example
 

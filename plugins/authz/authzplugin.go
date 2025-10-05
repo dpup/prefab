@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/dpup/prefab"
@@ -146,12 +147,32 @@ func WithRoleDescriberFn(objectKey string, describer func(ctx context.Context, s
 	}
 }
 
+// WithAuditLogger configures an audit logger to receive all authorization decisions.
+// The audit logger is called for both allowed and denied requests, providing complete
+// visibility into authorization decisions for compliance and security monitoring.
+//
+// Example:
+//
+//	authz.WithAuditLogger(func(ctx context.Context, decision authz.AuthzDecision) {
+//	    log.Printf("authz: user=%s action=%s resource=%s effect=%s",
+//	        decision.Identity.Subject, decision.Action, decision.Resource, decision.Effect)
+//	})
+func WithAuditLogger(logger AuditLogger) AuthzOption {
+	return func(ap *AuthzPlugin) {
+		ap.auditLogger = logger
+	}
+}
+
+// AuditLogger is a function that receives authorization decisions for audit logging.
+type AuditLogger func(ctx context.Context, decision AuthzDecision)
+
 // AuthzPlugin provides functionality for authorizing requests and access to resources.
 type AuthzPlugin struct {
 	policies       map[Action]map[Role]Effect
 	objectFetchers map[string]ObjectFetcher
 	roleDescribers map[string]RoleDescriber
 	roleParents    map[Role]Role
+	auditLogger    AuditLogger
 }
 
 // From plugin.Plugin.
@@ -357,18 +378,76 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 	logging.Track(ctx, "authz.scope", cfg.Scope)
 	logging.Track(ctx, "authz.roles", roles)
 
-	if len(roles) == 0 {
-		logging.Track(ctx, "authz.reason", "no roles")
-		return errors.Mark(defaultError, 0)
+	// Determine the authorization effect and track which policies were evaluated
+	finalEffect, evaluatedPolicies := ap.DetermineEffect(cfg.Action, roles, cfg.DefaultEffect)
+	logging.Track(ctx, "authz.evaluated_policies", evaluatedPolicies)
+	logging.Track(ctx, "authz.effect", finalEffect.String())
+
+	// Build decision context for audit logging
+	decision := AuthzDecision{
+		Action:            cfg.Action,
+		Resource:          cfg.ObjectKey,
+		ObjectID:          cfg.ObjectID,
+		Scope:             cfg.Scope,
+		Identity:          identity,
+		Roles:             roles,
+		Effect:            finalEffect,
+		DefaultEffect:     cfg.DefaultEffect,
+		EvaluatedPolicies: evaluatedPolicies,
 	}
 
-	if ap.DetermineEffect(cfg.Action, roles, cfg.DefaultEffect) == Allow {
-		logging.Track(ctx, "authz.reason", "allowed by role")
+	if finalEffect == Allow {
+		decision.Reason = "allowed by policy"
+		logging.Track(ctx, "authz.reason", decision.Reason)
+
+		// Call audit logger if configured
+		if ap.auditLogger != nil {
+			ap.auditLogger(ctx, decision)
+		}
+
 		return nil
 	}
 
-	logging.Track(ctx, "authz.reason", "denied by role")
-	return errors.Mark(defaultError, 0)
+	// Access denied - build explanation for user
+	if len(roles) == 0 {
+		decision.Reason = "no roles"
+	} else {
+		decision.Reason = "denied by policy"
+	}
+	logging.Track(ctx, "authz.reason", decision.Reason)
+
+	// Call audit logger if configured
+	if ap.auditLogger != nil {
+		ap.auditLogger(ctx, decision)
+	}
+
+	// Build user-friendly denial explanation
+	explanation := buildDenialExplanation(cfg.Action, roles, evaluatedPolicies, cfg.DefaultEffect)
+	return errors.WithUserPresentableMessage(
+		errors.Mark(defaultError, 0),
+		"Access denied: %s", explanation,
+	)
+}
+
+// buildDenialExplanation creates a human-readable explanation for why access was denied.
+func buildDenialExplanation(action Action, roles []Role, evaluated []PolicyEvaluation, defaultEffect Effect) string {
+	if len(roles) == 0 {
+		return "no roles assigned"
+	}
+
+	if len(evaluated) == 0 {
+		return fmt.Sprintf("no policies match action '%s' for your roles", action)
+	}
+
+	// Check for explicit deny
+	for _, policy := range evaluated {
+		if policy.Effect == Deny {
+			return fmt.Sprintf("explicitly denied by role '%s'", policy.Role)
+		}
+	}
+
+	// All policies were allow, but default is deny
+	return fmt.Sprintf("action '%s' not explicitly allowed (default: deny)", action)
 }
 
 // DetermineEffect determines if a user can perform an action using AWS IAM-style precedence:
@@ -386,18 +465,23 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 //   - Policy: admin → Allow write
 //   - Policy: blocked-user → Deny write
 //   - Result: Deny (explicit deny wins)
-func (ap *AuthzPlugin) DetermineEffect(action Action, roles []Role, defaultEffect Effect) Effect {
+//
+// Returns the final effect and a list of evaluated policies for debugging/auditing.
+func (ap *AuthzPlugin) DetermineEffect(action Action, roles []Role, defaultEffect Effect) (Effect, []PolicyEvaluation) {
 	if len(roles) == 0 {
-		return defaultEffect
+		return defaultEffect, nil
 	}
 	var effects effectList
+	var evaluated []PolicyEvaluation
+
 	for _, role := range roles {
 		inheritedRoles := ap.RoleHierarchy(role)
 		for _, r := range inheritedRoles {
 			if roleEffect, ok := ap.policies[action][r]; ok {
 				effects = append(effects, roleEffect)
+				evaluated = append(evaluated, PolicyEvaluation{Role: r, Effect: roleEffect})
 			}
 		}
 	}
-	return effects.Combine(defaultEffect)
+	return effects.Combine(defaultEffect), evaluated
 }
