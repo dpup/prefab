@@ -4,16 +4,27 @@
 //
 // # Getting Started.
 //
-// The simplest way to get started with authorization is to use the builder pattern
-// and common configuration helpers:
+// The simplest way to get started with authorization is to define policies and
+// register object fetchers and role describers:
 //
-//	// Create a basic CRUD authorization plugin with common roles and permissions,
-//	authzPlugin := authz.NewCRUDBuilder().
-//		WithObjectFetcher("document", fetchDocument).
-//		WithRoleDescriber("document", documentRoleDescriber).
-//		Build()
+//	authzPlugin := authz.Plugin(
+//		// Define policies (effect, role, action)
+//		authz.WithPolicy(authz.Allow, authz.RoleViewer, authz.Action("documents.view")),
+//		authz.WithPolicy(authz.Allow, authz.RoleEditor, authz.Action("documents.edit")),
+//		authz.WithPolicy(authz.Allow, authz.RoleAdmin, authz.Action("*")),
 //
+//		// Register object fetcher
+//		authz.WithObjectFetcher("document", authz.AsObjectFetcher(
+//			authz.Fetcher(db.GetDocumentByID),
+//		)),
 //
+//		// Register role describer
+//		authz.WithRoleDescriber("document", authz.Compose(
+//			authz.OwnershipRole(authz.RoleOwner, func(d *Document) string {
+//				return d.OwnerID
+//			}),
+//		)),
+//	)
 //
 //	// Add to your Prefab server.
 //	server := prefab.New(
@@ -73,9 +84,8 @@
 // This package provides several common patterns to simplify authorization setup:
 //
 // - Builder pattern: Use `NewBuilder()` for a fluent configuration interface.
-// - Predefined roles: `RoleAdmin`, `RoleEditor`, `RoleViewer`, etc..
-// - Common CRUD actions: `ActionCreate`, `ActionRead`, etc..
-// - CRUD builder: `NewCRUDBuilder()` for standard roles and CRUD permissions.
+// - Predefined roles: `RoleAdmin`, `RoleEditor`, `RoleViewer`, etc.
+// - Common CRUD actions: `ActionCreate`, `ActionRead`, etc.
 // - Type-safe interfaces: Use the typed helpers for compile-time type safety.
 //
 // # Role Describer Patterns
@@ -117,7 +127,50 @@
 // - MembershipRoles: Grants roles based on parent resource membership
 // - ScopeRoles: Grants roles based on scope relationship
 //
-// See patterns.go for detailed documentation on each pattern.
+// See role_patterns.go for detailed documentation on each pattern.
+//
+// # Object Fetcher Patterns
+//
+// The package provides composable, type-safe patterns for building object fetchers
+// that eliminate boilerplate and manual type assertions:
+//
+//	// Simple map-based fetcher (common for tests/examples)
+//	builder.WithObjectFetcher("document", authz.AsObjectFetcher(
+//	    authz.MapFetcher(staticDocuments),
+//	))
+//
+//	// Database fetcher with type safety
+//	builder.WithObjectFetcher("user", authz.AsObjectFetcher(
+//	    authz.Fetcher(func(ctx context.Context, id string) (*User, error) {
+//	        return db.GetUserByID(ctx, id)
+//	    }),
+//	))
+//
+//	// Composed fetcher with caching and validation
+//	builder.WithObjectFetcher("org", authz.AsObjectFetcher(
+//	    authz.ComposeFetchers(
+//	        authz.MapFetcher(cache),           // Try cache first
+//	        authz.ValidatedFetcher(            // Then validated DB fetch
+//	            authz.Fetcher(db.GetOrgByID),
+//	            func(org *Org) error {
+//	                if org.Deleted {
+//	                    return errors.NewC("org deleted", codes.NotFound)
+//	                }
+//	                return nil
+//	            },
+//	        ),
+//	    ),
+//	))
+//
+// Available patterns:
+// - Fetcher: Type-safe wrapper for fetch functions
+// - MapFetcher: Fetch from static maps
+// - ValidatedFetcher: Add validation to fetched objects
+// - ComposeFetchers: Try multiple fetchers in order (cache → DB → API)
+// - TransformKey: Transform key before fetching
+// - DefaultFetcher: Return default instead of error
+//
+// See fetcher_patterns.go for detailed documentation on each pattern.
 //
 // # Role Hierarchy
 //

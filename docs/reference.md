@@ -88,306 +88,84 @@ s := prefab.New(
 
 ### Authorization
 
-#### Proto File Setup
+The authz plugin provides declarative, proto-based access control. See [authz.md](authz.md) for complete documentation.
+
+#### Proto Annotations
+
+Annotate your proto files with authorization metadata:
 
 ```protobuf
-syntax = "proto3";
-package resourceservice;
-option go_package = "./resourceservice";
+import "plugins/authz/authz.proto";
 
-import "google/api/annotations.proto";
-import "plugins/authz/authz.proto";  // Import Prefab's authz proto
-
-service ResourceService {
-  // List all resources - requires basic user access
-  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {
-    option (prefab.authz.action) = "resources.list";
-    option (prefab.authz.resource) = "workspace";
-
-    option (google.api.http) = {
-      get: "/api/{workspace_id}/resources"
-    };
-  }
-
-  // Get a specific resource - checks ownership or admin access
-  rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {
-    option (prefab.authz.action) = "resources.view";
-    option (prefab.authz.resource) = "resource";
-    option (prefab.authz.default_effect) = "deny";
-
-    option (google.api.http) = {
-      get: "/api/{workspace_id}/resources/{resource_id}"
-    };
-  }
-
-  // Update a resource - requires owner permission
-  rpc UpdateResource(UpdateResourceRequest) returns (UpdateResourceResponse) {
-    option (prefab.authz.action) = "resources.update";
-    option (prefab.authz.resource) = "resource";
-    option (prefab.authz.default_effect) = "deny";
-
-    option (google.api.http) = {
-      put: "/api/{workspace_id}/resources/{resource_id}"
-      body: "*"
-    };
-  }
+rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse) {
+  option (prefab.authz.action) = "documents.view";
+  option (prefab.authz.resource) = "document";
+  option (prefab.authz.default_effect) = "deny";
 }
 
-message ListResourcesRequest {
-  string workspace_id = 1 [(prefab.authz.id) = true];
-}
-
-message ListResourcesResponse {
-  repeated Resource resources = 1;
-}
-
-message GetResourceRequest {
-  string workspace_id = 1 [(prefab.authz.domain) = true];
-  string resource_id = 2 [(prefab.authz.id) = true];
-}
-
-message GetResourceResponse {
-  Resource resource = 1;
-}
-
-message UpdateResourceRequest {
-  string workspace_id = 1 [(prefab.authz.domain) = true];
-  string resource_id = 2 [(prefab.authz.id) = true];
-  string title = 3;
-  string content = 4;
-}
-
-message UpdateResourceResponse {
-  Resource resource = 1;
-}
-
-message Resource {
-  string id = 1;
-  string title = 2;
-  string content = 3;
-  string owner_id = 4;
+message GetDocumentRequest {
+  string workspace_id = 1 [(prefab.authz.scope) = true];  // Optional scope
+  string document_id = 2 [(prefab.authz.id) = true];      // Required resource ID
 }
 ```
 
-#### Understanding Prefab's Authorization Proto Options
-
-Prefab's authorization system uses proto options to define access control rules directly in your service definitions:
-
-1. **Method Options**:
-
-   - `(prefab.authz.action)`: Specifies the action being performed (e.g., "resources.view", "resources.update"). Actions are used in policy rules to control who can perform them.
-   - `(prefab.authz.resource)`: Defines the type of resource being accessed. This maps to the object fetcher registered with `WithObjectFetcher()`.
-   - `(prefab.authz.default_effect)`: Sets the default effect if no policy matches:
-     - `"allow"`: Allow access by default unless explicitly denied
-     - `"deny"`: Deny access by default unless explicitly allowed
-
-2. **Field Options**:
-
-   - `[(prefab.authz.id) = true]`: Marks a field as containing the resource identifier. The value will be passed to the appropriate object fetcher.
-   - `[(prefab.authz.domain) = true]`: Marks a field as containing the domain identifier. This allows for domain-scoped permissions. A domain might be a workspace, organization, or folder.
-
-3. **Authorization Flow**:
-   1. When an RPC is called, Prefab extracts the action from the method options
-   2. It gets the resource ID from fields marked with `[(prefab.authz.id) = true]`
-   3. It gets the domain from fields marked with `[(prefab.authz.domain) = true]`
-   4. It fetches the resource object using the registered object fetcher
-   5. It calls the role describer to determine the user's roles for that object and domain
-   6. It checks if any policy allows or denies the action for the user's roles
-   7. It applies the default effect if no policy matches
-
-4. **Policy Evaluation Precedence**:
-
-   Prefab uses AWS IAM-style precedence for clear, predictable authorization:
-
-   1. **Explicit Deny wins**: If ANY of the user's roles has a Deny policy for the action, access is denied
-   2. **Explicit Allow wins**: If no Deny exists and ANY role has an Allow policy, access is granted
-   3. **Default effect**: If no policies match any role, use the `default_effect` from the RPC method
-
-   **Benefits:**
-   - Create "blocklist" roles that override other permissions (e.g., suspended users)
-   - Grant permissions safely knowing deny policies provide ultimate control
-   - Predictable behavior aligned with industry standards (AWS IAM)
-
-   **Example:**
-   ```go
-   // User has roles: [editor, suspended]
-   authz.WithPolicy(authz.Allow, roleEditor, Action("documents.write"))
-   authz.WithPolicy(authz.Deny, roleSuspended, Action("*"))
-   // Result: Denied (explicit deny wins over allow)
-   ```
-
-This declarative approach allows authorization rules to be clearly defined at the API design level while implementation details are handled by the server code.
-
-#### Server Code Setup
+#### Server Setup
 
 ```go
-import (
-    "github.com/dpup/prefab"
-    "github.com/dpup/prefab/plugins/auth"
-    "github.com/dpup/prefab/plugins/authz"
-)
-
-// Define roles
 const (
     roleUser  = authz.Role("user")
-    roleAdmin = authz.Role("admin")
     roleOwner = authz.Role("owner")
+    roleAdmin = authz.Role("admin")
 )
 
-// Set up authorization policies
 s := prefab.New(
     prefab.WithPlugin(auth.Plugin()),
-    prefab.WithPlugin(pwdauth.Plugin(...)),
     prefab.WithPlugin(authz.Plugin(
-        // Allow users to read resources
-        authz.WithPolicy(authz.Allow, roleUser, authz.Action("resources.list")),
-        authz.WithPolicy(authz.Allow, roleUser, authz.Action("resources.view")),
-
-        // Allow owners to modify resources
-        authz.WithPolicy(authz.Allow, roleOwner, authz.Action("resources.update")),
-
-        // Allow admins to do everything
+        // Policies: Allow role X to perform action Y
+        authz.WithPolicy(authz.Allow, roleUser, authz.Action("documents.view")),
+        authz.WithPolicy(authz.Allow, roleOwner, authz.Action("documents.edit")),
         authz.WithPolicy(authz.Allow, roleAdmin, authz.Action("*")),
 
-        // Define object fetchers for authorization
-        authz.WithObjectFetcher("resource", fetchResource),
+        // Object Fetcher: Convert ID → Object
+        authz.WithObjectFetcher("document", authz.AsObjectFetcher(
+            authz.Fetcher(db.GetDocumentByID),
+        )),
 
-        // Define role describers to determine user roles
-        authz.WithRoleDescriber("*", roleDescriber),
+        // Role Describer: Determine user roles for object
+        authz.WithRoleDescriber("document", authz.Compose(
+            authz.OwnershipRole(roleOwner, func(d *Document) string {
+                return d.OwnerID
+            }),
+        )),
     )),
 )
-
-// Resource fetcher implementation
-func fetchResource(ctx context.Context, key any) (any, error) {
-    resourceID := key.(string)
-    // Fetch the resource from your database
-    resource, err := db.GetResourceByID(resourceID)
-    if err != nil {
-        return nil, err
-    }
-    return resource, nil
-}
-
-// Role describer implementation - determines roles for a user on an object
-func roleDescriber(ctx context.Context, identity auth.Identity, object any, domain authz.Domain) ([]authz.Role, error) {
-    // All authenticated users have the "user" role
-    roles := []authz.Role{roleUser}
-
-    // Check if user is an admin
-    isAdmin, err := isUserAdmin(identity.Subject)
-    if err != nil {
-        return nil, err
-    }
-    if isAdmin {
-        roles = append(roles, roleAdmin)
-    }
-
-    // Check if user is the owner of this resource
-    if resource, ok := object.(Resource); ok {
-        if resource.OwnerID == identity.Subject {
-            roles = append(roles, roleOwner)
-        }
-    }
-
-    return roles, nil
-}
 ```
 
-#### Role Describer Patterns
+#### Authorization Flow
 
-Prefab provides composable, type-safe patterns for building role describers that eliminate boilerplate code, manual type assertions, and provide automatic scope validation:
+When an RPC is invoked:
+1. Extract action, resource type, ID, and scope from proto annotations
+2. Fetch object using registered Object Fetcher
+3. Determine user roles using registered Role Describer
+4. Evaluate policies using AWS IAM-style precedence (Deny > Allow > Default)
+5. Grant or deny access
 
+#### Common Patterns
+
+**Object Fetchers:**
 ```go
-// OLD PATTERN: Manual type assertions and scope validation
-builder.WithRoleDescriberFn("document", func(ctx context.Context, identity auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
-    // Manual type assertion
-    doc, ok := object.(*Document)
-    if !ok {
-        return nil, errors.NewC("expected Document", codes.Internal)
-    }
-
-    // Manual scope validation
-    if string(scope) != doc.WorkspaceID {
-        return []authz.Role{}, nil
-    }
-
-    var roles []authz.Role
-    if doc.OwnerID == identity.Subject {
-        roles = append(roles, authz.RoleOwner)
-    }
-    return roles, nil
-})
-
-// NEW PATTERN: Composable, type-safe patterns
-builder.WithRoleDescriber("document", authz.Compose(
-    // Grant owner role if user owns the document
-    authz.OwnershipRole(authz.RoleOwner, func(doc *Document) string {
-        return doc.OwnerID
-    }),
-
-    // Grant viewer role if document is published
-    authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc *Document) bool {
-        return doc.Published
-    }),
-
-    // Grant roles based on workspace membership
-    authz.MembershipRoles(
-        func(doc *Document) string { return doc.WorkspaceID },
-        func(ctx context.Context, workspaceID string, identity auth.Identity) ([]authz.Role, error) {
-            workspace, err := fetchWorkspace(ctx, workspaceID)
-            if err != nil {
-                return nil, err
-            }
-            return workspace.GetUserRoles(ctx, identity.Subject)
-        },
-    ),
-))
+authz.Fetcher(db.GetDocByID)                     // Database fetch
+authz.MapFetcher(staticDocs)                     // Static map
+authz.ComposeFetchers(cache, db, api)            // Fallback chain
+authz.ValidatedFetcher(fetcher, validateFunc)    // Add validation
 ```
 
-**Available Patterns:**
-
-- **Compose**: Combines multiple describers with automatic scope validation for `ScopedObject`
-- **OwnershipRole**: Grants role if user owns the resource
-- **ConditionalRole**: Grants role based on async predicate (for database queries)
-- **StaticRole**: Grants role based on sync predicate (for simple conditions)
-- **StaticRoles**: Returns multiple roles based on conditions
-- **GlobalRole**: Grants role based on context only (e.g., superuser checks)
-- **MembershipRoles**: Grants roles based on parent resource membership
-- **ScopeRoles**: Grants roles based on scope relationship (validates scope matches)
-
-**Scope Semantics:**
-
-The `scope` parameter represents the "container" of the object being accessed. For example:
-- Document = Object, Folder = Scope
-- Note = Object, Workspace = Scope
-- File = Object, Organization = Scope
-
-When using `Compose` with objects that implement `ScopedObject`, scope validation is automatic. If the object's `ScopeID()` doesn't match the request scope, empty roles are returned.
-
-**Custom Roles:**
-
-Roles are just strings, so you can define your own:
-
+**Role Describers:**
 ```go
-const (
-    reviewer = authz.Role("reviewer")
-    contributor = authz.Role("contributor")
-)
-
-authz.Compose(
-    // Use framework roles
-    authz.OwnershipRole(authz.RoleOwner, func(pr *PullRequest) string { return pr.AuthorID }),
-
-    // Use custom roles
-    authz.ConditionalRole(reviewer, func(_ context.Context, identity auth.Identity, pr *PullRequest, _ authz.Scope) (bool, error) {
-        for _, r := range pr.Reviewers {
-            if r == identity.Subject {
-                return true, nil
-            }
-        }
-        return false, nil
-    }),
-)
+authz.OwnershipRole(role, getOwnerID)            // Grant if user owns resource
+authz.MembershipRoles(getParentID, getRoles)     // Grant roles from parent
+authz.StaticRole(role, predicate)                // Grant based on condition
+authz.Compose(describer1, describer2, ...)       // Combine multiple describers
 ```
 
 ### Storage

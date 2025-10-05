@@ -97,9 +97,14 @@ func Run() {
 	// while owner will only act as editor on their own docs.
 	builder.WithPolicy(authz.Allow, authz.RoleEditor, docWrite)
 
-	// Define our object fetchers with the function adapter
-	builder.WithObjectFetcherFn("org", fetchOrg)
-	builder.WithObjectFetcherFn("document", fetchDocument)
+	// Define our object fetchers using the new pattern-based approach
+	// OLD PATTERN (commented for comparison):
+	//   builder.WithObjectFetcherFn("org", fetchOrg)
+	//   builder.WithObjectFetcherFn("document", fetchDocument)
+	//
+	// NEW PATTERN: Type-safe map fetchers
+	builder.WithObjectFetcher("org", authz.AsObjectFetcher(authz.MapFetcher(staticOrgs)))
+	builder.WithObjectFetcher("document", authz.AsObjectFetcher(authz.MapFetcher(staticDocuments)))
 
 	// Define role describer for org using the old pattern (for reference)
 	builder.WithRoleDescriberFn("org", func(ctx context.Context, identity auth.Identity, object any, scope authz.Scope) ([]authz.Role, error) {
@@ -172,22 +177,6 @@ func rolesForIdentity(identity auth.Identity) []authz.Role {
 	return roles
 }
 
-// ObjectFetcher implementation for org.
-func fetchOrg(ctx context.Context, key any) (any, error) {
-	if key.(string) == "xmen" {
-		return org{name: "xmen"}, nil
-	}
-	return nil, errors.NewC("org not found", codes.NotFound)
-}
-
-// ObjectFetcher implementation for document.
-func fetchDocument(ctx context.Context, key any) (any, error) {
-	if doc, ok := staticDocuments[key.(string)]; ok {
-		return doc, nil
-	}
-	return nil, errors.NewC("document not found", codes.NotFound)
-}
-
 // Basic implementation of the test server
 type testServer struct {
 	authztest.UnimplementedAuthzTestServiceServer
@@ -230,6 +219,10 @@ func (a accountStore) FindAccount(ctx context.Context, email string) (*pwdauth.A
 }
 
 // Static data
+var staticOrgs = map[string]org{
+	"xmen": {name: "xmen"},
+}
+
 var staticDocuments = map[string]document{
 	"1": {id: "1", author: "3", title: "The Phoenix Saga", body: "A long time ago..."},
 	"2": {id: "2", author: "3", title: "The Dark Phoenix Saga", body: "A long time ago..."},
