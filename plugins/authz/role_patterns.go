@@ -143,6 +143,7 @@ func GlobalRole[T any](role Role, predicate func(context.Context) bool) TypedRol
 
 // OwnershipRole grants a role if the subject owns the object.
 // This is a common pattern for granting elevated permissions to resource creators.
+// Returns no roles for anonymous users (zero-value Identity).
 //
 // Example:
 //
@@ -151,12 +152,71 @@ func GlobalRole[T any](role Role, predicate func(context.Context) bool) TypedRol
 //	})
 func OwnershipRole[T any](role Role, getOwnerID func(T) string) TypedRoleDescriber[T] {
 	return StaticRole(role, func(_ context.Context, subject auth.Identity, object T) bool {
+		if subject == (auth.Identity{}) {
+			return false
+		}
 		return getOwnerID(object) == subject.Subject
 	})
 }
 
+// IdentityOwnershipRole grants a role when the identity resolves to the object's owner.
+// This pattern handles cases where identity-to-user mapping is workspace-scoped and requires
+// async resolution (e.g., database lookup).
+// Returns no roles for anonymous users (zero-value Identity).
+//
+// Unlike OwnershipRole which does simple string comparison (identity.Subject == ownerID),
+// this pattern:
+// - Supports async identity-to-user resolution (e.g., database lookup)
+// - Handles workspace/scope-scoped user identities
+// - Gracefully handles NotFound errors when identity isn't mapped in the workspace
+//
+// Example (workspace-scoped users):
+//
+//	authz.IdentityOwnershipRole(authz.RoleOwner,
+//	    func(ctx context.Context, subject auth.Identity, note *Note) (string, error) {
+//	        // Resolve identity to workspace-scoped user ID
+//	        q := models.FromContext(ctx)
+//	        viewer, err := q.UserByIdentityAndWorkspace(ctx, &models.UserByIdentityAndWorkspaceParams{
+//	            WorkspaceID:      note.WorkspaceID,
+//	            IdentitySub:      subject.Subject,
+//	            IdentityProvider: subject.Provider,
+//	        })
+//	        if err != nil {
+//	            return "", err
+//	        }
+//	        return viewer.ID, nil
+//	    },
+//	    func(note *Note) string { return note.OwnerID },
+//	)
+func IdentityOwnershipRole[T any](
+	role Role,
+	resolveUserID func(context.Context, auth.Identity, T) (string, error),
+	getOwnerID func(T) string,
+) TypedRoleDescriber[T] {
+	return func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error) {
+		if subject == (auth.Identity{}) {
+			return []Role{}, nil
+		}
+
+		userID, err := resolveUserID(ctx, subject, object)
+		if err != nil {
+			// Handle NotFound gracefully - identity not mapped in this workspace
+			if errors.Code(err) == codes.NotFound {
+				return []Role{}, nil
+			}
+			return nil, err
+		}
+
+		if userID == getOwnerID(object) {
+			return []Role{role}, nil
+		}
+		return []Role{}, nil
+	}
+}
+
 // MembershipRoles returns roles based on membership in a parent object.
 // The parent object is identified by a parent ID extracted from the current object.
+// Returns no roles for anonymous users (zero-value Identity).
 //
 // This pattern is useful when roles are inherited from a parent resource
 // (e.g., organization membership grants roles on all org documents).
@@ -175,6 +235,9 @@ func OwnershipRole[T any](role Role, getOwnerID func(T) string) TypedRoleDescrib
 //	)
 func MembershipRoles[T any](getParentID func(T) string, getRoles func(context.Context, string, auth.Identity) ([]Role, error)) TypedRoleDescriber[T] {
 	return func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error) {
+		if subject == (auth.Identity{}) {
+			return []Role{}, nil
+		}
 		parentID := getParentID(object)
 		return getRoles(ctx, parentID, subject)
 	}
@@ -183,6 +246,7 @@ func MembershipRoles[T any](getParentID func(T) string, getRoles func(context.Co
 // ScopeRoles returns roles based on the subject's relationship to the scope.
 // Unlike MembershipRoles which uses a parent ID from the object, this uses
 // the scope parameter directly.
+// Returns no roles for anonymous users (zero-value Identity).
 //
 // This pattern is useful when the scope represents the "owner" of the object
 // (e.g., Document=Object, Folder=Scope) and you want to grant roles based on
@@ -198,6 +262,9 @@ func MembershipRoles[T any](getParentID func(T) string, getRoles func(context.Co
 //	)
 func ScopeRoles[T any](getScopeID func(T) string, getRoles func(context.Context, string, auth.Identity) ([]Role, error)) TypedRoleDescriber[T] {
 	return func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error) {
+		if subject == (auth.Identity{}) {
+			return []Role{}, nil
+		}
 		scopeID := getScopeID(object)
 		// Validate scope matches
 		if string(scope) != scopeID {
