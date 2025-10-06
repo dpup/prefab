@@ -43,6 +43,8 @@ func Compose[T any](describers ...TypedRoleDescriber[T]) RoleDescriber {
 				// This allows Compose to work with objects from different scopes
 				return []Role{}, nil
 			}
+			// Mark that we validated scope via ScopedObject for audit logging
+			ctx = MarkScopeValidated(ctx)
 		}
 
 		// Call all describers and merge results
@@ -91,12 +93,12 @@ func ConditionalRole[T any](role Role, predicate func(context.Context, auth.Iden
 //
 // Example:
 //
-//	authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc *Document) bool {
+//	authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc *Document, _ authz.Scope) bool {
 //	    return doc.Published
 //	})
-func StaticRole[T any](role Role, predicate func(context.Context, auth.Identity, T) bool) TypedRoleDescriber[T] {
+func StaticRole[T any](role Role, predicate func(context.Context, auth.Identity, T, Scope) bool) TypedRoleDescriber[T] {
 	return func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error) {
-		if predicate(ctx, subject, object) {
+		if predicate(ctx, subject, object, scope) {
 			return []Role{role}, nil
 		}
 		return nil, nil
@@ -108,7 +110,7 @@ func StaticRole[T any](role Role, predicate func(context.Context, auth.Identity,
 //
 // Example:
 //
-//	authz.StaticRoles(func(_ context.Context, subject auth.Identity, pr *PullRequest) []authz.Role {
+//	authz.StaticRoles(func(_ context.Context, subject auth.Identity, pr *PullRequest, _ authz.Scope) []authz.Role {
 //	    var roles []authz.Role
 //	    for _, reviewer := range pr.Reviewers {
 //	        if reviewer == subject.Subject {
@@ -117,9 +119,9 @@ func StaticRole[T any](role Role, predicate func(context.Context, auth.Identity,
 //	    }
 //	    return roles
 //	})
-func StaticRoles[T any](getRoles func(context.Context, auth.Identity, T) []Role) TypedRoleDescriber[T] {
+func StaticRoles[T any](getRoles func(context.Context, auth.Identity, T, Scope) []Role) TypedRoleDescriber[T] {
 	return func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error) {
-		return getRoles(ctx, subject, object), nil
+		return getRoles(ctx, subject, object, scope), nil
 	}
 }
 
@@ -151,7 +153,7 @@ func GlobalRole[T any](role Role, predicate func(context.Context) bool) TypedRol
 //	    return doc.OwnerID
 //	})
 func OwnershipRole[T any](role Role, getOwnerID func(T) string) TypedRoleDescriber[T] {
-	return StaticRole(role, func(_ context.Context, subject auth.Identity, object T) bool {
+	return StaticRole(role, func(_ context.Context, subject auth.Identity, object T, _ Scope) bool {
 		if subject == (auth.Identity{}) {
 			return false
 		}
@@ -247,6 +249,8 @@ func MembershipRoles[T any](getScopeID func(T) string, getRoles func(context.Con
 		if string(scope) != scopeID {
 			return nil, errors.Codef(codes.Internal, "authz: scope mismatch: expected %s, got %s", scopeID, scope)
 		}
+		// Mark that we validated scope for audit logging
+		ctx = MarkScopeValidated(ctx)
 		return getRoles(ctx, scopeID, subject)
 	}
 }

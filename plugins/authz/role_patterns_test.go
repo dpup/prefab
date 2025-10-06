@@ -74,7 +74,7 @@ func TestStaticRole(t *testing.T) {
 	privateDoc := testDoc{id: "2", ownerID: "user456", public: false}
 
 	describer := authz.StaticRole(viewer,
-		func(ctx context.Context, subject auth.Identity, doc testDoc) bool {
+		func(ctx context.Context, subject auth.Identity, doc testDoc, scope authz.Scope) bool {
 			return doc.public
 		},
 	)
@@ -96,7 +96,7 @@ func TestStaticRoles(t *testing.T) {
 	identity := auth.Identity{Subject: "user123"}
 	doc := testDoc{id: "1", ownerID: "user123", orgID: "org1", public: true}
 
-	describer := authz.StaticRoles(func(ctx context.Context, subject auth.Identity, obj testDoc) []authz.Role {
+	describer := authz.StaticRoles(func(ctx context.Context, subject auth.Identity, obj testDoc, scope authz.Scope) []authz.Role {
 		var roles []authz.Role
 		if obj.ownerID == subject.Subject {
 			roles = append(roles, authz.RoleOwner)
@@ -211,7 +211,7 @@ func TestCompose(t *testing.T) {
 	t.Run("combines multiple describers", func(t *testing.T) {
 		describer := authz.Compose(
 			authz.OwnershipRole(authz.RoleOwner, func(d testDoc) string { return d.ownerID }),
-			authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, d testDoc) bool { return d.public }),
+			authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, d testDoc, _ authz.Scope) bool { return d.public }),
 		)
 
 		roles, err := describer.DescribeRoles(t.Context(), ownerIdentity, doc, "org1")
@@ -320,7 +320,7 @@ func TestRealWorldScenario(t *testing.T) {
 		}),
 
 		// Workspace roles would go here
-		authz.StaticRoles(func(_ context.Context, subject auth.Identity, _ studentNote) []authz.Role {
+		authz.StaticRoles(func(_ context.Context, subject auth.Identity, _ studentNote, _ authz.Scope) []authz.Role {
 			// Simplified - in real code would check workspace membership
 			if subject.Subject == "user123" {
 				return []authz.Role{authz.RoleEditor}

@@ -396,7 +396,7 @@ authz.ConditionalRole(authz.RoleEditor, func(ctx context.Context, identity auth.
 Grants a role based on a sync predicate (i.e. an error isn't possible):
 
 ```go
-authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc *Document) bool {
+authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc *Document, _ authz.Scope) bool {
     return doc.Published
 })
 ```
@@ -406,7 +406,7 @@ authz.StaticRole(authz.RoleViewer, func(_ context.Context, _ auth.Identity, doc 
 Returns multiple roles based on conditions:
 
 ```go
-authz.StaticRoles(func(ctx context.Context, identity auth.Identity, doc *Document) []authz.Role {
+authz.StaticRoles(func(ctx context.Context, identity auth.Identity, doc *Document, scope authz.Scope) []authz.Role {
     var roles []authz.Role
     if doc.Published {
         roles = append(roles, authz.RoleViewer)

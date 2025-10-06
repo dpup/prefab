@@ -389,6 +389,7 @@ func (ap *AuthzPlugin) Authorize(ctx context.Context, cfg AuthorizeParams) error
 		Resource:          cfg.ObjectKey,
 		ObjectID:          cfg.ObjectID,
 		Scope:             cfg.Scope,
+		ScopeValidated:    WasScopeValidated(ctx),
 		Identity:          identity,
 		Roles:             roles,
 		Effect:            finalEffect,

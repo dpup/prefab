@@ -450,7 +450,7 @@ func TestWithAuditLogger(t *testing.T) {
 			}),
 		)),
 		authz.WithRoleDescriber("test", authz.Compose(
-			authz.StaticRole(authz.Role("viewer"), func(_ context.Context, _ auth.Identity, _ *testDocument) bool {
+			authz.StaticRole(authz.Role("viewer"), func(_ context.Context, _ auth.Identity, _ *testDocument, _ authz.Scope) bool {
 				return true
 			}),
 		)),

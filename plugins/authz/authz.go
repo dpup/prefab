@@ -244,12 +244,29 @@ type AuthzDecision struct {
 	Resource          string
 	ObjectID          any
 	Scope             Scope
+	ScopeValidated    bool // Whether scope was explicitly validated by role describer
 	Identity          auth.Identity
 	Roles             []Role
 	Effect            Effect
 	DefaultEffect     Effect
 	Reason            string
 	EvaluatedPolicies []PolicyEvaluation
+}
+
+// scopeValidationKey is the context key for tracking scope validation.
+type scopeValidationKey struct{}
+
+// MarkScopeValidated marks the context as having performed explicit scope validation.
+// This is used by role describers to indicate they checked that the object's scope
+// matches the authorization scope parameter.
+func MarkScopeValidated(ctx context.Context) context.Context {
+	return context.WithValue(ctx, scopeValidationKey{}, true)
+}
+
+// WasScopeValidated returns true if scope validation was explicitly performed.
+func WasScopeValidated(ctx context.Context) bool {
+	validated, _ := ctx.Value(scopeValidationKey{}).(bool)
+	return validated
 }
 
 // Combine returns the combined effect using AWS IAM-style precedence:
