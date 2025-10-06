@@ -162,10 +162,11 @@ authz.ValidatedFetcher(fetcher, validateFunc)    // Add validation
 
 **Role Describers:**
 ```go
-authz.OwnershipRole(role, getOwnerID)            // Grant if user owns resource
-authz.MembershipRoles(getParentID, getRoles)     // Grant roles from parent
-authz.StaticRole(role, predicate)                // Grant based on condition
-authz.Compose(describer1, describer2, ...)       // Combine multiple describers
+authz.OwnershipRole(role, getOwnerID)              // Grant if user owns resource
+authz.IdentityOwnershipRole(role, resolve, getOwnerID) // Async identity→owner resolution
+authz.MembershipRoles(getScopeID, getRoles)        // Grant roles from scope (validates scope)
+authz.StaticRole(role, predicate)                  // Grant based on condition
+authz.Compose(describer1, describer2, ...)         // Combine multiple describers
 ```
 
 ### Storage

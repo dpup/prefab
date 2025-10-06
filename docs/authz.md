@@ -449,22 +449,7 @@ authz.MembershipRoles(
 )
 ```
 
-#### ScopeRoles - Scope-based roles
-
-Grants roles if the object is in a specific scope:
-
-```go
-authz.ScopeRoles(
-    func(doc *Document) string { return doc.WorkspaceID },
-    func(ctx context.Context, workspaceID string, identity auth.Identity) ([]authz.Role, error) {
-        workspace, err := fetchWorkspace(ctx, workspaceID)
-        if err != nil {
-            return nil, err
-        }
-        return workspace.GetUserRoles(ctx, identity.Subject)
-    },
-)
-```
+**Security Note:** `MembershipRoles` automatically validates that the object's scope ID matches the authorization scope parameter. This prevents scope confusion attacks where a request to `/api/orgs/123/documents/456` could access a document that actually belongs to org 999.
 
 ### Real-World Composition Example
 

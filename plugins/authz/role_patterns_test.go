@@ -184,29 +184,10 @@ func TestMembershipRoles(t *testing.T) {
 		},
 	)
 
-	roles, err := describer(t.Context(), identity, doc, "")
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []authz.Role{authz.RoleAdmin, authz.RoleEditor}, roles)
-}
-
-func TestScopeRoles(t *testing.T) {
-	identity := auth.Identity{Subject: "user123"}
-	doc := testDoc{id: "1", orgID: "org1"}
-
-	describer := authz.ScopeRoles(
-		func(d testDoc) string { return d.orgID },
-		func(ctx context.Context, scopeID string, subject auth.Identity) ([]authz.Role, error) {
-			if scopeID == "org1" && subject.Subject == "user123" {
-				return []authz.Role{authz.RoleEditor}, nil
-			}
-			return []authz.Role{}, nil
-		},
-	)
-
 	t.Run("grants roles when scope matches", func(t *testing.T) {
 		roles, err := describer(t.Context(), identity, doc, "org1")
 		require.NoError(t, err)
-		assert.Equal(t, []authz.Role{authz.RoleEditor}, roles)
+		assert.ElementsMatch(t, []authz.Role{authz.RoleAdmin, authz.RoleEditor}, roles)
 	})
 
 	t.Run("returns error when scope does not match", func(t *testing.T) {
@@ -214,6 +195,12 @@ func TestScopeRoles(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "scope mismatch")
 		assert.Nil(t, roles)
+	})
+
+	t.Run("returns empty roles for anonymous users", func(t *testing.T) {
+		roles, err := describer(t.Context(), auth.Identity{}, doc, "org1")
+		require.NoError(t, err)
+		assert.Empty(t, roles)
 	})
 }
 

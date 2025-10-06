@@ -120,12 +120,12 @@
 // Available patterns:
 // - Compose: Combines multiple describers with automatic scope validation
 // - OwnershipRole: Grants role if user owns the resource
+// - IdentityOwnershipRole: Grants role when identity resolves to owner (async, workspace-scoped)
 // - ConditionalRole: Grants role based on async predicate (for database queries)
 // - StaticRole: Grants role based on sync predicate (for simple conditions)
 // - StaticRoles: Returns multiple roles based on conditions
 // - GlobalRole: Grants role based on context only (e.g., superuser checks)
-// - MembershipRoles: Grants roles based on parent resource membership
-// - ScopeRoles: Grants roles based on scope relationship
+// - MembershipRoles: Grants roles based on scope membership with automatic scope validation
 //
 // See role_patterns.go for detailed documentation on each pattern.
 //

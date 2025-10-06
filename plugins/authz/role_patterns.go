@@ -214,12 +214,16 @@ func IdentityOwnershipRole[T any](
 	}
 }
 
-// MembershipRoles returns roles based on membership in a parent object.
-// The parent object is identified by a parent ID extracted from the current object.
+// MembershipRoles returns roles based on membership in a scope (e.g., organization, workspace).
+// The scope ID is extracted from the object and MUST match the authorization scope parameter
+// for security. Returns an error if scope doesn't match, preventing scope confusion attacks.
 // Returns no roles for anonymous users (zero-value Identity).
 //
 // This pattern is useful when roles are inherited from a parent resource
 // (e.g., organization membership grants roles on all org documents).
+//
+// Security: This function validates that object.scopeID == scope to prevent attacks where
+// a request to /api/orgs/123/documents/456 could access a document that belongs to org 999.
 //
 // Example:
 //
@@ -233,40 +237,13 @@ func IdentityOwnershipRole[T any](
 //	        return org.GetUserRoles(ctx, subject.Subject)
 //	    },
 //	)
-func MembershipRoles[T any](getParentID func(T) string, getRoles func(context.Context, string, auth.Identity) ([]Role, error)) TypedRoleDescriber[T] {
-	return func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error) {
-		if subject == (auth.Identity{}) {
-			return []Role{}, nil
-		}
-		parentID := getParentID(object)
-		return getRoles(ctx, parentID, subject)
-	}
-}
-
-// ScopeRoles returns roles based on the subject's relationship to the scope.
-// Unlike MembershipRoles which uses a parent ID from the object, this uses
-// the scope parameter directly.
-// Returns no roles for anonymous users (zero-value Identity).
-//
-// This pattern is useful when the scope represents the "owner" of the object
-// (e.g., Document=Object, Folder=Scope) and you want to grant roles based on
-// the user's relationship to that scope.
-//
-// Example:
-//
-//	authz.ScopeRoles(
-//	    func(note *Note) string { return note.WorkspaceID },
-//	    func(ctx context.Context, workspaceID string, subject auth.Identity) ([]authz.Role, error) {
-//	        return workspaceRoleDescriber.DescribeRoles(ctx, subject, workspaceID, authz.Scope(workspaceID))
-//	    },
-//	)
-func ScopeRoles[T any](getScopeID func(T) string, getRoles func(context.Context, string, auth.Identity) ([]Role, error)) TypedRoleDescriber[T] {
+func MembershipRoles[T any](getScopeID func(T) string, getRoles func(context.Context, string, auth.Identity) ([]Role, error)) TypedRoleDescriber[T] {
 	return func(ctx context.Context, subject auth.Identity, object T, scope Scope) ([]Role, error) {
 		if subject == (auth.Identity{}) {
 			return []Role{}, nil
 		}
 		scopeID := getScopeID(object)
-		// Validate scope matches
+		// Validate scope matches for security
 		if string(scope) != scopeID {
 			return nil, errors.Codef(codes.Internal, "authz: scope mismatch: expected %s, got %s", scopeID, scope)
 		}
