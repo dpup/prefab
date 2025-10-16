@@ -77,6 +77,9 @@ type Error struct {
 
 	// Error message to return to client,
 	userPresentableMessage string
+
+	// Log fields to be unpacked when logging this error
+	logFields map[string]interface{}
 }
 
 // New makes an Error from the given value. If that value is already an
@@ -162,6 +165,7 @@ func WrapPrefix(e interface{}, prefix string, skip int) *Error {
 		httpStatusCode:         err.httpStatusCode,
 		userPresentableMessage: err.userPresentableMessage,
 		prefix:                 prefix,
+		logFields:              err.logFields,
 	}
 }
 
@@ -181,6 +185,7 @@ func Mark(e interface{}, skip int) *Error {
 			httpStatusCode:         err.httpStatusCode,
 			userPresentableMessage: err.userPresentableMessage,
 			prefix:                 err.prefix,
+			logFields:              err.logFields,
 		}
 	}
 
@@ -211,6 +216,20 @@ func WithHTTPStatusCode(err error, code int) *Error {
 // not already an `Error`, it will be wrapped in one.
 func WithDetails(err error, details ...protoiface.MessageV1) *Error {
 	return Wrap(err, 1).WithDetails(details...)
+}
+
+// WithLogField takes an error and adds a log field to it. If the error is
+// not already an `Error`, it will be wrapped in one. The field will be unpacked
+// by the logging middleware when this error is logged.
+func WithLogField(err error, key string, value interface{}) *Error {
+	return Wrap(err, 1).WithLogField(key, value)
+}
+
+// WithLogFields takes an error and adds multiple log fields to it. If the error
+// is not already an `Error`, it will be wrapped in one. The fields will be
+// unpacked by the logging middleware when this error is logged.
+func WithLogFields(err error, fields map[string]interface{}) *Error {
+	return Wrap(err, 1).WithLogFields(fields)
 }
 
 // Errorf creates a new error with the given message. You can use it
@@ -391,6 +410,35 @@ func (err *Error) GRPCStatus() *status.Status {
 		st, _ = st.WithDetails(err.details...)
 	}
 	return st
+}
+
+// WithLogField adds a log field that will be unpacked by the logging middleware
+// when this error is logged. The field will be added to structured logs alongside
+// the standard error fields (error.type, error.message, etc.).
+func (err *Error) WithLogField(key string, value interface{}) *Error {
+	if err.logFields == nil {
+		err.logFields = make(map[string]interface{})
+	}
+	err.logFields[key] = value
+	return err
+}
+
+// WithLogFields adds multiple log fields that will be unpacked by the logging
+// middleware when this error is logged.
+func (err *Error) WithLogFields(fields map[string]interface{}) *Error {
+	if err.logFields == nil {
+		err.logFields = make(map[string]interface{})
+	}
+	for k, v := range fields {
+		err.logFields[k] = v
+	}
+	return err
+}
+
+// LogFields returns the log fields attached to this error. Returns nil if no
+// fields have been added.
+func (err *Error) LogFields() map[string]interface{} {
+	return err.logFields
 }
 
 // Code returns a gRPC status code for an error. If the error is nil, it returns

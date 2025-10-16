@@ -286,3 +286,130 @@ func TestTrackError(t *testing.T) {
 		assert.NotNil(t, ctxLogger)
 	})
 }
+
+func TestTrackErrorWithLogFields(t *testing.T) {
+	t.Run("WithSingleLogField", func(t *testing.T) {
+		logger, obs := newTestLogger()
+		ctx := With(t.Context(), logger)
+
+		err := errors.New("test error").WithLogField("user_id", "123")
+		trackError(ctx, err)
+
+		// Log a message to capture the tracked fields
+		Info(ctx, "error occurred")
+
+		require.Equal(t, 1, obs.Len())
+		entry := obs.All()[0]
+
+		// Should contain standard error fields plus custom log field
+		fields := entry.Context
+		assert.Contains(t, fields, zap.String("user_id", "123"))
+		assert.Contains(t, fields, zap.String("error.message", "test error"))
+	})
+
+	t.Run("WithMultipleLogFields", func(t *testing.T) {
+		logger, obs := newTestLogger()
+		ctx := With(t.Context(), logger)
+
+		err := errors.New("database error").WithLogFields(map[string]interface{}{
+			"query":        "SELECT * FROM users",
+			"retry_count":  3,
+			"database":     "users_db",
+			"timeout_ms":   5000,
+		})
+		trackError(ctx, err)
+
+		Info(ctx, "database error occurred")
+
+		require.Equal(t, 1, obs.Len())
+		entry := obs.All()[0]
+
+		fields := entry.Context
+		assert.Contains(t, fields, zap.String("query", "SELECT * FROM users"))
+		assert.Contains(t, fields, zap.Int("retry_count", 3))
+		assert.Contains(t, fields, zap.String("database", "users_db"))
+		assert.Contains(t, fields, zap.Int("timeout_ms", 5000))
+	})
+
+	t.Run("WithNoLogFields", func(t *testing.T) {
+		logger, obs := newTestLogger()
+		ctx := With(t.Context(), logger)
+
+		err := errors.New("simple error")
+		trackError(ctx, err)
+
+		Info(ctx, "simple error occurred")
+
+		require.Equal(t, 1, obs.Len())
+		entry := obs.All()[0]
+
+		// Should only have standard error fields
+		fields := entry.Context
+		assert.Contains(t, fields, zap.String("error.message", "simple error"))
+
+		// Should not have any custom fields
+		for _, field := range fields {
+			assert.NotEqual(t, "user_id", field.Key)
+			assert.NotEqual(t, "query", field.Key)
+		}
+	})
+
+	t.Run("WithChainedLogFields", func(t *testing.T) {
+		logger, obs := newTestLogger()
+		ctx := With(t.Context(), logger)
+
+		err := errors.New("payment failed").
+			WithLogField("user_id", "usr_123").
+			WithLogField("payment_id", "pay_456").
+			WithLogField("amount", 100)
+		trackError(ctx, err)
+
+		Info(ctx, "payment failed")
+
+		require.Equal(t, 1, obs.Len())
+		entry := obs.All()[0]
+
+		fields := entry.Context
+		assert.Contains(t, fields, zap.String("user_id", "usr_123"))
+		assert.Contains(t, fields, zap.String("payment_id", "pay_456"))
+		assert.Contains(t, fields, zap.Int("amount", 100))
+	})
+}
+
+func TestErrorInterceptorWithLogFields(t *testing.T) {
+	logger, obs := newTestLogger()
+	ctx := With(t.Context(), logger.Named("test_method"))
+
+	obs.TakeAll() // Clear any previous logs
+
+	// Create an error with log fields
+	testErr := errors.New("database connection failed").
+		WithCode(codes.Internal).
+		WithLogField("database", "users_db").
+		WithLogField("retry_count", 3).
+		WithLogField("connection_timeout", true)
+
+	handler := func(ctx context.Context, req any) (any, error) {
+		return nil, testErr
+	}
+
+	resp, err := errorInterceptor(ctx, nil, nil, handler)
+	assert.Nil(t, resp)
+	assert.Equal(t, testErr, err)
+
+	// Log a message to verify fields were tracked
+	Info(ctx, "handler completed with error")
+
+	require.Equal(t, 1, obs.Len())
+	entry := obs.All()[0]
+
+	// Verify custom log fields were unpacked
+	fields := entry.Context
+	assert.Contains(t, fields, zap.String("database", "users_db"))
+	assert.Contains(t, fields, zap.Int("retry_count", 3))
+	assert.Contains(t, fields, zap.Bool("connection_timeout", true))
+
+	// Verify standard error fields are also present
+	assert.Contains(t, fields, zap.String("error.message", "database connection failed"))
+	assert.Contains(t, fields, zap.Int("error.http_status", 500))
+}

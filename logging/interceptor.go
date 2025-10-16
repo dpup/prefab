@@ -56,6 +56,13 @@ func trackError(ctx context.Context, err error) {
 	if errors.As(err, &prefabErr) {
 		Track(ctx, "error.stack_trace", prefabErr.MinimalStack(0, stackSize))
 		Track(ctx, "error.original_type", prefabErr.TypeName())
+
+		// Unpack custom log fields attached to the error.
+		if logFields := prefabErr.LogFields(); logFields != nil {
+			for k, v := range logFields {
+				Track(ctx, k, v)
+			}
+		}
 	}
 }
 
