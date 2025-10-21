@@ -124,3 +124,39 @@ s := prefab.New(
     prefab.WithPlugin(&myPlugin{}),
 )
 ```
+
+## Registering Plugin Configuration
+
+Plugins should register their configuration keys to enable typo detection and validation. Register keys in an `init()` function:
+
+```go
+package myplugin
+
+import "github.com/dpup/prefab"
+
+const PluginName = "myplugin"
+
+func init() {
+    prefab.RegisterConfigKeys(
+        prefab.ConfigKeyInfo{
+            Key:         "myplugin.apiKey",
+            Description: "API key for external service",
+            Type:        "string",
+        },
+        prefab.ConfigKeyInfo{
+            Key:         "myplugin.timeout",
+            Description: "Request timeout",
+            Type:        "duration",
+        },
+    )
+}
+
+func Plugin() *MyPlugin {
+    return &MyPlugin{
+        apiKey:  prefab.ConfigString("myplugin.apiKey"),
+        timeout: prefab.ConfigDuration("myplugin.timeout"),
+    }
+}
+```
+
+Prefab will automatically validate loaded config keys at startup and warn about potential typos or unknown keys, helping users catch configuration errors early.

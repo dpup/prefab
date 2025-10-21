@@ -62,6 +62,22 @@ const (
 	jwtLeeway   = 5 * time.Second
 )
 
+func init() {
+	// Register magiclink plugin config keys
+	prefab.RegisterConfigKeys(
+		prefab.ConfigKeyInfo{
+			Key:         "auth.magiclink.signingKey",
+			Description: "JWT signing key for magic link tokens",
+			Type:        "string",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "auth.magiclink.expiration",
+			Description: "How long magic link tokens should be valid for",
+			Type:        "duration",
+		},
+	)
+}
+
 // MagicLinkOptions allow configuration of the MagicLinkPlugin.
 type MagicLinkOption func(*MagicLinkPlugin)
 

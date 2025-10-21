@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/dpup/prefab/internal/config"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/serverutil"
 
@@ -43,6 +44,11 @@ func New(opts ...ServerOption) *Server {
 	// Validate configuration before building the server
 	if errors := ValidateConfig(); len(errors) > 0 {
 		panic(FormatValidationErrors(errors))
+	}
+
+	// Check for unknown config keys and warn about potential typos
+	if warnings := config.ValidateConfigKeys(Config); len(warnings) > 0 {
+		logging.Warn(context.Background(), config.FormatValidationWarnings(warnings))
 	}
 
 	b := &builder{

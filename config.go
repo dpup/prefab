@@ -3,12 +3,9 @@ package prefab
 import (
 	"context"
 	"net"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
-	"unicode"
 
+	"github.com/dpup/prefab/internal/config"
 	"github.com/dpup/prefab/serverutil"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -20,6 +17,13 @@ import (
 
 // Filename of the standard configuration file.
 const ConfigFile = "prefab.yaml"
+
+// ConfigKeyInfo contains metadata about a known configuration key.
+// This is re-exported from internal/config for public API use.
+type ConfigKeyInfo = config.ConfigKeyInfo
+
+// ConfigInjector is a function that injects configuration into a context.
+type ConfigInjector func(context.Context) context.Context
 
 // Config is a global koanf instance used to access application level
 // configuration options.
@@ -42,96 +46,54 @@ const (
 )
 
 func init() {
-	// Provide fallbacks for cases when no configuration is loaded at all.
-	// TODO: Allow plugins to extend the default configuration directly, so they
-	// aren't all grouped here.
-	if err := Config.Load(confmap.Provider(map[string]interface{}{
-		"name":                  "Prefab Server",
-		"address":               "http://" + net.JoinHostPort(defaultHost, defaultPort),
-		"server.host":           defaultHost,
-		"server.port":           defaultPort,
-		"auth.expiration":       "24h",
-		"upload.path":           "/upload",
-		"upload.downloadPrefix": "/download",
-		"upload.maxFiles":       10,
-		"upload.maxMemory":      4 << 20,
-		"upload.validTypes":     []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
-	}, "."), nil); err != nil {
+	// Register all core configuration keys with their defaults.
+	// This must happen first so that DefaultConfigs() can be used below.
+	registerCoreConfigKeys()
+
+	// Load default configuration from registered keys
+	if err := Config.Load(confmap.Provider(config.DefaultConfigs(), "."), nil); err != nil {
 		panic("error loading default config: " + err.Error())
 	}
 
 	// Look for a prefab.yaml file in the current directory or any parent.
-	if cfg := searchForConfig(ConfigFile, "."); cfg != "" {
+	if cfg := config.SearchForConfig(ConfigFile, "."); cfg != "" {
 		if err := Config.Load(file.Provider(cfg), yaml.Parser()); err != nil {
 			panic("error loading config: " + err.Error())
 		}
 	}
 
 	// Load environment variables with the prefix PF__.
-	if err := Config.Load(env.Provider("PF__", ".", transformEnv), nil); err != nil {
+	if err := Config.Load(env.Provider("PF__", ".", config.TransformEnv), nil); err != nil {
 		panic("error loading env config: " + err.Error())
 	}
 }
 
-// Injects request scoped configuration from plugins.
-func configInterceptor(injectors []ConfigInjector) func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-		return handler(injectConfigs(ctx, injectors), req)
-	}
+// RegisterConfigKey registers a known configuration key with metadata.
+// This should be called by core code and plugins to document expected config keys.
+//
+// Example:
+//
+//	prefab.RegisterConfigKey(prefab.ConfigKeyInfo{
+//	    Key:         "auth.signingKey",
+//	    Description: "JWT signing key for identity tokens",
+//	    Type:        "string",
+//	})
+func RegisterConfigKey(info ConfigKeyInfo) {
+	config.RegisterConfigKey(info)
 }
 
-// ConfigInjector is a function that injects configuration into a context.
-type ConfigInjector func(context.Context) context.Context
-
-//nolint:fatcontext // Lint complains about using context in a loop.
-func injectConfigs(ctx context.Context, injectors []ConfigInjector) context.Context {
-	ctx = serverutil.WithAddress(ctx, Config.String("address"))
-	for _, injector := range injectors {
-		ctx = injector(ctx)
-	}
-	return ctx
+// RegisterConfigKeys registers multiple configuration keys at once.
+func RegisterConfigKeys(infos ...ConfigKeyInfo) {
+	config.RegisterConfigKeys(infos...)
 }
 
-func searchForConfig(filename string, startDir string) string {
-	d, err := filepath.Abs(startDir)
-	if err != nil {
-		return ""
-	}
-
-	p := filepath.Join(d, filename)
-	if _, err = os.Stat(p); err == nil {
-		return p
-	}
-
-	parentDir := filepath.Dir(d)
-	if parentDir == d {
-		return ""
-	}
-	return searchForConfig(filename, parentDir)
-}
-
-// Converts PF__SERVER__INCOMING_HEADERS to server.incomingHeaders.
-func transformEnv(s string) string {
-	s = strings.ToLower(strings.TrimPrefix(s, "PF__"))
-	segments := strings.Split(s, "__")
-	for i, segment := range segments {
-		parts := strings.Split(segment, "_")
-		for j := 1; j < len(parts); j++ {
-			parts[j] = capitalize(parts[j])
-		}
-		segments[i] = strings.Join(parts, "")
-	}
-
-	return strings.Join(segments, ".")
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return ""
-	}
-	r := []rune(s)
-	r[0] = unicode.ToUpper(r[0])
-	return string(r)
+// RegisterDeprecatedKey registers a deprecated configuration key and its replacement.
+//
+// Example:
+//
+//	prefab.RegisterDeprecatedKey("server.security.corsAllowMethods", "server.security.corsAllowedMethods")
+func RegisterDeprecatedKey(oldKey, newKey string) {
+	config.RegisterDeprecatedKey(oldKey, newKey)
 }
 
 // LoadConfigFile loads additional configuration from a YAML file into the
@@ -231,4 +193,219 @@ func ConfigExists(key string) bool {
 // ConfigAll returns all configuration as a map.
 func ConfigAll() map[string]interface{} {
 	return Config.All()
+}
+
+// Injects request scoped configuration from plugins.
+func configInterceptor(injectors []ConfigInjector) func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		return handler(injectConfigs(ctx, injectors), req)
+	}
+}
+
+//nolint:fatcontext // Lint complains about using context in a loop.
+func injectConfigs(ctx context.Context, injectors []ConfigInjector) context.Context {
+	ctx = serverutil.WithAddress(ctx, Config.String("address"))
+	for _, injector := range injectors {
+		ctx = injector(ctx)
+	}
+	return ctx
+}
+
+// registerCoreConfigKeys registers all core Prefab configuration keys with their defaults.
+// This is called from init() before any config loading happens.
+func registerCoreConfigKeys() {
+	config.RegisterConfigKeys(
+		// General server configuration
+		ConfigKeyInfo{
+			Key:         "name",
+			Description: "User-facing name that identifies the service",
+			Type:        "string",
+			Default:     "Prefab Server",
+		},
+		ConfigKeyInfo{
+			Key:         "address",
+			Description: "External address for the service (used in URL construction)",
+			Type:        "string",
+			Default:     "http://" + net.JoinHostPort(defaultHost, defaultPort),
+		},
+
+		// Server configuration
+		ConfigKeyInfo{
+			Key:         "server.host",
+			Description: "Host to bind the server to",
+			Type:        "string",
+			Default:     defaultHost,
+		},
+		ConfigKeyInfo{
+			Key:         "server.port",
+			Description: "Port to bind the server to",
+			Type:        "int",
+			Default:     defaultPort,
+		},
+		ConfigKeyInfo{
+			Key:         "server.incomingHeaders",
+			Description: "Safe-list of headers to forward to gRPC services",
+			Type:        "[]string",
+		},
+		ConfigKeyInfo{
+			Key:         "server.maxMsgSizeBytes",
+			Description: "Maximum gRPC message size in bytes",
+			Type:        "int",
+		},
+		ConfigKeyInfo{
+			Key:         "server.csrfSigningKey",
+			Description: "Key used to sign CSRF tokens",
+			Type:        "string",
+		},
+
+		// TLS configuration
+		ConfigKeyInfo{
+			Key:         "server.tls.certFile",
+			Description: "Path to TLS certificate file",
+			Type:        "string",
+		},
+		ConfigKeyInfo{
+			Key:         "server.tls.keyFile",
+			Description: "Path to TLS key file",
+			Type:        "string",
+		},
+
+		// Security headers configuration
+		ConfigKeyInfo{
+			Key:         "server.security.xFramesOptions",
+			Description: "X-Frame-Options header value",
+			Type:        "string",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.hstsExpiration",
+			Description: "HSTS max-age duration",
+			Type:        "duration",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.hstsIncludeSubdomains",
+			Description: "Include subdomains in HSTS",
+			Type:        "bool",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.hstsPreload",
+			Description: "Enable HSTS preload",
+			Type:        "bool",
+		},
+
+		// CORS configuration
+		ConfigKeyInfo{
+			Key:         "server.security.corsOrigins",
+			Description: "Allowed CORS origins",
+			Type:        "[]string",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.corsAllowMethods",
+			Description: "Allowed CORS methods",
+			Type:        "[]string",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.corsAllowHeaders",
+			Description: "Allowed CORS headers",
+			Type:        "[]string",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.corsExposeHeaders",
+			Description: "CORS headers to expose to the browser",
+			Type:        "[]string",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.corsAllowCredentials",
+			Description: "Allow credentials in CORS requests",
+			Type:        "bool",
+		},
+		ConfigKeyInfo{
+			Key:         "server.security.corsMaxAge",
+			Description: "CORS preflight cache duration",
+			Type:        "duration",
+		},
+
+		// Auth configuration
+		ConfigKeyInfo{
+			Key:         "auth.signingKey",
+			Description: "JWT signing key for identity tokens",
+			Type:        "string",
+		},
+		ConfigKeyInfo{
+			Key:         "auth.expiration",
+			Description: "How long identity tokens should be valid for",
+			Type:        "duration",
+			Default:     "24h",
+		},
+
+		// Template configuration
+		ConfigKeyInfo{
+			Key:         "templates.alwaysParse",
+			Description: "Whether to reparse templates on every execution",
+			Type:        "bool",
+		},
+		ConfigKeyInfo{
+			Key:         "templates.dirs",
+			Description: "Directories to load templates from",
+			Type:        "[]string",
+		},
+
+		// Upload configuration
+		ConfigKeyInfo{
+			Key:         "upload.path",
+			Description: "URL path for upload endpoint",
+			Type:        "string",
+			Default:     "/upload",
+		},
+		ConfigKeyInfo{
+			Key:         "upload.downloadPrefix",
+			Description: "URL prefix for download endpoints",
+			Type:        "string",
+			Default:     "/download",
+		},
+		ConfigKeyInfo{
+			Key:         "upload.maxFiles",
+			Description: "Maximum number of files per upload",
+			Type:        "int",
+			Default:     10,
+		},
+		ConfigKeyInfo{
+			Key:         "upload.maxMemory",
+			Description: "Maximum memory for file uploads in bytes",
+			Type:        "int",
+			Default:     4 << 20, // 4MB
+		},
+		ConfigKeyInfo{
+			Key:         "upload.validTypes",
+			Description: "Allowed MIME types for uploads",
+			Type:        "[]string",
+			Default:     []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
+		},
+
+		// Email configuration
+		ConfigKeyInfo{
+			Key:         "email.from",
+			Description: "Default from address for emails",
+			Type:        "string",
+		},
+		ConfigKeyInfo{
+			Key:         "email.smtp.host",
+			Description: "SMTP server hostname",
+			Type:        "string",
+		},
+		ConfigKeyInfo{
+			Key:         "email.smtp.port",
+			Description: "SMTP server port",
+			Type:        "int",
+		},
+		ConfigKeyInfo{
+			Key:         "email.smtp.username",
+			Description: "SMTP authentication username",
+			Type:        "string",
+		},
+		ConfigKeyInfo{
+			Key:         "email.smtp.password",
+			Description: "SMTP authentication password",
+			Type:        "string",
+		},
+	)
 }

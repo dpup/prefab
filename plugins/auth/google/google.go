@@ -95,6 +95,22 @@ const (
 	ProviderName = "google"
 )
 
+func init() {
+	// Register google auth plugin config keys
+	prefab.RegisterConfigKeys(
+		prefab.ConfigKeyInfo{
+			Key:         "auth.google.id",
+			Description: "Google OAuth2 client ID",
+			Type:        "string",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "auth.google.secret",
+			Description: "Google OAuth2 client secret",
+			Type:        "string",
+		},
+	)
+}
+
 // GoogleOptions allow configuration of the GooglePlugin.
 type GoogleOption func(*GooglePlugin)
 

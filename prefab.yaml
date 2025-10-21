@@ -34,12 +34,12 @@ server:
     corsOrigins:
     - http://localhost:3000
     - http://localhost:8000
-    corsAllowedMethods:
+    corsAllowMethods:
     - GET
     - POST
     - PUT
     - DELETE
-    corsAllowedHeaders:
+    corsAllowHeaders:
     - x-requested-with
     - x-csrf-protection
     corsAllowCredentials: true
