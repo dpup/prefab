@@ -122,7 +122,7 @@ func Run() {
 		}),
 
 		// Base roles from identity - every authenticated user gets their base role
-		authz.StaticRoles(func(_ context.Context, identity auth.Identity, _ document) []authz.Role {
+		authz.StaticRoles(func(_ context.Context, identity auth.Identity, _ document, _ authz.Scope) []authz.Role {
 			// Only grant roles if in the right scope (xmen org)
 			// Note: Compose automatically validates ScopedObject, but document
 			// doesn't implement it, so we check manually here

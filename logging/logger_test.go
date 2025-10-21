@@ -312,10 +312,10 @@ func TestTrackErrorWithLogFields(t *testing.T) {
 		ctx := With(t.Context(), logger)
 
 		err := errors.New("database error").WithLogFields(map[string]interface{}{
-			"query":        "SELECT * FROM users",
-			"retry_count":  3,
-			"database":     "users_db",
-			"timeout_ms":   5000,
+			"query":       "SELECT * FROM users",
+			"retry_count": 3,
+			"database":    "users_db",
+			"timeout_ms":  5000,
 		})
 		trackError(ctx, err)
 

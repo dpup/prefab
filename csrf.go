@@ -76,7 +76,7 @@ func VerifyCSRF(ctx context.Context, signingKey []byte) error {
 	md, _ := metadata.FromIncomingContext(ctx)
 	params := md.Get(csrfParam)
 	if len(params) == 0 || params[0] == "" {
-		return errors.Codef(codes.FailedPrecondition, "csrf: missing token in request")
+		return errors.Codef(codes.FailedPrecondition, "csrf: missing token in request (x-csrf-protection)")
 	}
 
 	fromCookie := csrfTokenFromCookie(ctx)
