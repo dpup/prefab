@@ -41,6 +41,11 @@ var JSONMarshalOptions = protojson.MarshalOptions{
 
 // New returns a new server.
 func New(opts ...ServerOption) *Server {
+	// Load config defaults now that all plugins have registered their keys.
+	// This happens lazily here instead of in init() to ensure all plugin
+	// init() functions have completed and registered their config keys.
+	config.EnsureDefaultsLoaded(Config)
+
 	// Validate configuration before building the server
 	if errors := ValidateConfig(); len(errors) > 0 {
 		panic(FormatValidationErrors(errors))

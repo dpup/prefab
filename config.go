@@ -46,14 +46,8 @@ const (
 )
 
 func init() {
-	// Register all core configuration keys with their defaults.
-	// This must happen first so that DefaultConfigs() can be used below.
+	// Register all core configuration keys with their defaults (loaded lazily).
 	registerCoreConfigKeys()
-
-	// Load default configuration from registered keys
-	if err := Config.Load(confmap.Provider(config.DefaultConfigs(), "."), nil); err != nil {
-		panic("error loading default config: " + err.Error())
-	}
 
 	// Look for a prefab.yaml file in the current directory or any parent.
 	if cfg := config.SearchForConfig(ConfigFile, "."); cfg != "" {
@@ -214,6 +208,12 @@ func injectConfigs(ctx context.Context, injectors []ConfigInjector) context.Cont
 // registerCoreConfigKeys registers all core Prefab configuration keys with their defaults.
 // This is called from init() before any config loading happens.
 func registerCoreConfigKeys() {
+	registerServerAndTLSConfigKeys()
+	registerSecurityConfigKeys()
+}
+
+// registerServerAndTLSConfigKeys registers general server and TLS configuration keys.
+func registerServerAndTLSConfigKeys() {
 	config.RegisterConfigKeys(
 		// General server configuration
 		ConfigKeyInfo{
@@ -269,7 +269,12 @@ func registerCoreConfigKeys() {
 			Description: "Path to TLS key file",
 			Type:        "string",
 		},
+	)
+}
 
+// registerSecurityConfigKeys registers security headers and CORS configuration keys.
+func registerSecurityConfigKeys() {
+	config.RegisterConfigKeys(
 		// Security headers configuration
 		ConfigKeyInfo{
 			Key:         "server.security.xFramesOptions",
@@ -322,90 +327,6 @@ func registerCoreConfigKeys() {
 			Key:         "server.security.corsMaxAge",
 			Description: "CORS preflight cache duration",
 			Type:        "duration",
-		},
-
-		// Auth configuration
-		ConfigKeyInfo{
-			Key:         "auth.signingKey",
-			Description: "JWT signing key for identity tokens",
-			Type:        "string",
-		},
-		ConfigKeyInfo{
-			Key:         "auth.expiration",
-			Description: "How long identity tokens should be valid for",
-			Type:        "duration",
-			Default:     "24h",
-		},
-
-		// Template configuration
-		ConfigKeyInfo{
-			Key:         "templates.alwaysParse",
-			Description: "Whether to reparse templates on every execution",
-			Type:        "bool",
-		},
-		ConfigKeyInfo{
-			Key:         "templates.dirs",
-			Description: "Directories to load templates from",
-			Type:        "[]string",
-		},
-
-		// Upload configuration
-		ConfigKeyInfo{
-			Key:         "upload.path",
-			Description: "URL path for upload endpoint",
-			Type:        "string",
-			Default:     "/upload",
-		},
-		ConfigKeyInfo{
-			Key:         "upload.downloadPrefix",
-			Description: "URL prefix for download endpoints",
-			Type:        "string",
-			Default:     "/download",
-		},
-		ConfigKeyInfo{
-			Key:         "upload.maxFiles",
-			Description: "Maximum number of files per upload",
-			Type:        "int",
-			Default:     10,
-		},
-		ConfigKeyInfo{
-			Key:         "upload.maxMemory",
-			Description: "Maximum memory for file uploads in bytes",
-			Type:        "int",
-			Default:     4 << 20, // 4MB
-		},
-		ConfigKeyInfo{
-			Key:         "upload.validTypes",
-			Description: "Allowed MIME types for uploads",
-			Type:        "[]string",
-			Default:     []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
-		},
-
-		// Email configuration
-		ConfigKeyInfo{
-			Key:         "email.from",
-			Description: "Default from address for emails",
-			Type:        "string",
-		},
-		ConfigKeyInfo{
-			Key:         "email.smtp.host",
-			Description: "SMTP server hostname",
-			Type:        "string",
-		},
-		ConfigKeyInfo{
-			Key:         "email.smtp.port",
-			Description: "SMTP server port",
-			Type:        "int",
-		},
-		ConfigKeyInfo{
-			Key:         "email.smtp.username",
-			Description: "SMTP authentication username",
-			Type:        "string",
-		},
-		ConfigKeyInfo{
-			Key:         "email.smtp.password",
-			Description: "SMTP authentication password",
-			Type:        "string",
 		},
 	)
 }

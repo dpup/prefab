@@ -12,6 +12,7 @@ import (
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/errors"
+	"github.com/dpup/prefab/internal/config"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugins/auth"
 	"github.com/dpup/prefab/plugins/authz"
@@ -19,6 +20,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 )
+
+func init() {
+	// Ensure config defaults are loaded before tests run.
+	// This is necessary because these tests don't call prefab.New()
+	config.EnsureDefaultsLoaded(prefab.Config)
+}
 
 const (
 	pngBase64  = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAA1JREFUGFdj+L+U4T8ABu8CpCYJ1DQAAAAASUVORK5CYII="

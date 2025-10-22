@@ -14,7 +14,7 @@ func TestDefaultConfigs(t *testing.T) {
 		t.Error("DefaultConfigs() returned empty map")
 	}
 
-	// Test specific defaults
+	// Test specific core defaults (not plugin defaults to avoid import cycles)
 	tests := []struct {
 		key      string
 		expected interface{}
@@ -22,11 +22,6 @@ func TestDefaultConfigs(t *testing.T) {
 		{"name", "Prefab Server"},
 		{"server.host", defaultHost},
 		{"server.port", defaultPort},
-		{"auth.expiration", "24h"},
-		{"upload.path", "/upload"},
-		{"upload.downloadPrefix", "/download"},
-		{"upload.maxFiles", 10},
-		{"upload.maxMemory", 4 << 20},
 	}
 
 	for _, tt := range tests {
@@ -39,20 +34,14 @@ func TestDefaultConfigs(t *testing.T) {
 			t.Errorf("Default for %q = %v, want %v", tt.key, value, tt.expected)
 		}
 	}
-
-	// Test that validTypes slice is populated
-	if validTypes, ok := defaults["upload.validTypes"].([]string); ok {
-		if len(validTypes) == 0 {
-			t.Error("upload.validTypes should not be empty")
-		}
-	} else {
-		t.Error("upload.validTypes should be a []string")
-	}
 }
 
 func TestConfigLoadedDefaults(t *testing.T) {
-	// Test that defaults are actually loaded into Config
-	// Note: Some values may be overridden by prefab.yaml, so we test
+	// Test that defaults are actually loaded into Config after EnsureDefaultsLoaded is called.
+	// Note: Defaults are loaded lazily in builder.New(), so we call EnsureDefaultsLoaded directly.
+	config.EnsureDefaultsLoaded(Config)
+
+	// Some values may be overridden by prefab.yaml, so we test
 	// values that are less likely to be in the YAML file
 
 	if ConfigString("name") == "" {
@@ -61,18 +50,5 @@ func TestConfigLoadedDefaults(t *testing.T) {
 
 	if ConfigString("server.port") == "" {
 		t.Error("Config server.port should not be empty (should have default)")
-	}
-
-	// These are less likely to be overridden by prefab.yaml
-	if ConfigString("upload.path") != "/upload" {
-		t.Errorf("Config upload.path = %q, want %q", ConfigString("upload.path"), "/upload")
-	}
-
-	if ConfigString("upload.downloadPrefix") != "/download" {
-		t.Errorf("Config upload.downloadPrefix = %q, want %q", ConfigString("upload.downloadPrefix"), "/download")
-	}
-
-	if ConfigInt("upload.maxFiles") != 10 {
-		t.Errorf("Config upload.maxFiles = %d, want %d", ConfigInt("upload.maxFiles"), 10)
 	}
 }

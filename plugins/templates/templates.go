@@ -23,6 +23,21 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
+func init() {
+	prefab.RegisterConfigKeys(
+		prefab.ConfigKeyInfo{
+			Key:         "templates.alwaysParse",
+			Description: "Whether to reparse templates on every execution",
+			Type:        "bool",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "templates.dirs",
+			Description: "Directories to load templates from",
+			Type:        "[]string",
+		},
+	)
+}
+
 // Constant name for identifying the templates plugin.
 const PluginName = "templates"
 

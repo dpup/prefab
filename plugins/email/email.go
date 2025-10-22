@@ -24,6 +24,36 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
+func init() {
+	prefab.RegisterConfigKeys(
+		prefab.ConfigKeyInfo{
+			Key:         "email.from",
+			Description: "Default from address for emails",
+			Type:        "string",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "email.smtp.host",
+			Description: "SMTP server hostname",
+			Type:        "string",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "email.smtp.port",
+			Description: "SMTP server port",
+			Type:        "int",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "email.smtp.username",
+			Description: "SMTP authentication username",
+			Type:        "string",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "email.smtp.password",
+			Description: "SMTP authentication password",
+			Type:        "string",
+		},
+	)
+}
+
 // Constant name for identifying the email plugin.
 const PluginName = "email"
 

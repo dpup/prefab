@@ -19,9 +19,9 @@ func TestValidateConfigKeys_Integration(t *testing.T) {
 		"server.security.corsAlowHeaders":     []string{"x-test"}, // Typo: missing one 'l'
 		"server.security.corsAlowMethods":     []string{"GET"},    // Typo: missing one 'l'
 		"auth.expiration":                     "24h",
-		"auth.signngKey":                      "test",             // Typo: should be signingKey
+		"auth.signngKey":                      "test", // Typo: should be signingKey
 		"unknownKey":                          "value",
-		"myapp.customKey":                     "value",                               // Unknown app key
+		"myapp.customKey":                     "value",              // Unknown app key
 		"server.security.corsAllowHeaders_v2": []string{"x-custom"}, // Similar to known key
 	}, "."), nil)
 

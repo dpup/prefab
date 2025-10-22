@@ -7,6 +7,22 @@ import (
 	"github.com/dpup/prefab"
 )
 
+func init() {
+	prefab.RegisterConfigKeys(
+		prefab.ConfigKeyInfo{
+			Key:         "auth.signingKey",
+			Description: "JWT signing key for identity tokens",
+			Type:        "string",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "auth.expiration",
+			Description: "How long identity tokens should be valid for",
+			Type:        "duration",
+			Default:     "24h",
+		},
+	)
+}
+
 const defaultTokenExpiration = time.Hour * 24 * 30
 
 type signingKey struct{}

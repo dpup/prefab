@@ -35,6 +35,41 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
+func init() {
+	prefab.RegisterConfigKeys(
+		prefab.ConfigKeyInfo{
+			Key:         "upload.path",
+			Description: "URL path for upload endpoint",
+			Type:        "string",
+			Default:     "/upload",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "upload.downloadPrefix",
+			Description: "URL prefix for download endpoints",
+			Type:        "string",
+			Default:     "/download",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "upload.maxFiles",
+			Description: "Maximum number of files per upload",
+			Type:        "int",
+			Default:     10,
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "upload.maxMemory",
+			Description: "Maximum memory for file uploads in bytes",
+			Type:        "int",
+			Default:     4 << 20, // 4MB
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "upload.validTypes",
+			Description: "Allowed MIME types for uploads",
+			Type:        "[]string",
+			Default:     []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
+		},
+	)
+}
+
 const (
 	// Constant name for identifying the upload plugin.
 	PluginName = "upload"

@@ -7,12 +7,19 @@ import (
 
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/errors"
+	"github.com/dpup/prefab/internal/config"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugins/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 )
+
+func init() {
+	// Ensure config defaults are loaded before tests run.
+	// This is necessary because these tests don't call prefab.New()
+	config.EnsureDefaultsLoaded(prefab.Config)
+}
 
 func TestWithValidTypes(t *testing.T) {
 	t.Run("CustomValidTypes", func(t *testing.T) {
