@@ -33,6 +33,174 @@ func main() {
 }
 ```
 
+## Server-Sent Events (SSE)
+
+Prefab provides built-in support for Server-Sent Events, allowing you to stream real-time updates from gRPC services to web clients over HTTP.
+
+### Basic SSE Endpoint
+
+```go
+import (
+    "context"
+    "github.com/dpup/prefab"
+    "google.golang.org/protobuf/proto"
+    "google.golang.org/protobuf/types/known/wrapperspb"
+)
+
+s := prefab.New(
+    prefab.WithSSE(prefab.SSEConfig{
+        Path: "/events",
+        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
+            // Send events to clients
+            ch <- wrapperspb.String("Hello from SSE!")
+            return nil
+        },
+    }),
+)
+```
+
+### SSE with Path Parameters
+
+Extract parameters from URL patterns to create dynamic streams:
+
+```go
+s := prefab.New(
+    prefab.WithSSE(prefab.SSEConfig{
+        Path: "/notes/{id}/updates",
+        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
+            noteID := params["id"]
+
+            // Stream updates for this specific note
+            ticker := time.NewTicker(1 * time.Second)
+            defer ticker.Stop()
+
+            for {
+                select {
+                case <-ctx.Done():
+                    return ctx.Err()
+                case <-ticker.C:
+                    update := getLatestUpdate(noteID)
+                    ch <- update
+                }
+            }
+        },
+    }),
+)
+```
+
+### Integrating with gRPC Streaming Services
+
+Bridge gRPC streaming RPCs to SSE for web clients:
+
+```go
+// Your gRPC streaming service
+func (s *NotesService) StreamUpdates(req *StreamRequest, stream NotesStreamService_StreamUpdatesServer) error {
+    for update := range s.getUpdates(req.NoteId) {
+        if err := stream.Send(update); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+
+// SSE adapter
+s := prefab.New(
+    prefab.WithSSE(prefab.SSEConfig{
+        Path: "/notes/{id}/updates",
+        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
+            noteID := params["id"]
+
+            // Create gRPC client and call streaming method
+            client := NewNotesStreamServiceClient(conn)
+            stream, err := client.StreamUpdates(ctx, &StreamRequest{NoteId: noteID})
+            if err != nil {
+                return err
+            }
+
+            // Forward gRPC stream to SSE channel
+            for {
+                update, err := stream.Recv()
+                if err == io.EOF {
+                    return nil
+                }
+                if err != nil {
+                    return err
+                }
+                ch <- update
+            }
+        },
+    }),
+)
+```
+
+### Multiple Path Parameters
+
+```go
+s := prefab.New(
+    prefab.WithSSE(prefab.SSEConfig{
+        Path: "/users/{userId}/notes/{noteId}/live",
+        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
+            userID := params["userId"]
+            noteID := params["noteId"]
+
+            // Stream live collaboration events
+            // ...
+            return nil
+        },
+    }),
+)
+```
+
+### Client Usage
+
+#### JavaScript (Browser)
+
+```javascript
+const eventSource = new EventSource('http://localhost:8080/notes/123/updates');
+
+eventSource.onopen = () => {
+    console.log('Connected');
+};
+
+eventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Received:', data);
+};
+
+eventSource.onerror = (error) => {
+    console.error('Error:', error);
+    eventSource.close();
+};
+```
+
+#### curl
+
+```bash
+curl -N http://localhost:8080/notes/123/updates
+```
+
+### SSE Features
+
+- **Path Parameters**: Extract values from URL patterns like `/notes/{id}/updates`
+- **Query Parameters**: Access via `params["query.paramName"]`
+- **Context Cancellation**: Automatically stops streaming when client disconnects
+- **Error Handling**: Gracefully handles errors and closes connections
+- **Protobuf Support**: Automatically converts protobuf messages to JSON
+- **Middleware Integration**: Works with existing Prefab middleware (auth, CORS, etc.)
+
+### Best Practices
+
+1. **Handle Context Cancellation**: Always check `ctx.Done()` in your stream function
+2. **Close Channels**: Always close the message channel when done
+3. **Error Handling**: Return errors from StreamFunc to properly close connections
+4. **Rate Limiting**: Consider rate limiting to prevent abuse
+5. **Authentication**: Use Prefab's auth middleware to protect endpoints
+6. **Buffering**: Use buffered channels to prevent blocking
+
+### Example
+
+See `examples/ssestream/` for a complete working example.
+
 ## Plugin Integration
 
 ### Authentication

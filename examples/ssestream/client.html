@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prefab SSE Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #666;
+            margin-top: 0;
+        }
+        .controls {
+            margin-bottom: 15px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.stop {
+            background: #f44336;
+        }
+        button.stop:hover {
+            background: #da190b;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .events {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .event {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: white;
+            border-left: 3px solid #4CAF50;
+            border-radius: 3px;
+        }
+        .event-time {
+            color: #999;
+            font-size: 11px;
+        }
+        .event-data {
+            margin-top: 5px;
+            color: #333;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Prefab SSE Example</h1>
+    <p>This page demonstrates Server-Sent Events with Prefab. Open your browser's developer console to see more details.</p>
+
+    <div class="grid">
+        <div class="container">
+            <h2>Note Updates Stream</h2>
+            <div class="controls">
+                <label>Note ID:</label>
+                <input type="text" id="noteId" value="123" />
+                <button id="startNotes" onclick="startNoteStream()">Start</button>
+                <button id="stopNotes" class="stop" onclick="stopNoteStream()" disabled>Stop</button>
+            </div>
+            <div id="notesStatus" class="status disconnected">Disconnected</div>
+            <div id="notesEvents" class="events"></div>
+        </div>
+
+        <div class="container">
+            <h2>Counter Stream</h2>
+            <div class="controls">
+                <button id="startCounter" onclick="startCounterStream()">Start</button>
+                <button id="stopCounter" class="stop" onclick="stopCounterStream()" disabled>Stop</button>
+            </div>
+            <div id="counterStatus" class="status disconnected">Disconnected</div>
+            <div id="counterEvents" class="events"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Live Note Edits Stream</h2>
+        <div class="controls">
+            <label>User ID:</label>
+            <input type="text" id="userId" value="42" />
+            <label>Note ID:</label>
+            <input type="text" id="liveNoteId" value="99" />
+            <button id="startLive" onclick="startLiveStream()">Start</button>
+            <button id="stopLive" class="stop" onclick="stopLiveStream()" disabled>Stop</button>
+        </div>
+        <div id="liveStatus" class="status disconnected">Disconnected</div>
+        <div id="liveEvents" class="events"></div>
+    </div>
+
+    <script>
+        let noteEventSource = null;
+        let counterEventSource = null;
+        let liveEventSource = null;
+
+        function formatTime() {
+            return new Date().toLocaleTimeString();
+        }
+
+        function addEvent(containerId, data) {
+            const container = document.getElementById(containerId);
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'event';
+            eventDiv.innerHTML = `
+                <div class="event-time">${formatTime()}</div>
+                <div class="event-data">${escapeHtml(data)}</div>
+            `;
+            container.insertBefore(eventDiv, container.firstChild);
+
+            // Keep only last 50 events
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function updateStatus(statusId, status) {
+            const statusEl = document.getElementById(statusId);
+            statusEl.className = 'status ' + status;
+            statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
+        // Note Updates Stream
+        function startNoteStream() {
+            if (noteEventSource) {
+                stopNoteStream();
+            }
+
+            const noteId = document.getElementById('noteId').value;
+            const url = `http://localhost:8080/notes/${noteId}/updates`;
+
+            console.log('Connecting to:', url);
+            updateStatus('notesStatus', 'connecting');
+
+            noteEventSource = new EventSource(url);
+
+            noteEventSource.onopen = () => {
+                console.log('Note stream connected');
+                updateStatus('notesStatus', 'connected');
+                document.getElementById('startNotes').disabled = true;
+                document.getElementById('stopNotes').disabled = false;
+            };
+
+            noteEventSource.onmessage = (event) => {
+                console.log('Note update:', event.data);
+                addEvent('notesEvents', event.data);
+            };
+
+            noteEventSource.onerror = (error) => {
+                console.error('Note stream error:', error);
+                updateStatus('notesStatus', 'disconnected');
+                stopNoteStream();
+            };
+        }
+
+        function stopNoteStream() {
+            if (noteEventSource) {
+                noteEventSource.close();
+                noteEventSource = null;
+                console.log('Note stream disconnected');
+            }
+            updateStatus('notesStatus', 'disconnected');
+            document.getElementById('startNotes').disabled = false;
+            document.getElementById('stopNotes').disabled = true;
+        }
+
+        // Counter Stream
+        function startCounterStream() {
+            if (counterEventSource) {
+                stopCounterStream();
+            }
+
+            const url = 'http://localhost:8080/counter';
+
+            console.log('Connecting to:', url);
+            updateStatus('counterStatus', 'connecting');
+
+            counterEventSource = new EventSource(url);
+
+            counterEventSource.onopen = () => {
+                console.log('Counter stream connected');
+                updateStatus('counterStatus', 'connected');
+                document.getElementById('startCounter').disabled = true;
+                document.getElementById('stopCounter').disabled = false;
+            };
+
+            counterEventSource.onmessage = (event) => {
+                console.log('Counter:', event.data);
+                addEvent('counterEvents', event.data);
+            };
+
+            counterEventSource.onerror = (error) => {
+                console.error('Counter stream error:', error);
+                updateStatus('counterStatus', 'disconnected');
+                stopCounterStream();
+            };
+        }
+
+        function stopCounterStream() {
+            if (counterEventSource) {
+                counterEventSource.close();
+                counterEventSource = null;
+                console.log('Counter stream disconnected');
+            }
+            updateStatus('counterStatus', 'disconnected');
+            document.getElementById('startCounter').disabled = false;
+            document.getElementById('stopCounter').disabled = true;
+        }
+
+        // Live Edits Stream
+        function startLiveStream() {
+            if (liveEventSource) {
+                stopLiveStream();
+            }
+
+            const userId = document.getElementById('userId').value;
+            const noteId = document.getElementById('liveNoteId').value;
+            const url = `http://localhost:8080/users/${userId}/notes/${noteId}/live`;
+
+            console.log('Connecting to:', url);
+            updateStatus('liveStatus', 'connecting');
+
+            liveEventSource = new EventSource(url);
+
+            liveEventSource.onopen = () => {
+                console.log('Live stream connected');
+                updateStatus('liveStatus', 'connected');
+                document.getElementById('startLive').disabled = true;
+                document.getElementById('stopLive').disabled = false;
+            };
+
+            liveEventSource.onmessage = (event) => {
+                console.log('Live edit:', event.data);
+                addEvent('liveEvents', event.data);
+            };
+
+            liveEventSource.onerror = (error) => {
+                console.error('Live stream error:', error);
+                updateStatus('liveStatus', 'disconnected');
+                stopLiveStream();
+            };
+        }
+
+        function stopLiveStream() {
+            if (liveEventSource) {
+                liveEventSource.close();
+                liveEventSource = null;
+                console.log('Live stream disconnected');
+            }
+            updateStatus('liveStatus', 'disconnected');
+            document.getElementById('startLive').disabled = false;
+            document.getElementById('stopLive').disabled = true;
+        }
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            stopNoteStream();
+            stopCounterStream();
+            stopLiveStream();
+        });
+    </script>
+</body>
+</html>
