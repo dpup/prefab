@@ -113,7 +113,7 @@ func (p *pathPattern) extractParams(path string) (map[string]string, bool) {
 }
 
 // createSSEHandler creates an HTTP handler that serves Server-Sent Events from a gRPC stream.
-func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamStarter[T], getConn func() grpc.ClientConnInterface) http.Handler {
+func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamStarter[T], s *Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := logging.EnsureLogger(r.Context())
 
@@ -157,8 +157,8 @@ func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamSt
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		// Get the gRPC client connection
-		cc := getConn()
+		// Use the shared gRPC client connection
+		cc := s.sseClientConn
 
 		// Start the gRPC stream
 		stream, err := starter(ctx, params, cc)
@@ -236,6 +236,8 @@ func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamSt
 //	)
 //
 // All stream management (reading, cancellation, error handling, SSE formatting) is handled automatically.
+//
+// Multiple SSE endpoints share a single gRPC client connection for efficiency.
 func WithSSEStream[T proto.Message](path string, starter SSEStreamStarter[T]) ServerOption {
 	return func(b *builder) {
 		pattern, err := parsePathPattern(path)
@@ -243,21 +245,24 @@ func WithSSEStream[T proto.Message](path string, starter SSEStreamStarter[T]) Se
 			panic(err)
 		}
 
-		// We'll capture the server reference and create a connection getter
-		// that returns the client connection to this server (like grpc-gateway does)
-		var connGetter func() grpc.ClientConnInterface
+		// Capture the server reference to access the shared connection
+		var server *Server
 
-		// Register a server builder that sets up the connection after the server is built
+		// Register a server builder that:
+		// 1. Creates the shared SSE client connection if not already created
+		// 2. Stores the server reference for handlers
 		b.serverBuilders = append(b.serverBuilders, func(s *Server) {
-			connGetter = func() grpc.ClientConnInterface {
-				// Create a client connection to ourselves
+			server = s
+
+			// Create the shared SSE client connection if this is the first SSE endpoint
+			if s.sseClientConn == nil {
 				_, _, endpoint, opts := s.GatewayArgs()
 				conn, err := grpc.NewClient(endpoint, opts...)
 				if err != nil {
-					logging.Errorw(s.baseContext, "sse: failed to create client connection", "error", err)
-					panic(err)
+					panic(fmt.Sprintf("sse: failed to create shared client connection: %v", err))
 				}
-				return conn
+				s.sseClientConn = conn
+				logging.Infow(s.baseContext, "sse: created shared gRPC client connection", "endpoint", endpoint)
 			}
 		})
 
@@ -265,8 +270,8 @@ func WithSSEStream[T proto.Message](path string, starter SSEStreamStarter[T]) Se
 		b.handlers = append(b.handlers, handler{
 			prefix: pattern.prefix,
 			httpHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Create handler with connection getter
-				h := createSSEHandler(pattern, starter, connGetter)
+				// Use the server's shared connection
+				h := createSSEHandler(pattern, starter, server)
 				h.ServeHTTP(w, r)
 			}),
 		})

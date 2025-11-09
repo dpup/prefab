@@ -53,7 +53,8 @@ func New(opts ...ServerOption) *Server {
 
 	// Check for unknown config keys and warn about potential typos
 	if warnings := config.ValidateConfigKeys(Config); len(warnings) > 0 {
-		logging.Warn(context.Background(), config.FormatValidationWarnings(warnings))
+		ctx := logging.EnsureLogger(context.Background())
+		logging.Warn(ctx, config.FormatValidationWarnings(warnings))
 	}
 
 	b := &builder{

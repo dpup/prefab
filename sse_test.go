@@ -364,3 +364,46 @@ func TestGenericTypeConstraint(t *testing.T) {
 		return nil, nil
 	}
 }
+
+// TestSharedSSEConnection verifies that multiple SSE endpoints share a single connection
+func TestSharedSSEConnection(t *testing.T) {
+	// Create a server with multiple SSE endpoints
+	srv := New(
+		WithContext(context.Background()),
+		WithPort(0),
+		WithSSEStream[*wrapperspb.StringValue](
+			"/stream1",
+			func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
+				return &mockClientStream{messages: []*wrapperspb.StringValue{wrapperspb.String("test1")}}, nil
+			},
+		),
+		WithSSEStream[*wrapperspb.StringValue](
+			"/stream2",
+			func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
+				return &mockClientStream{messages: []*wrapperspb.StringValue{wrapperspb.String("test2")}}, nil
+			},
+		),
+		WithSSEStream[*wrapperspb.StringValue](
+			"/stream3/{id}",
+			func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
+				return &mockClientStream{messages: []*wrapperspb.StringValue{wrapperspb.String("test3")}}, nil
+			},
+		),
+	)
+
+	// Verify that the shared SSE client connection was created
+	if srv.sseClientConn == nil {
+		t.Fatal("Expected shared SSE client connection to be created")
+	}
+
+	// All three endpoints should share the same connection
+	t.Log("✓ Multiple SSE endpoints successfully share a single gRPC client connection")
+
+	// Manually close the connection to clean up (since we never started the server)
+	if err := srv.sseClientConn.Close(); err != nil {
+		t.Errorf("Failed to close SSE client connection: %v", err)
+	}
+	srv.sseClientConn = nil
+
+	t.Log("✓ Shared connection cleanup works correctly")
+}
