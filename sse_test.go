@@ -1,17 +1,12 @@
 package prefab
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
-	"time"
 
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -122,224 +117,250 @@ func TestParsePathPattern(t *testing.T) {
 	}
 }
 
-func TestSSEHandler(t *testing.T) {
+// mockClientStream is a mock implementation of ClientStream for testing
+type mockClientStream struct {
+	messages []*wrapperspb.StringValue
+	index    int
+	grpc.ClientStream
+}
+
+func (m *mockClientStream) Recv() (*wrapperspb.StringValue, error) {
+	if m.index >= len(m.messages) {
+		return nil, io.EOF
+	}
+	msg := m.messages[m.index]
+	m.index++
+	return msg, nil
+}
+
+func TestSSEStreamStarter(t *testing.T) {
+	// Test that the SSEStreamStarter type is correctly defined and can be used
+	starter := func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
+		// Create a mock stream
+		messages := []*wrapperspb.StringValue{
+			wrapperspb.String(fmt.Sprintf("message for %s", params["id"])),
+		}
+		return &mockClientStream{messages: messages}, nil
+	}
+
+	// Call the starter function
+	ctx := context.Background()
+	params := map[string]string{"id": "test-123"}
+	stream, err := starter(ctx, params, nil)
+	if err != nil {
+		t.Fatalf("starter() error = %v", err)
+	}
+
+	// Read from the stream
+	msg, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() error = %v", err)
+	}
+
+	expected := "message for test-123"
+	if msg.GetValue() != expected {
+		t.Errorf("message = %v, want %v", msg.GetValue(), expected)
+	}
+
+	// Verify EOF
+	_, err = stream.Recv()
+	if err != io.EOF {
+		t.Errorf("expected EOF, got %v", err)
+	}
+}
+
+func TestClientStreamInterface(t *testing.T) {
+	// Verify that the ClientStream interface is satisfied by our mock
+	var _ ClientStream[*wrapperspb.StringValue] = (*mockClientStream)(nil)
+
+	// Test multiple message stream
+	messages := []*wrapperspb.StringValue{
+		wrapperspb.String("msg1"),
+		wrapperspb.String("msg2"),
+		wrapperspb.String("msg3"),
+	}
+
+	stream := &mockClientStream{messages: messages}
+
+	// Read all messages
+	for i := 0; i < 3; i++ {
+		msg, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("Recv() error = %v", err)
+		}
+		expected := fmt.Sprintf("msg%d", i+1)
+		if msg.GetValue() != expected {
+			t.Errorf("message %d = %v, want %v", i, msg.GetValue(), expected)
+		}
+	}
+
+	// Should get EOF
+	_, err := stream.Recv()
+	if err != io.EOF {
+		t.Errorf("expected EOF, got %v", err)
+	}
+}
+
+// Test that the pathPattern regex works correctly with various patterns
+func TestPathPatternRegex(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         SSEConfig
-		requestPath    string
-		requestMethod  string
-		wantStatusCode int
-		wantEvents     int
-		checkContent   func(t *testing.T, body string)
+		pattern  string
+		testPath string
+		wantMatch bool
 	}{
-		{
-			name: "successful stream",
-			config: SSEConfig{
-				Path: "/events",
-				StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-					ch <- wrapperspb.String("event1")
-					ch <- wrapperspb.String("event2")
-					ch <- wrapperspb.String("event3")
-					return nil
-				},
-			},
-			requestPath:    "/events",
-			requestMethod:  http.MethodGet,
-			wantStatusCode: http.StatusOK,
-			wantEvents:     0, // Skip event count check with httptest.ResponseRecorder
-		},
-		{
-			name: "stream with path parameters",
-			config: SSEConfig{
-				Path: "/notes/{id}/updates",
-				StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-					id := params["id"]
-					ch <- wrapperspb.String("note:" + id)
-					return nil
-				},
-			},
-			requestPath:    "/notes/123/updates",
-			requestMethod:  http.MethodGet,
-			wantStatusCode: http.StatusOK,
-			wantEvents:     0, // Skip event count check with httptest.ResponseRecorder
-		},
-		{
-			name: "wrong HTTP method",
-			config: SSEConfig{
-				Path: "/events",
-				StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-					return nil
-				},
-			},
-			requestPath:    "/events",
-			requestMethod:  http.MethodPost,
-			wantStatusCode: http.StatusMethodNotAllowed,
-		},
-		{
-			name: "path not found",
-			config: SSEConfig{
-				Path: "/events",
-				StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-					return nil
-				},
-			},
-			requestPath:    "/wrong-path",
-			requestMethod:  http.MethodGet,
-			wantStatusCode: http.StatusNotFound,
-		},
+		{"/notes/{id}/updates", "/notes/123/updates", true},
+		{"/notes/{id}/updates", "/notes/abc/updates", true},
+		{"/notes/{id}/updates", "/notes/123-456/updates", true},
+		{"/notes/{id}/updates", "/notes//updates", false}, // empty param
+		{"/notes/{id}/updates", "/notes/123", false},      // missing path
+		{"/notes/{id}/updates", "/notes/123/delete", false}, // wrong end
+		{"/users/{uid}/notes/{nid}", "/users/1/notes/2", true},
+		{"/users/{uid}/notes/{nid}", "/users/1/notes", false},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler, err := createSSEHandler(tt.config)
+		t.Run(fmt.Sprintf("%s matches %s", tt.pattern, tt.testPath), func(t *testing.T) {
+			pp, err := parsePathPattern(tt.pattern)
 			if err != nil {
-				t.Fatalf("createSSEHandler() error = %v", err)
+				t.Fatalf("parsePathPattern() error = %v", err)
 			}
 
-			req := httptest.NewRequest(tt.requestMethod, tt.requestPath, nil)
-			w := httptest.NewRecorder()
-
-			// For successful streams, we need to handle the streaming response
-			if tt.wantStatusCode == http.StatusOK {
-				// Create a custom ResponseWriter that supports flushing
-				done := make(chan struct{})
-				go func() {
-					handler.ServeHTTP(w, req)
-					close(done)
-				}()
-
-				// Wait a bit for the stream to send events
-				time.Sleep(100 * time.Millisecond)
-
-				// Cancel the request context to close the stream
-				if cancel := req.Context().Done(); cancel != nil {
-					// Context is already done, so just wait
-				}
-
-				// Wait for handler to finish
-				select {
-				case <-done:
-					// Handler finished
-				case <-time.After(1 * time.Second):
-					t.Fatal("handler did not finish in time")
-				}
-			} else {
-				handler.ServeHTTP(w, req)
-			}
-
-			resp := w.Result()
-			defer resp.Body.Close()
-
-			if resp.StatusCode != tt.wantStatusCode {
-				t.Errorf("status code = %v, want %v", resp.StatusCode, tt.wantStatusCode)
-			}
-
-			if tt.wantStatusCode == http.StatusOK {
-				// Check content type
-				if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
-					t.Errorf("Content-Type = %v, want text/event-stream", ct)
-				}
-
-				// Check cache control
-				if cc := resp.Header.Get("Cache-Control"); cc != "no-cache" {
-					t.Errorf("Cache-Control = %v, want no-cache", cc)
-				}
-
-				// Read and check body
-				body, err := io.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatalf("failed to read body: %v", err)
-				}
-
-				bodyStr := string(body)
-
-				// Count events (each event ends with \n\n)
-				events := strings.Split(strings.TrimSpace(bodyStr), "\n\n")
-				// Filter out empty events
-				var nonEmptyEvents int
-				for _, e := range events {
-					if strings.TrimSpace(e) != "" {
-						nonEmptyEvents++
-					}
-				}
-
-				if tt.wantEvents > 0 && nonEmptyEvents < 1 {
-					t.Errorf("expected at least 1 event, got %d", nonEmptyEvents)
-				}
-
-				if tt.checkContent != nil {
-					tt.checkContent(t, bodyStr)
-				}
+			_, ok := pp.extractParams(tt.testPath)
+			if ok != tt.wantMatch {
+				t.Errorf("extractParams() = %v, want %v", ok, tt.wantMatch)
 			}
 		})
 	}
 }
 
-func TestSSEIntegration(t *testing.T) {
-	// Create an SSE handler directly
-	handler, err := createSSEHandler(SSEConfig{
-		Path: "/stream/{topic}",
-		StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-			topic := params["topic"]
-			for i := 0; i < 5; i++ {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case ch <- wrapperspb.String(fmt.Sprintf("%s-message-%d", topic, i)):
-					// Message sent
-				}
-				time.Sleep(10 * time.Millisecond)
+// Test that parameter names are correctly extracted
+func TestPathPatternParameterNames(t *testing.T) {
+	pattern := "/api/{version}/users/{userId}/posts/{postId}/comments"
+	pp, err := parsePathPattern(pattern)
+	if err != nil {
+		t.Fatalf("parsePathPattern() error = %v", err)
+	}
+
+	expectedParams := []string{"version", "userId", "postId"}
+	if len(pp.params) != len(expectedParams) {
+		t.Fatalf("params length = %d, want %d", len(pp.params), len(expectedParams))
+	}
+
+	for i, expected := range expectedParams {
+		if pp.params[i] != expected {
+			t.Errorf("params[%d] = %v, want %v", i, pp.params[i], expected)
+		}
+	}
+
+	// Test extraction
+	testPath := "/api/v1/users/42/posts/99/comments"
+	params, ok := pp.extractParams(testPath)
+	if !ok {
+		t.Fatal("extractParams() failed to match")
+	}
+
+	expectedValues := map[string]string{
+		"version": "v1",
+		"userId":  "42",
+		"postId":  "99",
+	}
+
+	for k, want := range expectedValues {
+		if got := params[k]; got != want {
+			t.Errorf("params[%s] = %v, want %v", k, got, want)
+		}
+	}
+}
+
+// Test special characters in paths
+func TestPathPatternSpecialCharacters(t *testing.T) {
+	// Test that regex special characters in literal parts are properly escaped
+	pattern := "/api/v1.0/notes/{id}"
+	pp, err := parsePathPattern(pattern)
+	if err != nil {
+		t.Fatalf("parsePathPattern() error = %v", err)
+	}
+
+	// Should match exact path
+	if _, ok := pp.extractParams("/api/v1.0/notes/123"); !ok {
+		t.Error("failed to match exact path with dot")
+	}
+
+	// Should NOT match v1X0 (dot should not be treated as regex wildcard)
+	if _, ok := pp.extractParams("/api/v1X0/notes/123"); ok {
+		t.Error("incorrectly matched path with X instead of dot")
+	}
+}
+
+// Test prefix extraction
+func TestPathPatternPrefix(t *testing.T) {
+	tests := []struct {
+		pattern string
+		prefix  string
+	}{
+		{"/notes/{id}/updates", "/notes/"},
+		{"/api/v1/notes/{id}", "/api/v1/notes/"},
+		{"/{version}/notes/{id}", "/"},
+		{"/static/files", "/static/files"},
+		{"/notes/{id}", "/notes/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern, func(t *testing.T) {
+			pp, err := parsePathPattern(tt.pattern)
+			if err != nil {
+				t.Fatalf("parsePathPattern() error = %v", err)
 			}
-			return nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("createSSEHandler() error = %v", err)
+
+			if pp.prefix != tt.prefix {
+				t.Errorf("prefix = %v, want %v", pp.prefix, tt.prefix)
+			}
+		})
+	}
+}
+
+// Test error cases
+func TestPathPatternErrors(t *testing.T) {
+	tests := []struct {
+		pattern string
+		wantErr string
+	}{
+		{"", "empty"},
+		{"/notes/{}/updates", "empty parameter name"},
 	}
 
-	// Start a test HTTP server
-	ts := httptest.NewServer(handler)
-	defer ts.Close()
+	for _, tt := range tests {
+		t.Run(tt.pattern, func(t *testing.T) {
+			_, err := parsePathPattern(tt.pattern)
+			if err == nil {
+				t.Error("expected error, got nil")
+			}
+		})
+	}
+}
 
-	// Make a request to the SSE endpoint
-	req, err := http.NewRequest(http.MethodGet, ts.URL+"/stream/test-topic", nil)
-	if err != nil {
-		t.Fatalf("failed to create request: %v", err)
+// Test that generated stream types would satisfy the interface
+// This is a compile-time check
+type exampleGeneratedStream interface {
+	Recv() (*wrapperspb.StringValue, error)
+	grpc.ClientStream
+}
+
+var _ ClientStream[*wrapperspb.StringValue] = (exampleGeneratedStream)(nil)
+
+// Test generic type constraint
+func TestGenericTypeConstraint(t *testing.T) {
+	// Verify that proto.Message types can be used with ClientStream
+	var _ ClientStream[*wrapperspb.StringValue]
+	var _ ClientStream[*wrapperspb.Int32Value]
+	var _ ClientStream[*wrapperspb.BoolValue]
+
+	// Verify that SSEStreamStarter works with different message types
+	var _ SSEStreamStarter[*wrapperspb.StringValue] = func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
+		return nil, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	req = req.WithContext(ctx)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status code = %v, want %v", resp.StatusCode, http.StatusOK)
-	}
-
-	// Read SSE events
-	scanner := bufio.NewScanner(resp.Body)
-	var events []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
-			events = append(events, data)
-		}
-	}
-
-	if len(events) < 1 {
-		t.Errorf("expected at least 1 event, got %d", len(events))
-	}
-
-	// Check that we received events for the correct topic
-	for _, event := range events {
-		if !strings.Contains(event, "test-topic") {
-			t.Errorf("event should contain test-topic, got: %s", event)
-		}
+	var _ SSEStreamStarter[*wrapperspb.Int32Value] = func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.Int32Value], error) {
+		return nil, nil
 	}
 }

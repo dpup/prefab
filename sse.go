@@ -2,32 +2,38 @@ package prefab
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-// SSEStreamFunc is a function that produces a stream of protobuf messages.
-// The function should send messages to the provided channel and close it when done.
-// The context will be cancelled if the client disconnects.
-type SSEStreamFunc func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error
-
-// SSEConfig configures a Server-Sent Events endpoint.
-type SSEConfig struct {
-	// Path pattern for the SSE endpoint. Can include path parameters like "/notes/{id}/updates"
-	Path string
-
-	// StreamFunc is called to generate the stream of messages.
-	StreamFunc SSEStreamFunc
+// ClientStream represents a gRPC client stream that can receive messages.
+// This interface is satisfied by all generated gRPC client stream types.
+type ClientStream[T proto.Message] interface {
+	Recv() (T, error)
+	grpc.ClientStream
 }
+
+// SSEStreamStarter is a function that starts a gRPC client stream.
+// It receives the request context, path/query parameters, and a gRPC client connection.
+// It should create a client and call the streaming method, returning the stream.
+//
+// Example:
+//
+//	func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
+//	    client := NewNotesStreamServiceClient(cc)
+//	    return client.StreamUpdates(ctx, &StreamRequest{NoteId: params["id"]})
+//	}
+type SSEStreamStarter[T proto.Message] func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[T], error)
 
 // pathPattern represents a parsed path pattern with parameter extraction.
 type pathPattern struct {
@@ -106,13 +112,8 @@ func (p *pathPattern) extractParams(path string) (map[string]string, bool) {
 	return params, true
 }
 
-// createSSEHandler creates an HTTP handler that serves Server-Sent Events.
-func createSSEHandler(config SSEConfig) (http.Handler, error) {
-	pattern, err := parsePathPattern(config.Path)
-	if err != nil {
-		return nil, err
-	}
-
+// createSSEHandler creates an HTTP handler that serves Server-Sent Events from a gRPC stream.
+func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamStarter[T], getConn func() grpc.ClientConnInterface) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := logging.EnsureLogger(r.Context())
 
@@ -126,8 +127,7 @@ func createSSEHandler(config SSEConfig) (http.Handler, error) {
 		params, ok := pattern.extractParams(r.URL.Path)
 		if !ok {
 			logging.Errorw(ctx, "sse: path does not match pattern",
-				"path", r.URL.Path,
-				"pattern", config.Path)
+				"path", r.URL.Path)
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
@@ -153,22 +153,20 @@ func createSSEHandler(config SSEConfig) (http.Handler, error) {
 			return
 		}
 
-		// Create a channel for messages
-		messageCh := make(chan proto.Message, 10)
-
 		// Create a context that will be cancelled when the client disconnects
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		// Start the stream function in a goroutine
-		errCh := make(chan error, 1)
-		go func() {
-			defer close(messageCh)
-			if err := config.StreamFunc(ctx, params, messageCh); err != nil {
-				errCh <- err
-			}
-			close(errCh)
-		}()
+		// Get the gRPC client connection
+		cc := getConn()
+
+		// Start the gRPC stream
+		stream, err := starter(ctx, params, cc)
+		if err != nil {
+			logging.Errorw(ctx, "sse: failed to start stream", "error", err)
+			http.Error(w, fmt.Sprintf("Failed to start stream: %v", err), http.StatusInternalServerError)
+			return
+		}
 
 		// Marshal options for JSON conversion
 		marshaler := protojson.MarshalOptions{
@@ -180,114 +178,97 @@ func createSSEHandler(config SSEConfig) (http.Handler, error) {
 
 		// Stream messages to the client
 		for {
-			select {
-			case msg, ok := <-messageCh:
-				if !ok {
-					// Channel closed, stream is complete
-					logging.Infow(ctx, "sse: stream completed", "path", r.URL.Path)
-					return
-				}
-
-				// Convert proto message to JSON
-				var data []byte
-				var err error
-				if msg != nil {
-					data, err = marshaler.Marshal(msg)
-					if err != nil {
-						logging.Errorw(ctx, "sse: failed to marshal message", "error", err)
-						continue
-					}
-				}
-
-				// Write SSE event
-				if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
-					logging.Errorw(ctx, "sse: failed to write event", "error", err)
-					return
-				}
-
-				// Flush the data immediately
-				flusher.Flush()
-
-			case err := <-errCh:
-				if err != nil {
-					logging.Errorw(ctx, "sse: stream error", "error", err)
-					// Send error as SSE comment (not visible to EventSource API but visible in raw stream)
-					fmt.Fprintf(w, ": error: %s\n\n", err.Error())
-					flusher.Flush()
-				}
-				return
-
-			case <-ctx.Done():
-				// Client disconnected
-				logging.Infow(ctx, "sse: client disconnected", "path", r.URL.Path)
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				// Stream completed normally
+				logging.Infow(ctx, "sse: stream completed", "path", r.URL.Path)
 				return
 			}
+			if err != nil {
+				logging.Errorw(ctx, "sse: stream error", "error", err)
+				// Send error as SSE comment (not visible to EventSource API but visible in raw stream)
+				fmt.Fprintf(w, ": error: %s\n\n", err.Error())
+				flusher.Flush()
+				return
+			}
+
+			// Convert proto message to JSON
+			data, err := marshaler.Marshal(msg)
+			if err != nil {
+				logging.Errorw(ctx, "sse: failed to marshal message", "error", err)
+				continue
+			}
+
+			// Write SSE event
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				logging.Errorw(ctx, "sse: failed to write event", "error", err)
+				return
+			}
+
+			// Flush the data immediately
+			flusher.Flush()
 		}
-	}), nil
+	})
 }
 
-// WithSSE registers a Server-Sent Events endpoint.
+// WithSSEStream registers a Server-Sent Events endpoint that streams from a gRPC streaming method.
 //
 // The path can include parameters in curly braces, e.g., "/notes/{id}/updates".
-// These parameters will be extracted and passed to the stream function.
+// These parameters will be extracted and passed to the stream starter function.
+//
+// The starter function receives:
+//   - ctx: Request context (cancelled when client disconnects)
+//   - params: Map of path and query parameters
+//   - cc: gRPC client connection (connected to this server)
+//
+// The starter function should create a gRPC client and call the streaming method.
 //
 // Example:
 //
 //	server := prefab.New(
-//	    prefab.WithSSE(prefab.SSEConfig{
-//	        Path: "/notes/{id}/updates",
-//	        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-//	            noteID := params["id"]
-//	            // Stream updates for the note...
-//	            return nil
+//	    prefab.WithSSEStream(
+//	        "/notes/{id}/updates",
+//	        func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
+//	            client := NewNotesStreamServiceClient(cc)
+//	            return client.StreamUpdates(ctx, &StreamRequest{NoteId: params["id"]})
 //	        },
-//	    }),
+//	    ),
 //	)
-func WithSSE(config SSEConfig) ServerOption {
+//
+// All stream management (reading, cancellation, error handling, SSE formatting) is handled automatically.
+func WithSSEStream[T proto.Message](path string, starter SSEStreamStarter[T]) ServerOption {
 	return func(b *builder) {
-		h, err := createSSEHandler(config)
+		pattern, err := parsePathPattern(path)
 		if err != nil {
 			panic(err)
 		}
 
-		// Register the handler with the appropriate prefix
-		pattern, _ := parsePathPattern(config.Path)
+		// We'll capture the server reference and create a connection getter
+		// that returns the client connection to this server (like grpc-gateway does)
+		var connGetter func() grpc.ClientConnInterface
+
+		// Register a server builder that sets up the connection after the server is built
+		b.serverBuilders = append(b.serverBuilders, func(s *Server) {
+			connGetter = func() grpc.ClientConnInterface {
+				// Create a client connection to ourselves
+				_, _, endpoint, opts := s.GatewayArgs()
+				conn, err := grpc.NewClient(endpoint, opts...)
+				if err != nil {
+					logging.Errorw(s.baseContext, "sse: failed to create client connection", "error", err)
+					panic(err)
+				}
+				return conn
+			}
+		})
+
+		// Register the HTTP handler
 		b.handlers = append(b.handlers, handler{
-			prefix:      pattern.prefix,
-			httpHandler: h,
+			prefix: pattern.prefix,
+			httpHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Create handler with connection getter
+				h := createSSEHandler(pattern, starter, connGetter)
+				h.ServeHTTP(w, r)
+			}),
 		})
 	}
-}
-
-// SSEEvent represents a typed SSE event that can be sent to clients.
-// This is a helper type for applications that want to send structured events.
-type SSEEvent struct {
-	// Event type (optional, defaults to "message")
-	Event string `json:"-"`
-	// Data to send
-	Data any `json:"data,omitempty"`
-}
-
-// MarshalSSE converts an SSEEvent to the SSE wire format.
-func (e *SSEEvent) MarshalSSE() ([]byte, error) {
-	var buf strings.Builder
-
-	if e.Event != "" {
-		buf.WriteString("event: ")
-		buf.WriteString(e.Event)
-		buf.WriteString("\n")
-	}
-
-	if e.Data != nil {
-		data, err := json.Marshal(e.Data)
-		if err != nil {
-			return nil, err
-		}
-		buf.WriteString("data: ")
-		buf.Write(data)
-		buf.WriteString("\n")
-	}
-
-	buf.WriteString("\n")
-	return []byte(buf.String()), nil
 }

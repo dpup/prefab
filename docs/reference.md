@@ -35,120 +35,87 @@ func main() {
 
 ## Server-Sent Events (SSE)
 
-Prefab provides built-in support for Server-Sent Events, allowing you to stream real-time updates from gRPC services to web clients over HTTP.
+Prefab provides built-in support for Server-Sent Events, allowing you to stream real-time updates from gRPC streaming services to web clients over HTTP.
 
-### Basic SSE Endpoint
+**Key Benefits:**
+- Automatically bridges gRPC streams to SSE
+- Handles all connection management, cancellation, and error handling
+- Type-safe with Go generics
+- No manual channel management or goroutines required
+
+### Basic Usage
 
 ```go
 import (
     "context"
     "github.com/dpup/prefab"
-    "google.golang.org/protobuf/proto"
-    "google.golang.org/protobuf/types/known/wrapperspb"
+    "google.golang.org/grpc"
 )
 
 s := prefab.New(
-    prefab.WithSSE(prefab.SSEConfig{
-        Path: "/events",
-        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-            // Send events to clients
-            ch <- wrapperspb.String("Hello from SSE!")
-            return nil
+    // Register your gRPC streaming service first
+    prefab.WithGRPCService(&NotesStreamService_ServiceDesc, notesService),
+    prefab.WithGRPCGateway(RegisterNotesStreamServiceHandlerFromEndpoint),
+
+    // Then register SSE endpoint
+    prefab.WithSSEStream(
+        "/notes/{id}/updates",
+        func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
+            client := NewNotesStreamServiceClient(cc)
+            return client.StreamUpdates(ctx, &StreamRequest{NoteId: params["id"]})
         },
-    }),
+    ),
 )
 ```
 
-### SSE with Path Parameters
+### How It Works
 
-Extract parameters from URL patterns to create dynamic streams:
+1. **HTTP Request**: Client connects to `/notes/123/updates`
+2. **Parameter Extraction**: `params["id"]` = `"123"`
+3. **gRPC Client**: Prefab creates a client connection to your service
+4. **Stream Call**: Your function calls the gRPC streaming method
+5. **Auto-Streaming**: Prefab reads from stream, converts to JSON, sends as SSE
+6. **Auto-Cleanup**: Context cancellation, error handling, connection cleanup all automatic
 
-```go
-s := prefab.New(
-    prefab.WithSSE(prefab.SSEConfig{
-        Path: "/notes/{id}/updates",
-        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-            noteID := params["id"]
-
-            // Stream updates for this specific note
-            ticker := time.NewTicker(1 * time.Second)
-            defer ticker.Stop()
-
-            for {
-                select {
-                case <-ctx.Done():
-                    return ctx.Err()
-                case <-ticker.C:
-                    update := getLatestUpdate(noteID)
-                    ch <- update
-                }
-            }
-        },
-    }),
-)
-```
-
-### Integrating with gRPC Streaming Services
-
-Bridge gRPC streaming RPCs to SSE for web clients:
-
-```go
-// Your gRPC streaming service
-func (s *NotesService) StreamUpdates(req *StreamRequest, stream NotesStreamService_StreamUpdatesServer) error {
-    for update := range s.getUpdates(req.NoteId) {
-        if err := stream.Send(update); err != nil {
-            return err
-        }
-    }
-    return nil
-}
-
-// SSE adapter
-s := prefab.New(
-    prefab.WithSSE(prefab.SSEConfig{
-        Path: "/notes/{id}/updates",
-        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-            noteID := params["id"]
-
-            // Create gRPC client and call streaming method
-            client := NewNotesStreamServiceClient(conn)
-            stream, err := client.StreamUpdates(ctx, &StreamRequest{NoteId: noteID})
-            if err != nil {
-                return err
-            }
-
-            // Forward gRPC stream to SSE channel
-            for {
-                update, err := stream.Recv()
-                if err == io.EOF {
-                    return nil
-                }
-                if err != nil {
-                    return err
-                }
-                ch <- update
-            }
-        },
-    }),
-)
-```
+You write 3 lines of code. Prefab handles everything else.
 
 ### Multiple Path Parameters
 
 ```go
-s := prefab.New(
-    prefab.WithSSE(prefab.SSEConfig{
-        Path: "/users/{userId}/notes/{noteId}/live",
-        StreamFunc: func(ctx context.Context, params map[string]string, ch chan<- proto.Message) error {
-            userID := params["userId"]
-            noteID := params["noteId"]
-
-            // Stream live collaboration events
-            // ...
-            return nil
-        },
-    }),
+prefab.WithSSEStream(
+    "/users/{userId}/notes/{noteId}/live",
+    func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
+        client := NewNotesStreamServiceClient(cc)
+        return client.StreamUpdates(ctx, &StreamRequest{
+            UserId: params["userId"],
+            NoteId: params["noteId"],
+        })
+    },
 )
+```
+
+### With Query Parameters
+
+Query parameters are accessible as `params["query.paramName"]`:
+
+```go
+prefab.WithSSEStream(
+    "/notes/{id}/updates",
+    func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
+        client := NewNotesStreamServiceClient(cc)
+
+        req := &StreamRequest{NoteId: params["id"]}
+
+        // Optional: add query parameters
+        if since := params["query.since"]; since != "" {
+            req.Since = parseTimestamp(since)
+        }
+
+        return client.StreamUpdates(ctx, req)
+    },
+)
+
+// Client usage: /notes/123/updates?since=2025-01-01T00:00:00Z
 ```
 
 ### Client Usage
@@ -179,27 +146,49 @@ eventSource.onerror = (error) => {
 curl -N http://localhost:8080/notes/123/updates
 ```
 
-### SSE Features
+### What Prefab Handles Automatically
 
-- **Path Parameters**: Extract values from URL patterns like `/notes/{id}/updates`
-- **Query Parameters**: Access via `params["query.paramName"]`
-- **Context Cancellation**: Automatically stops streaming when client disconnects
-- **Error Handling**: Gracefully handles errors and closes connections
-- **Protobuf Support**: Automatically converts protobuf messages to JSON
-- **Middleware Integration**: Works with existing Prefab middleware (auth, CORS, etc.)
+- ✓ gRPC client connection creation
+- ✓ Stream reading (calls `Recv()` in a loop)
+- ✓ Protobuf to JSON conversion
+- ✓ SSE formatting (`data: {...}\n\n`)
+- ✓ Context cancellation when client disconnects
+- ✓ Error handling and cleanup
+- ✓ EOF detection
+- ✓ Connection flushing
 
-### Best Practices
+### You Only Need To
 
-1. **Handle Context Cancellation**: Always check `ctx.Done()` in your stream function
-2. **Close Channels**: Always close the message channel when done
-3. **Error Handling**: Return errors from StreamFunc to properly close connections
-4. **Rate Limiting**: Consider rate limiting to prevent abuse
-5. **Authentication**: Use Prefab's auth middleware to protect endpoints
-6. **Buffering**: Use buffered channels to prevent blocking
+1. Define your gRPC streaming service in `.proto`
+2. Implement the service
+3. Register it with `WithGRPCService()`
+4. Call `WithSSEStream()` with path and a function that calls your streaming method
+
+That's it! No manual channel management, no goroutines, no stream reading loops.
+
+### Type Safety
+
+`WithSSEStream` uses Go generics to ensure type safety:
+
+```go
+// Generic signature
+func WithSSEStream[T proto.Message](
+    path string,
+    starter func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[T], error),
+) ServerOption
+
+// Where ClientStream is satisfied by all generated gRPC client streams
+type ClientStream[T proto.Message] interface {
+    Recv() (T, error)
+    grpc.ClientStream
+}
+```
+
+This ensures you can't accidentally return the wrong stream type.
 
 ### Example
 
-See `examples/ssestream/` for a complete working example.
+See `examples/ssestream/` for a complete working example with mock services.
 
 ## Plugin Integration
 
