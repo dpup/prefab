@@ -115,7 +115,7 @@ func (p *pathPattern) extractParams(path string) (map[string]string, bool) {
 // createSSEHandler creates an HTTP handler that serves Server-Sent Events from a gRPC stream.
 func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamStarter[T], s *Server) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := logging.EnsureLogger(r.Context())
+		ctx := r.Context()
 
 		// Only allow GET requests
 		if r.Method != http.MethodGet {
