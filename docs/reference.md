@@ -35,160 +35,65 @@ func main() {
 
 ## Server-Sent Events (SSE)
 
-Prefab provides built-in support for Server-Sent Events, allowing you to stream real-time updates from gRPC streaming services to web clients over HTTP.
-
-**Key Benefits:**
-- Automatically bridges gRPC streams to SSE
-- Handles all connection management, cancellation, and error handling
-- Type-safe with Go generics
-- No manual channel management or goroutines required
+Bridge gRPC streaming services to web clients using Server-Sent Events. Prefab automatically handles connection management, stream reading, and event formatting.
 
 ### Basic Usage
 
 ```go
-import (
-    "context"
-    "github.com/dpup/prefab"
-    "google.golang.org/grpc"
-)
-
 s := prefab.New(
-    // Register your gRPC streaming service first
-    prefab.WithGRPCService(&NotesStreamService_ServiceDesc, notesService),
-    prefab.WithGRPCGateway(RegisterNotesStreamServiceHandlerFromEndpoint),
+    prefab.WithGRPCService(&CounterService_ServiceDesc, counterService),
 
-    // Then register SSE endpoint
     prefab.WithSSEStream(
-        "/notes/{id}/updates",
-        func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
-            client := NewNotesStreamServiceClient(cc)
-            return client.StreamUpdates(ctx, &StreamRequest{NoteId: params["id"]})
+        "/counter",
+        func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (CounterService_StreamClient, error) {
+            client := NewCounterServiceClient(cc)
+            return client.Stream(ctx, &CounterRequest{})
         },
     ),
 )
 ```
 
-### How It Works
+Prefab automatically handles stream reading, protobuf-to-JSON conversion, SSE formatting, and cleanup when clients disconnect.
 
-1. **HTTP Request**: Client connects to `/notes/123/updates`
-2. **Parameter Extraction**: `params["id"]` = `"123"`
-3. **gRPC Client**: Prefab creates a client connection to your service
-4. **Stream Call**: Your function calls the gRPC streaming method
-5. **Auto-Streaming**: Prefab reads from stream, converts to JSON, sends as SSE
-6. **Auto-Cleanup**: Context cancellation, error handling, connection cleanup all automatic
-
-You write 3 lines of code. Prefab handles everything else.
-
-### Multiple Path Parameters
-
-```go
-prefab.WithSSEStream(
-    "/users/{userId}/notes/{noteId}/live",
-    func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
-        client := NewNotesStreamServiceClient(cc)
-        return client.StreamUpdates(ctx, &StreamRequest{
-            UserId: params["userId"],
-            NoteId: params["noteId"],
-        })
-    },
-)
-```
-
-### With Query Parameters
-
-Query parameters are accessible as `params["query.paramName"]`:
+### Path Parameters
 
 ```go
 prefab.WithSSEStream(
     "/notes/{id}/updates",
     func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
         client := NewNotesStreamServiceClient(cc)
-
-        req := &StreamRequest{NoteId: params["id"]}
-
-        // Optional: add query parameters
-        if since := params["query.since"]; since != "" {
-            req.Since = parseTimestamp(since)
-        }
-
-        return client.StreamUpdates(ctx, req)
+        return client.StreamUpdates(ctx, &StreamRequest{NoteId: params["id"]})
     },
 )
+```
 
-// Client usage: /notes/123/updates?since=2025-01-01T00:00:00Z
+### Query Parameters
+
+Access query parameters as `params["query.paramName"]`:
+
+```go
+req := &StreamRequest{NoteId: params["id"]}
+if since := params["query.since"]; since != "" {
+    req.Since = parseTimestamp(since)
+}
 ```
 
 ### Client Usage
 
-#### JavaScript (Browser)
-
+**JavaScript:**
 ```javascript
-const eventSource = new EventSource('http://localhost:8080/notes/123/updates');
-
-eventSource.onopen = () => {
-    console.log('Connected');
-};
-
+const eventSource = new EventSource('http://localhost:8080/counter');
 eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log('Received:', data);
-};
-
-eventSource.onerror = (error) => {
-    console.error('Error:', error);
-    eventSource.close();
+    console.log('Received:', JSON.parse(event.data));
 };
 ```
 
-#### curl
-
+**curl:**
 ```bash
-curl -N http://localhost:8080/notes/123/updates
+curl -N http://localhost:8080/counter
 ```
 
-### What Prefab Handles Automatically
-
-- ✓ gRPC client connection creation
-- ✓ Stream reading (calls `Recv()` in a loop)
-- ✓ Protobuf to JSON conversion
-- ✓ SSE formatting (`data: {...}\n\n`)
-- ✓ Context cancellation when client disconnects
-- ✓ Error handling and cleanup
-- ✓ EOF detection
-- ✓ Connection flushing
-
-### You Only Need To
-
-1. Define your gRPC streaming service in `.proto`
-2. Implement the service
-3. Register it with `WithGRPCService()`
-4. Call `WithSSEStream()` with path and a function that calls your streaming method
-
-That's it! No manual channel management, no goroutines, no stream reading loops.
-
-### Type Safety
-
-`WithSSEStream` uses Go generics to ensure type safety:
-
-```go
-// Generic signature
-func WithSSEStream[T proto.Message](
-    path string,
-    starter func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[T], error),
-) ServerOption
-
-// Where ClientStream is satisfied by all generated gRPC client streams
-type ClientStream[T proto.Message] interface {
-    Recv() (T, error)
-    grpc.ClientStream
-}
-```
-
-This ensures you can't accidentally return the wrong stream type.
-
-### Example
-
-See `examples/ssestream/` for a complete working example with mock services.
+See `examples/ssestream/` for a complete working example.
 
 ## Plugin Integration
 
