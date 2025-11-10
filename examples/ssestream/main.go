@@ -54,9 +54,9 @@ func main() {
 		prefab.WithPort(8080),
 
 		// Register SSE endpoint - Prefab handles everything
-		prefab.WithSSEStream(
+		prefab.WithSSEStream[*wrapperspb.StringValue](
 			"/counter",
-			func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (*mockCounterStream, error) {
+			func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (prefab.ClientStream[*wrapperspb.StringValue], error) {
 				return &mockCounterStream{
 					ctx:    ctx,
 					ticker: time.NewTicker(500 * time.Millisecond),
