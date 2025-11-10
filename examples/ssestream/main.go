@@ -52,6 +52,7 @@ func (m *mockCounterStream) Recv() (*wrapperspb.StringValue, error) {
 func main() {
 	server := prefab.New(
 		prefab.WithPort(8080),
+		prefab.WithStaticFiles("/", "./examples/ssestream/static/"),
 
 		// Register SSE endpoint - Prefab handles everything
 		prefab.WithSSEStream[*wrapperspb.StringValue](
@@ -67,6 +68,7 @@ func main() {
 
 	log.Println("Starting SSE example server on :8080")
 	log.Println("Try: curl -N http://localhost:8080/counter")
+	log.Println("Or open: http://localhost:8080/client.html")
 
 	if err := server.Start(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
