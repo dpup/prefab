@@ -21,6 +21,7 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -79,7 +80,7 @@ func SafeNew(connString string, opts ...Option) (storage.Store, error) {
 	}
 
 	// Test the connection
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(context.Background()); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
@@ -143,7 +144,7 @@ func (s *store) Read(id string, model storage.Model) error {
 		args = []interface{}{id}
 	}
 
-	row := s.db.QueryRow(query, args...)
+	row := s.db.QueryRowContext(context.Background(), query, args...)
 
 	var value []byte
 	err := row.Scan(&value)
@@ -155,7 +156,7 @@ func (s *store) Read(id string, model storage.Model) error {
 }
 
 func (s *store) Update(models ...storage.Model) error {
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
@@ -213,13 +214,13 @@ func (s *store) Delete(model storage.Model) error {
 		args = []interface{}{model.PK()}
 	}
 
-	stmt, err := s.db.Prepare(query)
+	stmt, err := s.db.PrepareContext(context.Background(), query)
 	if err != nil {
 		return translateError(err)
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(args...)
+	res, err := stmt.ExecContext(context.Background(), args...)
 	if err != nil {
 		return translateError(err)
 	}
@@ -243,7 +244,7 @@ func (s *store) List(models any, filter storage.Model) error {
 	}
 
 	query, args := s.buildListQuery(filter)
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.db.QueryContext(context.Background(), query, args...)
 	if err != nil {
 		return translateError(err)
 	}
@@ -287,7 +288,7 @@ func (s *store) Exists(id string, model storage.Model) (bool, error) {
 	}
 
 	var count int
-	err := s.db.QueryRow(query, args...).Scan(&count)
+	err := s.db.QueryRowContext(context.Background(), query, args...).Scan(&count)
 	if err != nil {
 		return false, translateError(err)
 	}
@@ -304,7 +305,7 @@ func (s *store) tableName(model storage.Model) (string, bool) {
 }
 
 func (s *store) insert(upsert bool, models ...storage.Model) error {
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return translateError(err)
 	}
@@ -369,14 +370,15 @@ func (s *store) insert(upsert bool, models ...storage.Model) error {
 }
 
 func (s *store) ensureDefaultTable() error {
+	ctx := context.Background()
 	// First ensure schema exists
-	_, err := s.db.Exec(`CREATE SCHEMA IF NOT EXISTS ` + s.schema + `;`)
+	_, err := s.db.ExecContext(ctx, `CREATE SCHEMA IF NOT EXISTS `+s.schema+`;`)
 	if err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
 	// Create default table with proper constraints and types
-	_, err = s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.schema + `.` + s.prefix + `default (
+	_, err = s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS `+s.schema+`.`+s.prefix+`default (
 		id TEXT NOT NULL,
 		entity_type TEXT NOT NULL,
 		value JSONB NOT NULL,
@@ -389,22 +391,22 @@ func (s *store) ensureDefaultTable() error {
 	}
 
 	// Create index on entity_type
-	_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_` + s.prefix + `default_entity_type 
-		ON ` + s.schema + `.` + s.prefix + `default(entity_type);`)
+	_, err = s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_`+s.prefix+`default_entity_type
+		ON `+s.schema+`.`+s.prefix+`default(entity_type);`)
 	if err != nil {
 		return fmt.Errorf("failed to create entity_type index: %w", err)
 	}
 
 	// Create GIN index on JSONB value
-	_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_` + s.prefix + `default_value 
-		ON ` + s.schema + `.` + s.prefix + `default USING GIN (value jsonb_path_ops);`)
+	_, err = s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_`+s.prefix+`default_value
+		ON `+s.schema+`.`+s.prefix+`default USING GIN (value jsonb_path_ops);`)
 	if err != nil {
 		return fmt.Errorf("failed to create JSONB index: %w", err)
 	}
 
 	// Create update timestamp function if it doesn't exist
-	_, err = s.db.Exec(`
-		CREATE OR REPLACE FUNCTION ` + s.schema + `.update_timestamp()
+	_, err = s.db.ExecContext(ctx, `
+		CREATE OR REPLACE FUNCTION `+s.schema+`.update_timestamp()
 		RETURNS TRIGGER AS $$
 		BEGIN
 			NEW.updated_at = NOW();
@@ -417,14 +419,14 @@ func (s *store) ensureDefaultTable() error {
 	}
 
 	// Create trigger for automatic timestamp updates
-	_, err = s.db.Exec(`
-		DROP TRIGGER IF EXISTS update_` + s.prefix + `default_timestamp 
-		ON ` + s.schema + `.` + s.prefix + `default;
-		
-		CREATE TRIGGER update_` + s.prefix + `default_timestamp
-		BEFORE UPDATE ON ` + s.schema + `.` + s.prefix + `default
+	_, err = s.db.ExecContext(ctx, `
+		DROP TRIGGER IF EXISTS update_`+s.prefix+`default_timestamp
+		ON `+s.schema+`.`+s.prefix+`default;
+
+		CREATE TRIGGER update_`+s.prefix+`default_timestamp
+		BEFORE UPDATE ON `+s.schema+`.`+s.prefix+`default
 		FOR EACH ROW
-		EXECUTE FUNCTION ` + s.schema + `.update_timestamp();
+		EXECUTE FUNCTION `+s.schema+`.update_timestamp();
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create timestamp trigger: %w", err)
@@ -434,14 +436,15 @@ func (s *store) ensureDefaultTable() error {
 }
 
 func (s *store) ensureTable(tableName string) error {
+	ctx := context.Background()
 	// First ensure schema exists
-	_, err := s.db.Exec(`CREATE SCHEMA IF NOT EXISTS ` + s.schema + `;`)
+	_, err := s.db.ExecContext(ctx, `CREATE SCHEMA IF NOT EXISTS `+s.schema+`;`)
 	if err != nil {
 		return errors.Errorf("failed to create schema: %w", err)
 	}
 
 	// Create model-specific table with proper constraints and types
-	_, err = s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.schema + `.` + s.prefix + tableName + ` (
+	_, err = s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS `+s.schema+`.`+s.prefix+tableName+` (
 		id TEXT NOT NULL PRIMARY KEY,
 		value JSONB NOT NULL,
 		created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -452,15 +455,15 @@ func (s *store) ensureTable(tableName string) error {
 	}
 
 	// Create GIN index on JSONB value
-	_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_` + s.prefix + tableName + `_value 
-		ON ` + s.schema + `.` + s.prefix + tableName + ` USING GIN (value jsonb_path_ops);`)
+	_, err = s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_`+s.prefix+tableName+`_value
+		ON `+s.schema+`.`+s.prefix+tableName+` USING GIN (value jsonb_path_ops);`)
 	if err != nil {
 		return errors.Errorf("failed to create JSONB index for [%s]: %w", tableName, err)
 	}
 
 	// Ensure the update timestamp function exists
-	_, err = s.db.Exec(`
-		CREATE OR REPLACE FUNCTION ` + s.schema + `.update_timestamp()
+	_, err = s.db.ExecContext(ctx, `
+		CREATE OR REPLACE FUNCTION `+s.schema+`.update_timestamp()
 		RETURNS TRIGGER AS $$
 		BEGIN
 			NEW.updated_at = NOW();
@@ -473,14 +476,14 @@ func (s *store) ensureTable(tableName string) error {
 	}
 
 	// Create trigger for automatic timestamp updates
-	_, err = s.db.Exec(`
-		DROP TRIGGER IF EXISTS update_` + s.prefix + tableName + `_timestamp 
-		ON ` + s.schema + `.` + s.prefix + tableName + `;
-		
-		CREATE TRIGGER update_` + s.prefix + tableName + `_timestamp
-		BEFORE UPDATE ON ` + s.schema + `.` + s.prefix + tableName + `
+	_, err = s.db.ExecContext(ctx, `
+		DROP TRIGGER IF EXISTS update_`+s.prefix+tableName+`_timestamp
+		ON `+s.schema+`.`+s.prefix+tableName+`;
+
+		CREATE TRIGGER update_`+s.prefix+tableName+`_timestamp
+		BEFORE UPDATE ON `+s.schema+`.`+s.prefix+tableName+`
 		FOR EACH ROW
-		EXECUTE FUNCTION ` + s.schema + `.update_timestamp();
+		EXECUTE FUNCTION `+s.schema+`.update_timestamp();
 	`)
 	if err != nil {
 		return errors.Errorf("failed to create timestamp trigger for [%s]: %w", tableName, err)
@@ -569,10 +572,11 @@ func translateError(err error) error {
 }
 
 func prepareAndExec(tx *sql.Tx, query string, args ...interface{}) (sql.Result, error) {
-	stmt, err := tx.Prepare(query)
+	ctx := context.Background()
+	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, errors.Wrap(err, 0)
 	}
 	defer stmt.Close()
-	return stmt.Exec(args...)
+	return stmt.ExecContext(ctx, args...)
 }
