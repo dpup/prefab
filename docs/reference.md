@@ -33,6 +33,68 @@ func main() {
 }
 ```
 
+## Server-Sent Events (SSE)
+
+Bridge gRPC streaming services to web clients using Server-Sent Events. Prefab automatically handles connection management, stream reading, and event formatting.
+
+### Basic Usage
+
+```go
+s := prefab.New(
+    prefab.WithGRPCService(&CounterService_ServiceDesc, counterService),
+
+    prefab.WithSSEStream(
+        "/counter",
+        func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (CounterService_StreamClient, error) {
+            client := NewCounterServiceClient(cc)
+            return client.Stream(ctx, &CounterRequest{})
+        },
+    ),
+)
+```
+
+Prefab automatically handles stream reading, protobuf-to-JSON conversion, SSE formatting, and cleanup when clients disconnect.
+
+### Path Parameters
+
+```go
+prefab.WithSSEStream(
+    "/notes/{id}/updates",
+    func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (NotesStreamService_StreamUpdatesClient, error) {
+        client := NewNotesStreamServiceClient(cc)
+        return client.StreamUpdates(ctx, &StreamRequest{NoteId: params["id"]})
+    },
+)
+```
+
+### Query Parameters
+
+Access query parameters as `params["query.paramName"]`:
+
+```go
+req := &StreamRequest{NoteId: params["id"]}
+if since := params["query.since"]; since != "" {
+    req.Since = parseTimestamp(since)
+}
+```
+
+### Client Usage
+
+**JavaScript:**
+```javascript
+const eventSource = new EventSource('http://localhost:8080/counter');
+eventSource.onmessage = (event) => {
+    console.log('Received:', JSON.parse(event.data));
+};
+```
+
+**curl:**
+```bash
+curl -N http://localhost:8080/counter
+```
+
+See `examples/ssestream/` for a complete working example.
+
 ## Plugin Integration
 
 ### Authentication

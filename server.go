@@ -76,6 +76,9 @@ type Server struct {
 
 	// Plugins tied to the lifecycle of the server.
 	plugins *Registry
+
+	// Shared gRPC client connection for SSE endpoints (reused across all SSE streams).
+	sseClientConn *grpc.ClientConn
 }
 
 // GRPCServer returns the GRPC Service Registrar for use with service
@@ -258,6 +261,16 @@ func (s *Server) Shutdown() error {
 		logging.Info(s.baseContext, "👍 HTTP connections drained")
 	}
 	s.httpServer = nil
+
+	// Close the shared SSE client connection if it exists
+	if s.sseClientConn != nil {
+		if cerr := s.sseClientConn.Close(); cerr != nil {
+			logging.Infof(s.baseContext, "❌ SSE client connection close error: %v", cerr)
+		} else {
+			logging.Info(s.baseContext, "👍 SSE client connection closed")
+		}
+		s.sseClientConn = nil
+	}
 
 	if perr := s.plugins.Shutdown(ctx); err != nil {
 		logging.Infof(s.baseContext, "❌ Plugin shutdown error: %v", perr)
