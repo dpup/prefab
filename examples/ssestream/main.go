@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dpup/prefab"
+	"github.com/dpup/prefab/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -58,6 +59,7 @@ func main() {
 		prefab.WithSSEStream[*wrapperspb.StringValue](
 			"/counter",
 			func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (prefab.ClientStream[*wrapperspb.StringValue], error) {
+				logging.Infof(ctx, "Starting mock counter stream")
 				return &mockCounterStream{
 					ctx:    ctx,
 					ticker: time.NewTicker(500 * time.Millisecond),

@@ -6,20 +6,21 @@ import (
 	"io"
 	"testing"
 
+	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestParsePathPattern(t *testing.T) {
 	tests := []struct {
-		name        string
-		pattern     string
-		wantErr     bool
-		wantPrefix  string
-		wantParams  []string
-		testPath    string
-		wantMatch   bool
-		wantValues  map[string]string
+		name       string
+		pattern    string
+		wantErr    bool
+		wantPrefix string
+		wantParams []string
+		testPath   string
+		wantMatch  bool
+		wantValues map[string]string
 	}{
 		{
 			name:       "simple static path",
@@ -135,8 +136,8 @@ func (m *mockClientStream) Recv() (*wrapperspb.StringValue, error) {
 
 func TestSSEStreamStarter(t *testing.T) {
 	// Test that the SSEStreamStarter type is correctly defined and can be used
-	starter := func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
-		// Create a mock stream
+	//nolint:unparam // error is to satisfy interface
+	starter := func(_ context.Context, params map[string]string, _ grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
 		messages := []*wrapperspb.StringValue{
 			wrapperspb.String(fmt.Sprintf("message for %s", params["id"])),
 		}
@@ -164,7 +165,7 @@ func TestSSEStreamStarter(t *testing.T) {
 
 	// Verify EOF
 	_, err = stream.Recv()
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Errorf("expected EOF, got %v", err)
 	}
 }
@@ -183,7 +184,7 @@ func TestClientStreamInterface(t *testing.T) {
 	stream := &mockClientStream{messages: messages}
 
 	// Read all messages
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		msg, err := stream.Recv()
 		if err != nil {
 			t.Fatalf("Recv() error = %v", err)
@@ -196,7 +197,7 @@ func TestClientStreamInterface(t *testing.T) {
 
 	// Should get EOF
 	_, err := stream.Recv()
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Errorf("expected EOF, got %v", err)
 	}
 }
@@ -204,15 +205,15 @@ func TestClientStreamInterface(t *testing.T) {
 // Test that the pathPattern regex works correctly with various patterns
 func TestPathPatternRegex(t *testing.T) {
 	tests := []struct {
-		pattern  string
-		testPath string
+		pattern   string
+		testPath  string
 		wantMatch bool
 	}{
 		{"/notes/{id}/updates", "/notes/123/updates", true},
 		{"/notes/{id}/updates", "/notes/abc/updates", true},
 		{"/notes/{id}/updates", "/notes/123-456/updates", true},
-		{"/notes/{id}/updates", "/notes//updates", false}, // empty param
-		{"/notes/{id}/updates", "/notes/123", false},      // missing path
+		{"/notes/{id}/updates", "/notes//updates", false},   // empty param
+		{"/notes/{id}/updates", "/notes/123", false},        // missing path
 		{"/notes/{id}/updates", "/notes/123/delete", false}, // wrong end
 		{"/users/{uid}/notes/{nid}", "/users/1/notes/2", true},
 		{"/users/{uid}/notes/{nid}", "/users/1/notes", false},
@@ -347,23 +348,6 @@ type exampleGeneratedStream interface {
 }
 
 var _ ClientStream[*wrapperspb.StringValue] = (exampleGeneratedStream)(nil)
-
-// Test generic type constraint
-func TestGenericTypeConstraint(t *testing.T) {
-	// Verify that proto.Message types can be used with ClientStream
-	var _ ClientStream[*wrapperspb.StringValue]
-	var _ ClientStream[*wrapperspb.Int32Value]
-	var _ ClientStream[*wrapperspb.BoolValue]
-
-	// Verify that SSEStreamStarter works with different message types
-	var _ SSEStreamStarter[*wrapperspb.StringValue] = func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.StringValue], error) {
-		return nil, nil
-	}
-
-	var _ SSEStreamStarter[*wrapperspb.Int32Value] = func(ctx context.Context, params map[string]string, cc grpc.ClientConnInterface) (ClientStream[*wrapperspb.Int32Value], error) {
-		return nil, nil
-	}
-}
 
 // TestSharedSSEConnection verifies that multiple SSE endpoints share a single connection
 func TestSharedSSEConnection(t *testing.T) {

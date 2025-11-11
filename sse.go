@@ -119,6 +119,7 @@ func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamSt
 
 		// Only allow GET requests
 		if r.Method != http.MethodGet {
+			logging.Warnf(ctx, "sse: invalid method %s for path %s", r.Method, r.URL.Path)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -126,8 +127,7 @@ func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamSt
 		// Extract path parameters
 		params, ok := pattern.extractParams(r.URL.Path)
 		if !ok {
-			logging.Errorw(ctx, "sse: path does not match pattern",
-				"path", r.URL.Path)
+			logging.Errorw(ctx, "sse: path does not match pattern", "path", r.URL.Path)
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
@@ -168,47 +168,49 @@ func createSSEHandler[T proto.Message](pattern *pathPattern, starter SSEStreamSt
 			return
 		}
 
-		// Marshal options for JSON conversion
-		marshaler := protojson.MarshalOptions{
-			EmitUnpopulated: true,
-			UseProtoNames:   false,
-		}
-
 		logging.Infow(ctx, "sse: client connected", "path", r.URL.Path, "params", params)
-
-		// Stream messages to the client
-		for {
-			msg, err := stream.Recv()
-			if err == io.EOF {
-				// Stream completed normally
-				logging.Infow(ctx, "sse: stream completed", "path", r.URL.Path)
-				return
-			}
-			if err != nil {
-				logging.Errorw(ctx, "sse: stream error", "error", err)
-				// Send error as SSE comment (not visible to EventSource API but visible in raw stream)
-				fmt.Fprintf(w, ": error: %s\n\n", err.Error())
-				flusher.Flush()
-				return
-			}
-
-			// Convert proto message to JSON
-			data, err := marshaler.Marshal(msg)
-			if err != nil {
-				logging.Errorw(ctx, "sse: failed to marshal message", "error", err)
-				continue
-			}
-
-			// Write SSE event
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
-				logging.Errorw(ctx, "sse: failed to write event", "error", err)
-				return
-			}
-
-			// Flush the data immediately
-			flusher.Flush()
-		}
+		streamMessages(ctx, stream, r, w, flusher)
 	})
+}
+
+func streamMessages[T proto.Message](ctx context.Context, stream ClientStream[T], r *http.Request, w http.ResponseWriter, flusher http.Flusher) {
+	// Marshal options for JSON conversion
+	marshaler := protojson.MarshalOptions{
+		EmitUnpopulated: true,
+		UseProtoNames:   false,
+	}
+
+	for {
+		msg, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			// Stream completed normally
+			logging.Infow(ctx, "sse: stream completed", "path", r.URL.Path)
+			return
+		}
+		if err != nil {
+			logging.Errorw(ctx, "sse: stream error", "error", err)
+			// Send error as SSE comment (not visible to EventSource API but visible in raw stream)
+			fmt.Fprintf(w, ": error: %s\n\n", err.Error())
+			flusher.Flush()
+			return
+		}
+
+		// Convert proto message to JSON
+		data, err := marshaler.Marshal(msg)
+		if err != nil {
+			logging.Errorw(ctx, "sse: failed to marshal message", "error", err)
+			continue
+		}
+
+		// Write SSE event
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+			logging.Errorw(ctx, "sse: failed to write event", "error", err)
+			return
+		}
+
+		// Flush the data immediately
+		flusher.Flush()
+	}
 }
 
 // WithSSEStream registers a Server-Sent Events endpoint that streams from a gRPC streaming method.
