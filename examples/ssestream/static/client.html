@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            max-width: 1200px;
+            max-width: 800px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
@@ -54,12 +54,6 @@
             background: #cccccc;
             cursor: not-allowed;
         }
-        input {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 10px;
-        }
         .status {
             padding: 10px;
             border-radius: 4px;
@@ -103,64 +97,24 @@
             margin-top: 5px;
             color: #333;
         }
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        @media (max-width: 768px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 <body>
     <h1>🚀 Prefab SSE Example</h1>
     <p>This page demonstrates Server-Sent Events with Prefab. Open your browser's developer console to see more details.</p>
 
-    <div class="grid">
-        <div class="container">
-            <h2>Note Updates Stream</h2>
-            <div class="controls">
-                <label>Note ID:</label>
-                <input type="text" id="noteId" value="123" />
-                <button id="startNotes" onclick="startNoteStream()">Start</button>
-                <button id="stopNotes" class="stop" onclick="stopNoteStream()" disabled>Stop</button>
-            </div>
-            <div id="notesStatus" class="status disconnected">Disconnected</div>
-            <div id="notesEvents" class="events"></div>
-        </div>
-
-        <div class="container">
-            <h2>Counter Stream</h2>
-            <div class="controls">
-                <button id="startCounter" onclick="startCounterStream()">Start</button>
-                <button id="stopCounter" class="stop" onclick="stopCounterStream()" disabled>Stop</button>
-            </div>
-            <div id="counterStatus" class="status disconnected">Disconnected</div>
-            <div id="counterEvents" class="events"></div>
-        </div>
-    </div>
-
     <div class="container">
-        <h2>Live Note Edits Stream</h2>
+        <h2>Counter Stream</h2>
         <div class="controls">
-            <label>User ID:</label>
-            <input type="text" id="userId" value="42" />
-            <label>Note ID:</label>
-            <input type="text" id="liveNoteId" value="99" />
-            <button id="startLive" onclick="startLiveStream()">Start</button>
-            <button id="stopLive" class="stop" onclick="stopLiveStream()" disabled>Stop</button>
+            <button id="startCounter" onclick="startCounterStream()">Start</button>
+            <button id="stopCounter" class="stop" onclick="stopCounterStream()" disabled>Stop</button>
         </div>
-        <div id="liveStatus" class="status disconnected">Disconnected</div>
-        <div id="liveEvents" class="events"></div>
+        <div id="counterStatus" class="status disconnected">Disconnected</div>
+        <div id="counterEvents" class="events"></div>
     </div>
 
     <script>
-        let noteEventSource = null;
         let counterEventSource = null;
-        let liveEventSource = null;
 
         function formatTime() {
             return new Date().toLocaleTimeString();
@@ -192,50 +146,6 @@
             const statusEl = document.getElementById(statusId);
             statusEl.className = 'status ' + status;
             statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-        }
-
-        // Note Updates Stream
-        function startNoteStream() {
-            if (noteEventSource) {
-                stopNoteStream();
-            }
-
-            const noteId = document.getElementById('noteId').value;
-            const url = `http://localhost:8080/notes/${noteId}/updates`;
-
-            console.log('Connecting to:', url);
-            updateStatus('notesStatus', 'connecting');
-
-            noteEventSource = new EventSource(url);
-
-            noteEventSource.onopen = () => {
-                console.log('Note stream connected');
-                updateStatus('notesStatus', 'connected');
-                document.getElementById('startNotes').disabled = true;
-                document.getElementById('stopNotes').disabled = false;
-            };
-
-            noteEventSource.onmessage = (event) => {
-                console.log('Note update:', event.data);
-                addEvent('notesEvents', event.data);
-            };
-
-            noteEventSource.onerror = (error) => {
-                console.error('Note stream error:', error);
-                updateStatus('notesStatus', 'disconnected');
-                stopNoteStream();
-            };
-        }
-
-        function stopNoteStream() {
-            if (noteEventSource) {
-                noteEventSource.close();
-                noteEventSource = null;
-                console.log('Note stream disconnected');
-            }
-            updateStatus('notesStatus', 'disconnected');
-            document.getElementById('startNotes').disabled = false;
-            document.getElementById('stopNotes').disabled = true;
         }
 
         // Counter Stream
@@ -281,56 +191,9 @@
             document.getElementById('stopCounter').disabled = true;
         }
 
-        // Live Edits Stream
-        function startLiveStream() {
-            if (liveEventSource) {
-                stopLiveStream();
-            }
-
-            const userId = document.getElementById('userId').value;
-            const noteId = document.getElementById('liveNoteId').value;
-            const url = `http://localhost:8080/users/${userId}/notes/${noteId}/live`;
-
-            console.log('Connecting to:', url);
-            updateStatus('liveStatus', 'connecting');
-
-            liveEventSource = new EventSource(url);
-
-            liveEventSource.onopen = () => {
-                console.log('Live stream connected');
-                updateStatus('liveStatus', 'connected');
-                document.getElementById('startLive').disabled = true;
-                document.getElementById('stopLive').disabled = false;
-            };
-
-            liveEventSource.onmessage = (event) => {
-                console.log('Live edit:', event.data);
-                addEvent('liveEvents', event.data);
-            };
-
-            liveEventSource.onerror = (error) => {
-                console.error('Live stream error:', error);
-                updateStatus('liveStatus', 'disconnected');
-                stopLiveStream();
-            };
-        }
-
-        function stopLiveStream() {
-            if (liveEventSource) {
-                liveEventSource.close();
-                liveEventSource = null;
-                console.log('Live stream disconnected');
-            }
-            updateStatus('liveStatus', 'disconnected');
-            document.getElementById('startLive').disabled = false;
-            document.getElementById('stopLive').disabled = true;
-        }
-
         // Clean up on page unload
         window.addEventListener('beforeunload', () => {
-            stopNoteStream();
             stopCounterStream();
-            stopLiveStream();
         });
     </script>
 </body>
