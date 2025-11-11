@@ -124,11 +124,11 @@ func (s *store) InitModel(model storage.Model) error {
 	return nil
 }
 
-func (s *store) Create(models ...storage.Model) error {
-	return s.insert(false, models...)
+func (s *store) Create(ctx context.Context, models ...storage.Model) error {
+	return s.insert(ctx, false, models...)
 }
 
-func (s *store) Read(id string, model storage.Model) error {
+func (s *store) Read(ctx context.Context, id string, model storage.Model) error {
 	if err := storage.ValidateReceiver(model); err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (s *store) Read(id string, model storage.Model) error {
 		args = []interface{}{id}
 	}
 
-	row := s.db.QueryRowContext(context.Background(), query, args...)
+	row := s.db.QueryRowContext(ctx, query, args...)
 
 	var value []byte
 	err := row.Scan(&value)
@@ -155,8 +155,8 @@ func (s *store) Read(id string, model storage.Model) error {
 	return errors.MaybeWrap(json.Unmarshal(value, model), 0)
 }
 
-func (s *store) Update(models ...storage.Model) error {
-	tx, err := s.db.BeginTx(context.Background(), nil)
+func (s *store) Update(ctx context.Context, models ...storage.Model) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -172,11 +172,11 @@ func (s *store) Update(models ...storage.Model) error {
 
 		var res sql.Result
 		if tableName, isDefault := s.tableName(model); isDefault {
-			res, err = prepareAndExec(tx,
+			res, err = prepareAndExec(ctx, tx,
 				"UPDATE "+tableName+" SET value = $1, updated_at = NOW() WHERE id = $2 AND entity_type = $3",
 				value, id, entityType)
 		} else {
-			res, err = prepareAndExec(tx,
+			res, err = prepareAndExec(ctx, tx,
 				"UPDATE "+tableName+" SET value = $1, updated_at = NOW() WHERE id = $2",
 				value, id)
 		}
@@ -198,11 +198,11 @@ func (s *store) Update(models ...storage.Model) error {
 	return nil
 }
 
-func (s *store) Upsert(models ...storage.Model) error {
-	return s.insert(true, models...)
+func (s *store) Upsert(ctx context.Context, models ...storage.Model) error {
+	return s.insert(ctx, true, models...)
 }
 
-func (s *store) Delete(model storage.Model) error {
+func (s *store) Delete(ctx context.Context, model storage.Model) error {
 	var query string
 	var args []interface{}
 
@@ -214,13 +214,13 @@ func (s *store) Delete(model storage.Model) error {
 		args = []interface{}{model.PK()}
 	}
 
-	stmt, err := s.db.PrepareContext(context.Background(), query)
+	stmt, err := s.db.PrepareContext(ctx, query)
 	if err != nil {
 		return translateError(err)
 	}
 	defer stmt.Close()
 
-	res, err := stmt.ExecContext(context.Background(), args...)
+	res, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
 		return translateError(err)
 	}
@@ -232,7 +232,7 @@ func (s *store) Delete(model storage.Model) error {
 	return nil
 }
 
-func (s *store) List(models any, filter storage.Model) error {
+func (s *store) List(ctx context.Context, models any, filter storage.Model) error {
 	modelsVal := reflect.ValueOf(models)
 	if modelsVal.Kind() != reflect.Ptr || modelsVal.Elem().Kind() != reflect.Slice {
 		return storage.ErrSliceRequired
@@ -244,7 +244,7 @@ func (s *store) List(models any, filter storage.Model) error {
 	}
 
 	query, args := s.buildListQuery(filter)
-	rows, err := s.db.QueryContext(context.Background(), query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return translateError(err)
 	}
@@ -275,7 +275,7 @@ func (s *store) List(models any, filter storage.Model) error {
 	return nil
 }
 
-func (s *store) Exists(id string, model storage.Model) (bool, error) {
+func (s *store) Exists(ctx context.Context, id string, model storage.Model) (bool, error) {
 	var query string
 	var args []interface{}
 
@@ -288,7 +288,7 @@ func (s *store) Exists(id string, model storage.Model) (bool, error) {
 	}
 
 	var count int
-	err := s.db.QueryRowContext(context.Background(), query, args...).Scan(&count)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return false, translateError(err)
 	}
@@ -304,8 +304,8 @@ func (s *store) tableName(model storage.Model) (string, bool) {
 	return s.schema + "." + s.prefix + name, false
 }
 
-func (s *store) insert(upsert bool, models ...storage.Model) error {
-	tx, err := s.db.BeginTx(context.Background(), nil)
+func (s *store) insert(ctx context.Context, upsert bool, models ...storage.Model) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return translateError(err)
 	}
@@ -354,7 +354,7 @@ func (s *store) insert(upsert bool, models ...storage.Model) error {
 			args = []interface{}{id, value}
 		}
 
-		_, err = prepareAndExec(tx, query, args...)
+		_, err = prepareAndExec(ctx, tx, query, args...)
 		if err != nil {
 			tx.Rollback()
 			return translateError(err)
@@ -571,8 +571,7 @@ func translateError(err error) error {
 	return errors.MaybeWrap(err, 0)
 }
 
-func prepareAndExec(tx *sql.Tx, query string, args ...interface{}) (sql.Result, error) {
-	ctx := context.Background()
+func prepareAndExec(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (sql.Result, error) {
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, errors.Wrap(err, 0)

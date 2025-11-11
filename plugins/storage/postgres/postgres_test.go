@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -289,7 +290,7 @@ func TestCreateWithMock(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
-		err := s.Create(model)
+		err := s.Create(context.Background(), model)
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -305,7 +306,7 @@ func TestCreateWithMock(t *testing.T) {
 			WillReturnError(&pq.Error{Code: "23505"})
 		mock.ExpectRollback()
 
-		err := s.Create(model)
+		err := s.Create(context.Background(), model)
 		require.Error(t, err)
 		require.ErrorIs(t, err, storage.ErrAlreadyExists)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -325,7 +326,7 @@ func TestReadWithMock(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(data))
 
 		var result TestModel
-		err := s.Read("1", &result)
+		err := s.Read(context.Background(), "1", &result)
 		require.NoError(t, err)
 		assert.Equal(t, "1", result.ID)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -337,7 +338,7 @@ func TestReadWithMock(t *testing.T) {
 			WillReturnError(sql.ErrNoRows)
 
 		var result TestModel
-		err := s.Read("1", &result)
+		err := s.Read(context.Background(), "1", &result)
 		require.Error(t, err)
 		require.ErrorIs(t, err, storage.ErrNotFound)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -345,7 +346,7 @@ func TestReadWithMock(t *testing.T) {
 
 	t.Run("ReadNilModel", func(t *testing.T) {
 		var result *TestModel
-		err := s.Read("1", result)
+		err := s.Read(context.Background(), "1", result)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, storage.ErrNilModel)
 	})
@@ -366,7 +367,7 @@ func TestUpdateWithMock(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
 
-		err := s.Update(model)
+		err := s.Update(context.Background(), model)
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -382,7 +383,7 @@ func TestUpdateWithMock(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectRollback()
 
-		err := s.Update(model)
+		err := s.Update(context.Background(), model)
 		require.Error(t, err)
 		require.ErrorIs(t, err, storage.ErrNotFound)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -403,7 +404,7 @@ func TestUpsertWithMock(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	err := s.Upsert(model)
+	err := s.Upsert(context.Background(), model)
 	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -420,7 +421,7 @@ func TestDeleteWithMock(t *testing.T) {
 			WithArgs("1", storage.Name(model)).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := s.Delete(model)
+		err := s.Delete(context.Background(), model)
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -433,7 +434,7 @@ func TestDeleteWithMock(t *testing.T) {
 			WithArgs("1", storage.Name(model)).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := s.Delete(model)
+		err := s.Delete(context.Background(), model)
 		require.Error(t, err)
 		require.ErrorIs(t, err, storage.ErrNotFound)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -449,7 +450,7 @@ func TestExistsWithMock(t *testing.T) {
 			WithArgs("1", storage.Name(TestModel{})).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
-		exists, err := s.Exists("1", &TestModel{})
+		exists, err := s.Exists(context.Background(), "1", &TestModel{})
 		require.NoError(t, err)
 		assert.True(t, exists)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -460,7 +461,7 @@ func TestExistsWithMock(t *testing.T) {
 			WithArgs("1", storage.Name(TestModel{})).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-		exists, err := s.Exists("1", &TestModel{})
+		exists, err := s.Exists(context.Background(), "1", &TestModel{})
 		require.NoError(t, err)
 		assert.False(t, exists)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -484,7 +485,7 @@ func TestListWithMock(t *testing.T) {
 				AddRow(string(data2)))
 
 		var results []TestModel
-		err := s.List(&results, TestModel{})
+		err := s.List(context.Background(), &results, TestModel{})
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 		assert.Equal(t, "1", results[0].ID)
@@ -498,7 +499,7 @@ func TestListWithMock(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"value"}))
 
 		var results []TestModel
-		err := s.List(&results, TestModel{})
+		err := s.List(context.Background(), &results, TestModel{})
 		require.NoError(t, err)
 		assert.Empty(t, results)
 		assert.NoError(t, mock.ExpectationsWereMet())
