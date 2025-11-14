@@ -1,0 +1,49 @@
+name: Claude Issue Evaluation
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  evaluate-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install Python dependencies
+        run: |
+          pip install anthropic requests PyGithub
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "Claude AI"
+          git config --global user.email "claude-bot@anthropic.com"
+
+      - name: Evaluate and implement issue
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GITHUB_SESSION_ID: ${{ github.run_id }}
+        run: |
+          python .github/scripts/claude_issue_evaluator.py
