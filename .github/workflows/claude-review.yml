@@ -1,47 +1,35 @@
-name: Claude Proactive Code Review
+name: Claude Code Review
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   code-review:
     runs-on: ubuntu-latest
     # Skip if PR is from a claude/ branch to avoid reviewing our own work
-    if: "!startsWith(github.head_ref, 'claude/')"
+    # Skip if PR is draft
+    # Skip if PR has skip-claude-review label
+    if: |
+      !startsWith(github.head_ref, 'claude/') &&
+      !github.event.pull_request.draft &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-claude-review')
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Please review this pull request for:
+            - Code quality and adherence to project conventions (see CLAUDE.md)
+            - Potential bugs and edge cases
+            - Security vulnerabilities
+            - Performance issues
+            - Go-specific best practices (error handling, goroutine safety, context usage)
 
-      - name: Fetch base branch
-        run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          pip install anthropic requests PyGithub pyyaml
-
-      - name: Perform code review
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: |
-          python .github/scripts/claude_code_review.py
+            Provide constructive feedback with specific suggestions for improvement.
