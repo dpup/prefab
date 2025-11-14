@@ -214,7 +214,8 @@ func (s *Server) Start() error {
 	}()
 
 	// TODO: Allow bufconn to be injected to allow tests to avoid the network.
-	ln, err := net.Listen("tcp", addr)
+	var listenCfg net.ListenConfig
+	ln, err := listenCfg.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
