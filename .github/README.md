@@ -46,19 +46,79 @@ Automatically reviews pull requests when they're opened or updated.
 Evaluates new issues and attempts to implement reasonable bug fixes or features.
 
 **Triggers:**
-- New issue opened
+- New issue opened (team members only)
+- Issue labeled with `claude:evaluate` (external contributors)
 
 **What it does:**
 - Evaluates if the issue is clear and actionable
-- For implementable issues:
+- For implementable issues from team members:
   - Creates an implementation plan
   - Creates a new branch (`claude/issue-N-session`)
   - Generates implementation guidance
   - Creates a draft pull request
   - Links the PR back to the issue
+- For implementable issues from external contributors:
+  - Creates an implementation plan (no auto-PR by default)
+  - Suggests they can implement following the plan
 - For unclear issues:
   - Asks clarifying questions
   - Requests additional context
+
+**Access Controls:**
+- Auto-triggers only for repository owners, members, and collaborators
+- External contributors must have the `claude:evaluate` label added by a team member
+- Rate limits apply to prevent abuse (configurable in `claude-config.yml`)
+
+## Rate Limiting & Cost Controls
+
+To prevent abuse and control API costs, the workflows include several safety features:
+
+### Rate Limits
+
+Default limits (configurable in `.github/claude-config.yml`):
+- **Issue Evaluations**: 3 per user per day
+- **@claude Mentions**: 10 per user per day
+- **Code Reviews**: 20 per day (total)
+
+Team members (OWNER, MEMBER, COLLABORATOR) are exempt from rate limits by default.
+
+### Code Review Controls
+
+- **Skip draft PRs**: Automatic reviews skip draft PRs (configurable)
+- **Skip label**: Add `skip-claude-review` label to skip review
+- **File limits**: Skips PRs with < 1 or > 50 files changed (configurable)
+- **Skip own work**: Never reviews PRs from `claude/*` branches
+
+### Issue Evaluation Controls
+
+- **Team member only**: Auto-evaluation only for team members by default
+- **Label required**: External contributors need `claude:evaluate` label
+- **No auto-PR**: External issues get plans but no auto-implementation (configurable)
+- **Rate limiting**: Per-user daily limits to prevent spam
+
+### Configuration
+
+Edit `.github/claude-config.yml` to customize limits:
+
+```yaml
+rate_limits:
+  issues_per_user_per_day: 3
+  mentions_per_user_per_day: 10
+  reviews_per_day: 20
+
+exempt_team_members: true
+
+issue_evaluation:
+  auto_evaluate_team_members: true
+  require_label_for_external: true
+  auto_implement_external_issues: false
+
+code_review:
+  skip_draft_prs: true
+  allow_skip_label: true
+  min_files_changed: 1
+  max_files_changed: 50
+```
 
 ## Setup
 
@@ -204,7 +264,19 @@ Each workflow run consumes Anthropic API credits:
 - Code reviews: ~10K-20K tokens per PR
 - Issue evaluations: ~5K-15K tokens per issue
 
-Monitor your API usage in the Anthropic console.
+**Cost Controls:**
+- Rate limits prevent excessive usage (see `.github/claude-config.yml`)
+- Default limits: 3 issues, 10 mentions per user per day, 20 reviews total per day
+- Team members are exempt from limits by default
+- External contributors require manual approval via labels
+- Draft PRs and large PRs (>50 files) are skipped
+
+With default settings, maximum daily cost is approximately:
+- 20 code reviews × 15K tokens = 300K tokens
+- 10 mentions × 6K tokens per team member = varies by team size
+- 3 issue evaluations × 10K tokens per user = varies by team size
+
+Monitor your API usage in the Anthropic console and adjust limits in `claude-config.yml` as needed.
 
 ## Support
 

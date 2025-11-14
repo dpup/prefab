@@ -1,0 +1,65 @@
+# Claude Automation Configuration
+#
+# This file controls rate limits and behavior for Claude AI automation workflows.
+# Edit these values to adjust cost controls and feature behavior.
+
+# Rate Limiting
+rate_limits:
+  # Maximum number of issue evaluations per user per day
+  # Set to 0 for unlimited (not recommended for public repos)
+  issues_per_user_per_day: 3
+
+  # Maximum number of @claude mentions a user can make per day
+  # Set to 0 for unlimited
+  mentions_per_user_per_day: 10
+
+  # Maximum number of code reviews per day (total across all PRs)
+  # Set to 0 for unlimited
+  reviews_per_day: 20
+
+# Team Member Exemptions
+# Team members (OWNER, MEMBER, COLLABORATOR) bypass rate limits
+exempt_team_members: true
+
+# Issue Evaluation Behavior
+issue_evaluation:
+  # Auto-evaluate issues from team members
+  auto_evaluate_team_members: true
+
+  # Require 'claude:evaluate' label for non-team members
+  require_label_for_external: true
+
+  # Auto-create implementation PRs for team member issues
+  auto_implement_team_member_issues: true
+
+  # Auto-create implementation PRs for external issues (after label added)
+  # Setting this to false will only post evaluation without creating PR
+  auto_implement_external_issues: false
+
+# Code Review Behavior
+code_review:
+  # Skip reviews for draft PRs
+  skip_draft_prs: true
+
+  # Skip reviews for PRs with 'skip-claude-review' label
+  allow_skip_label: true
+
+  # Minimum files changed to trigger review (avoid reviewing trivial PRs)
+  min_files_changed: 1
+
+  # Maximum files in PR to review (skip very large PRs to control costs)
+  max_files_changed: 50
+
+# Token Budget (optional - requires manual tracking)
+# These are informational and used for warnings only
+token_budget:
+  # Estimated tokens per operation
+  issue_evaluation: 8000
+  code_review: 15000
+  mention_response: 5000
+
+  # Daily budget (in tokens)
+  daily_budget: 500000  # ~500K tokens per day
+
+  # Warn when approaching this percentage of daily budget
+  warning_threshold: 0.8  # 80%

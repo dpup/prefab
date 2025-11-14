@@ -12,6 +12,7 @@ from claude_utils import (
     truncate_text,
     run_command,
 )
+from rate_limiter import RateLimiter
 
 
 def evaluate_issue():
@@ -35,6 +36,22 @@ def evaluate_issue():
     issue_title = issue.title
     issue_body = issue.body or ""
     issue_author = issue.user.login
+    author_association = issue.author_association
+
+    # Check rate limits
+    rate_limiter = RateLimiter(gh, repo_name)
+    allowed, reason = rate_limiter.check_issue_evaluation(issue_author, author_association)
+
+    if not allowed:
+        print(f"Rate limit check failed: {reason}")
+        issue.create_comment(
+            f"@{issue_author} Thank you for your issue! I've reached my daily limit for "
+            "issue evaluations. A team member will review this soon, or you can try again tomorrow.\n\n"
+            f"_{reason}_"
+        )
+        sys.exit(0)
+
+    print(f"Rate limit check passed: {reason}")
 
     # Get repository context
     repo_ctx = get_repo_context()
@@ -123,7 +140,11 @@ Evaluate this issue and respond with your assessment in JSON format."""
         # Attempt implementation
         implementation_plan = evaluation.get("implementation_plan", "")
 
-        comment = f"""## 🤖 Issue Evaluation
+        # Check if we should auto-implement for this user
+        should_implement = rate_limiter.should_auto_implement(author_association)
+
+        if should_implement:
+            comment = f"""## 🤖 Issue Evaluation
 
 Thanks for opening this issue, @{issue_author}!
 
@@ -137,13 +158,31 @@ I'll create a pull request with an implementation. Please review it and let me k
 ---
 *Automated evaluation by Claude*"""
 
-        issue.create_comment(comment)
-        print("Posted implementation plan comment")
+            issue.create_comment(comment)
+            print("Posted implementation plan comment")
 
-        # Attempt implementation using extended interaction
-        success = attempt_implementation(
-            client, repo, issue, issue_number, session_id, repo_ctx
-        )
+            # Attempt implementation using extended interaction
+            success = attempt_implementation(
+                client, repo, issue, issue_number, session_id, repo_ctx
+            )
+        else:
+            # Just post the plan without implementing
+            comment = f"""## 🤖 Issue Evaluation
+
+Thanks for opening this issue, @{issue_author}!
+
+**Assessment**: This looks like a reasonable request that could be implemented.
+
+**Plan**:
+{implementation_plan}
+
+A team member will review this issue and may create an implementation. If you're interested in contributing, feel free to follow this plan and submit a pull request!
+
+---
+*Automated evaluation by Claude*"""
+
+            issue.create_comment(comment)
+            print("Posted evaluation without auto-implementation")
 
         if not success:
             # Post follow-up if implementation failed

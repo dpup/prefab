@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install anthropic requests PyGithub
+          pip install anthropic requests PyGithub pyyaml
 
       - name: Handle @claude mention
         env:

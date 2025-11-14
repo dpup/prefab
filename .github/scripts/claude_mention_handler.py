@@ -12,9 +12,10 @@ from claude_utils import (
     create_claude_conversation,
     truncate_text,
 )
+from rate_limiter import RateLimiter
 
 
-def handle_pr_mention(repo, pr_number: int, comment_body: str, comment_user: str):
+def handle_pr_mention(repo, pr_number: int, comment_body: str, comment_user: str, comment_author_association: str):
     """Handle @claude mention in a pull request."""
     print(f"Handling PR mention in #{pr_number}")
 
@@ -66,7 +67,7 @@ Please provide a helpful response. If they're asking for a code review, analyze 
     print("Posted response to PR")
 
 
-def handle_issue_mention(repo, issue_number: int, comment_body: str, comment_user: str):
+def handle_issue_mention(repo, issue_number: int, comment_body: str, comment_user: str, comment_author_association: str):
     """Handle @claude mention in an issue."""
     print(f"Handling issue mention in #{issue_number}")
 
@@ -128,38 +129,67 @@ def main():
     repo_name = os.environ.get("GITHUB_REPOSITORY")
     repo = gh.get_repo(repo_name)
 
+    # Initialize rate limiter
+    rate_limiter = RateLimiter(gh, repo_name)
+
     # Extract comment info based on event type
     if event_name == "issue_comment":
         comment = event.get("comment", {})
         comment_body = comment.get("body", "")
         comment_user = comment.get("user", {}).get("login", "unknown")
+        comment_author_association = comment.get("author_association", "NONE")
+
+        # Check rate limit
+        allowed, reason = rate_limiter.check_mention_response(comment_user, comment_author_association)
+        if not allowed:
+            print(f"Rate limit exceeded: {reason}")
+            sys.exit(0)
+        print(f"Rate limit check passed: {reason}")
 
         # Check if this is a PR or issue
         issue = event.get("issue", {})
         if "pull_request" in issue:
             # This is a PR comment
             pr_number = issue.get("number")
-            handle_pr_mention(repo, pr_number, comment_body, comment_user)
+            handle_pr_mention(repo, pr_number, comment_body, comment_user, comment_author_association)
         else:
             # This is an issue comment
             issue_number = issue.get("number")
-            handle_issue_mention(repo, issue_number, comment_body, comment_user)
+            handle_issue_mention(repo, issue_number, comment_body, comment_user, comment_author_association)
 
     elif event_name == "pull_request_review":
         review = event.get("review", {})
         comment_body = review.get("body", "")
         comment_user = review.get("user", {}).get("login", "unknown")
+        comment_author_association = review.get("author_association", "NONE")
+
+        # Check rate limit
+        allowed, reason = rate_limiter.check_mention_response(comment_user, comment_author_association)
+        if not allowed:
+            print(f"Rate limit exceeded: {reason}")
+            sys.exit(0)
+        print(f"Rate limit check passed: {reason}")
+
         pr = event.get("pull_request", {})
         pr_number = pr.get("number")
-        handle_pr_mention(repo, pr_number, comment_body, comment_user)
+        handle_pr_mention(repo, pr_number, comment_body, comment_user, comment_author_association)
 
     elif event_name == "pull_request_review_comment":
         comment = event.get("comment", {})
         comment_body = comment.get("body", "")
         comment_user = comment.get("user", {}).get("login", "unknown")
+        comment_author_association = comment.get("author_association", "NONE")
+
+        # Check rate limit
+        allowed, reason = rate_limiter.check_mention_response(comment_user, comment_author_association)
+        if not allowed:
+            print(f"Rate limit exceeded: {reason}")
+            sys.exit(0)
+        print(f"Rate limit check passed: {reason}")
+
         pr = event.get("pull_request", {})
         pr_number = pr.get("number")
-        handle_pr_mention(repo, pr_number, comment_body, comment_user)
+        handle_pr_mention(repo, pr_number, comment_body, comment_user, comment_author_association)
 
     else:
         print(f"Unsupported event type: {event_name}")

@@ -13,6 +13,7 @@ from claude_utils import (
     truncate_text,
     read_file_safe,
 )
+from rate_limiter import RateLimiter
 
 
 def perform_code_review():
@@ -34,6 +35,32 @@ def perform_code_review():
     repo = gh.get_repo(repo_name)
     pr = repo.get_pull(pr_number)
 
+    # Initialize rate limiter and get config
+    rate_limiter = RateLimiter(gh, repo_name)
+    review_config = rate_limiter.get_review_config()
+
+    # Check if we should skip this PR
+    if review_config.get("skip_draft_prs", True) and pr.draft:
+        print("Skipping draft PR")
+        sys.exit(0)
+
+    if review_config.get("allow_skip_label", True):
+        for label in pr.labels:
+            if label.name == "skip-claude-review":
+                print("Skipping PR with 'skip-claude-review' label")
+                sys.exit(0)
+
+    # Check rate limit
+    allowed, reason = rate_limiter.check_code_review()
+    if not allowed:
+        print(f"Rate limit exceeded: {reason}")
+        # Optionally post a comment
+        pr.create_issue_comment(
+            "⚠️ Daily code review limit reached. A team member will review this PR."
+        )
+        sys.exit(0)
+    print(f"Rate limit check passed: {reason}")
+
     # Get PR details
     pr_title = pr.title
     pr_body = pr.body or ""
@@ -41,6 +68,22 @@ def perform_code_review():
     # Get changed files
     changed_files = get_changed_files(f"origin/{base_ref}", head_sha)
     print(f"Changed files: {len(changed_files)}")
+
+    # Check file count limits
+    min_files = review_config.get("min_files_changed", 1)
+    max_files = review_config.get("max_files_changed", 50)
+
+    if len(changed_files) < min_files:
+        print(f"Skipping PR with {len(changed_files)} files (min: {min_files})")
+        sys.exit(0)
+
+    if len(changed_files) > max_files:
+        print(f"Skipping PR with {len(changed_files)} files (max: {max_files})")
+        pr.create_issue_comment(
+            f"⚠️ This PR changes {len(changed_files)} files, which exceeds the automatic review limit of {max_files} files. "
+            "A team member will review this manually."
+        )
+        sys.exit(0)
 
     # Get full diff
     full_diff = get_file_diff(f"origin/{base_ref}", head_sha)
