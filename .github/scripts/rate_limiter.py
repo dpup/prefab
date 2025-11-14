@@ -29,6 +29,11 @@ class RateLimiter:
         """Check if user is a team member."""
         return author_association in ["OWNER", "MEMBER", "COLLABORATOR"]
 
+    def _is_exempt_user(self, user: str) -> bool:
+        """Check if user is in the exempt users list."""
+        exempt_users = self.config.get("exempt_users", [])
+        return user in exempt_users
+
     def _get_rate_limit_issue(self) -> Optional[any]:
         """Get or create the rate limit tracking issue."""
         # Look for existing rate limit tracking issue
@@ -92,6 +97,10 @@ class RateLimiter:
 
     def check_issue_evaluation(self, user: str, author_association: str) -> tuple[bool, str]:
         """Check if issue evaluation is allowed for this user."""
+        # Check if user is explicitly exempt
+        if self._is_exempt_user(user):
+            return True, f"Exempt user ({user}) - no limits"
+
         config = self.config.get("rate_limits", {})
 
         # Check if team members are exempt
@@ -117,6 +126,10 @@ class RateLimiter:
 
     def check_mention_response(self, user: str, author_association: str) -> tuple[bool, str]:
         """Check if mention response is allowed for this user."""
+        # Check if user is explicitly exempt
+        if self._is_exempt_user(user):
+            return True, f"Exempt user ({user}) - no limits"
+
         config = self.config.get("rate_limits", {})
 
         # Check if team members are exempt

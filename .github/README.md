@@ -76,11 +76,13 @@ To prevent abuse and control API costs, the workflows include several safety fea
 ### Rate Limits
 
 Default limits (configurable in `.github/claude-config.yml`):
-- **Issue Evaluations**: 3 per user per day
-- **@claude Mentions**: 10 per user per day
-- **Code Reviews**: 20 per day (total)
+- **Issue Evaluations**: 1 per user per day
+- **@claude Mentions**: 1 per user per day
+- **Code Reviews**: 1 per day (total)
 
-Team members (OWNER, MEMBER, COLLABORATOR) are exempt from rate limits by default.
+**Exemptions:**
+- Team members (OWNER, MEMBER, COLLABORATOR) are exempt from rate limits by default
+- Specific users listed in `exempt_users` bypass all rate limits (e.g., @dpup)
 
 ### Code Review Controls
 
@@ -102,11 +104,15 @@ Edit `.github/claude-config.yml` to customize limits:
 
 ```yaml
 rate_limits:
-  issues_per_user_per_day: 3
-  mentions_per_user_per_day: 10
-  reviews_per_day: 20
+  issues_per_user_per_day: 1
+  mentions_per_user_per_day: 1
+  reviews_per_day: 1
 
 exempt_team_members: true
+
+# Specific users who bypass all rate limits (GitHub usernames)
+exempt_users:
+  - dpup
 
 issue_evaluation:
   auto_evaluate_team_members: true
@@ -266,15 +272,17 @@ Each workflow run consumes Anthropic API credits:
 
 **Cost Controls:**
 - Rate limits prevent excessive usage (see `.github/claude-config.yml`)
-- Default limits: 3 issues, 10 mentions per user per day, 20 reviews total per day
-- Team members are exempt from limits by default
+- Default limits: 1 issue, 1 mention per user per day, 1 review total per day
+- Team members and specific exempt users (like @dpup) bypass limits
 - External contributors require manual approval via labels
 - Draft PRs and large PRs (>50 files) are skipped
 
-With default settings, maximum daily cost is approximately:
-- 20 code reviews × 15K tokens = 300K tokens
-- 10 mentions × 6K tokens per team member = varies by team size
-- 3 issue evaluations × 10K tokens per user = varies by team size
+With default settings, maximum daily cost for non-exempt users is approximately:
+- 1 code review × 15K tokens = 15K tokens
+- 1 mention × 6K tokens per user = varies by user count
+- 1 issue evaluation × 10K tokens per user = varies by user count
+
+These tight limits control costs while allowing team members and exempt users unlimited access.
 
 Monitor your API usage in the Anthropic console and adjust limits in `claude-config.yml` as needed.
 

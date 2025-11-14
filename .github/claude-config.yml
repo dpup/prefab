@@ -7,19 +7,23 @@
 rate_limits:
   # Maximum number of issue evaluations per user per day
   # Set to 0 for unlimited (not recommended for public repos)
-  issues_per_user_per_day: 3
+  issues_per_user_per_day: 1
 
   # Maximum number of @claude mentions a user can make per day
   # Set to 0 for unlimited
-  mentions_per_user_per_day: 10
+  mentions_per_user_per_day: 1
 
   # Maximum number of code reviews per day (total across all PRs)
   # Set to 0 for unlimited
-  reviews_per_day: 20
+  reviews_per_day: 1
 
-# Team Member Exemptions
+# Exemptions
 # Team members (OWNER, MEMBER, COLLABORATOR) bypass rate limits
 exempt_team_members: true
+
+# Specific users who bypass all rate limits (GitHub usernames)
+exempt_users:
+  - dpup
 
 # Issue Evaluation Behavior
 issue_evaluation:
