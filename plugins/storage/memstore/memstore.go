@@ -2,6 +2,7 @@
 package memstore
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"sort"
@@ -24,7 +25,7 @@ type store struct {
 	mu   sync.RWMutex
 }
 
-func (s *store) Create(models ...storage.Model) error {
+func (s *store) Create(ctx context.Context, models ...storage.Model) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -51,7 +52,7 @@ func (s *store) Create(models ...storage.Model) error {
 	return nil
 }
 
-func (s *store) Read(id string, model storage.Model) error {
+func (s *store) Read(ctx context.Context, id string, model storage.Model) error {
 	if err := storage.ValidateReceiver(model); err != nil {
 		return err
 	}
@@ -73,7 +74,7 @@ func (s *store) Read(id string, model storage.Model) error {
 	return nil
 }
 
-func (s *store) Update(models ...storage.Model) error {
+func (s *store) Update(ctx context.Context, models ...storage.Model) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -111,7 +112,7 @@ func (s *store) Update(models ...storage.Model) error {
 	return nil
 }
 
-func (s *store) Upsert(models ...storage.Model) error {
+func (s *store) Upsert(ctx context.Context, models ...storage.Model) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, m := range models {
@@ -128,7 +129,7 @@ func (s *store) Upsert(models ...storage.Model) error {
 	return nil
 }
 
-func (s *store) Delete(model storage.Model) error {
+func (s *store) Delete(ctx context.Context, model storage.Model) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -145,7 +146,7 @@ func (s *store) Delete(model storage.Model) error {
 }
 
 // List always performs a full scan of all items.
-func (s *store) List(models interface{}, filter storage.Model) error {
+func (s *store) List(ctx context.Context, models interface{}, filter storage.Model) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -178,7 +179,7 @@ func (s *store) List(models interface{}, filter storage.Model) error {
 	for _, pk := range pks {
 		newElemPtr := reflect.New(elemType)
 		newElem := newElemPtr.Elem()
-		if err := s.Read(pk, newElemPtr.Interface().(storage.Model)); err != nil {
+		if err := s.Read(ctx, pk, newElemPtr.Interface().(storage.Model)); err != nil {
 			return errors.Wrap(err, 0)
 		}
 		// Skip if any non-zero field in filter differs from the corresponding field in model.
@@ -201,7 +202,7 @@ func (s *store) List(models interface{}, filter storage.Model) error {
 	return nil
 }
 
-func (s *store) Exists(id string, model storage.Model) (bool, error) {
+func (s *store) Exists(ctx context.Context, id string, model storage.Model) (bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

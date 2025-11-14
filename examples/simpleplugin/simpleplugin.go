@@ -95,7 +95,7 @@ func (s *samplePlugin) interceptor(ctx context.Context, req any, info *grpc.Unar
 
 	// Get the current request count for this method.
 	var stats Stats
-	if err := s.store.Read(info.FullMethod, &stats); errors.Is(err, storage.ErrNotFound) {
+	if err := s.store.Read(ctx, info.FullMethod, &stats); errors.Is(err, storage.ErrNotFound) {
 		stats = Stats{Method: info.FullMethod, Count: 0}
 	} else if err != nil {
 		logging.Errorw(ctx, "error getting stats", "err", err)
@@ -103,7 +103,7 @@ func (s *samplePlugin) interceptor(ctx context.Context, req any, info *grpc.Unar
 
 	// Increment the count, and store. Clearly not thread safe!
 	stats.Count++
-	if err := s.store.Upsert(&stats); err != nil {
+	if err := s.store.Upsert(ctx, &stats); err != nil {
 		logging.Errorw(ctx, "error saving stats", "err", err)
 	}
 

@@ -3,6 +3,7 @@
 package storagetests
 
 import (
+	"context"
 	"testing"
 
 	"github.com/dpup/prefab/plugins/storage"
@@ -72,14 +73,14 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		banana2 := Fruit{}
 
 		store := newStore()
-		err := store.Create(apple, banana)
+		err := store.Create(context.Background(), apple, banana)
 		require.NoError(t, err, "unexpected error putting records")
 
-		err = store.Read("1", &apple2)
+		err = store.Read(context.Background(), "1", &apple2)
 		require.NoError(t, err, "unexpected error getting apple")
 		assert.Equal(t, apple, apple2)
 
-		err = store.Read("2", &banana2)
+		err = store.Read(context.Background(), "2", &banana2)
 		require.NoError(t, err, "unexpected error getting banana")
 		assert.Equal(t, banana, banana2)
 	})
@@ -97,10 +98,10 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		}
 
 		store := newStore()
-		err := store.Create(apple)
+		err := store.Create(context.Background(), apple)
 		require.NoError(t, err, "unexpected error putting records")
 
-		err = store.Create(apple2)
+		err = store.Create(context.Background(), apple2)
 		require.ErrorIs(t, err, storage.ErrAlreadyExists, "expected conflict error")
 	})
 
@@ -109,19 +110,19 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		bm.Cycle = &bm
 
 		store := newStore()
-		err := store.Create(bm)
+		err := store.Create(context.Background(), bm)
 		require.ErrorIs(t, err, storage.ErrInvalidModel, "expected invalid model error")
 	})
 
 	t.Run("TestReadNotFound", func(t *testing.T) {
 		store := newStore()
-		err := store.Read("1", &Fruit{})
+		err := store.Read(context.Background(), "1", &Fruit{})
 		require.ErrorIs(t, err, storage.ErrNotFound)
 
-		err = store.Create(&Fruit{ID: "1", Name: "Apple"})
+		err = store.Create(context.Background(), &Fruit{ID: "1", Name: "Apple"})
 		require.NoError(t, err, "unexpected error creating records")
 
-		err = store.Read("2", &Fruit{})
+		err = store.Read(context.Background(), "2", &Fruit{})
 		require.ErrorIs(t, err, storage.ErrNotFound)
 	})
 
@@ -135,10 +136,10 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		var apple2 *Fruit
 
 		store := newStore()
-		err := store.Create(apple)
+		err := store.Create(context.Background(), apple)
 		require.NoError(t, err, "unexpected error putting records")
 
-		err = store.Read("1", apple2)
+		err = store.Read(context.Background(), "1", apple2)
 		require.ErrorIs(t, err, storage.ErrNilModel, "expected nil model error")
 	})
 
@@ -152,18 +153,18 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		apple2 := Fruit{}
 
 		store := newStore()
-		err := store.Create(apple)
+		err := store.Create(context.Background(), apple)
 		require.NoError(t, err, "unexpected error putting records")
 
-		err = store.Read("1", &apple2)
+		err = store.Read(context.Background(), "1", &apple2)
 		require.NoError(t, err, "unexpected error getting apple")
 		assert.Equal(t, apple, apple2)
 
 		apple.Color = ColorRed
-		err = store.Update(apple)
+		err = store.Update(context.Background(), apple)
 		require.NoError(t, err, "unexpected error updating apple")
 
-		err = store.Read("1", &apple2)
+		err = store.Read(context.Background(), "1", &apple2)
 		require.NoError(t, err, "unexpected error getting apple")
 		assert.Equal(t, apple, apple2)
 	})
@@ -176,7 +177,7 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		}
 
 		store := newStore()
-		err := store.Update(apple)
+		err := store.Update(context.Background(), apple)
 		require.ErrorIs(t, err, storage.ErrNotFound, "expected not found error")
 	})
 
@@ -185,7 +186,7 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		bm.Cycle = &bm
 
 		store := newStore()
-		err := store.Update(bm)
+		err := store.Update(context.Background(), bm)
 		require.ErrorIs(t, err, storage.ErrInvalidModel, "expected invalid model error")
 	})
 
@@ -200,19 +201,19 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		banana2 := Fruit{}
 
 		store := newStore()
-		err := store.Create(apple)
+		err := store.Create(context.Background(), apple)
 		require.NoError(t, err, "unexpected error putting records")
 
 		apple.Color = ColorRed
 		banana := Fruit{ID: "2", Name: "Banana", Color: ColorYellow}
-		err = store.Upsert(apple, banana)
+		err = store.Upsert(context.Background(), apple, banana)
 		require.NoError(t, err, "unexpected error updating apple")
 
-		err = store.Read("1", &apple2)
+		err = store.Read(context.Background(), "1", &apple2)
 		require.NoError(t, err, "unexpected error getting apple")
 		assert.Equal(t, apple, apple2)
 
-		err = store.Read("2", &banana2)
+		err = store.Read(context.Background(), "2", &banana2)
 		require.NoError(t, err, "unexpected error getting banana")
 		assert.Equal(t, banana, banana2)
 	})
@@ -222,27 +223,27 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		bm.Cycle = &bm
 
 		store := newStore()
-		err := store.Upsert(bm)
+		err := store.Upsert(context.Background(), bm)
 		require.ErrorIs(t, err, storage.ErrInvalidModel, "expected invalid model error")
 	})
 
 	t.Run("TestDelete", func(t *testing.T) {
 		store := newStore()
-		err := store.Create(&Fruit{ID: "4", Name: "Mellon"})
+		err := store.Create(context.Background(), &Fruit{ID: "4", Name: "Mellon"})
 		require.NoError(t, err)
 
-		exists, err := store.Exists("4", &Fruit{})
+		exists, err := store.Exists(context.Background(), "4", &Fruit{})
 		assert.True(t, exists)
 		require.NoError(t, err)
 
-		err = store.Delete(&Fruit{ID: "4"})
+		err = store.Delete(context.Background(), &Fruit{ID: "4"})
 		require.NoError(t, err)
 
-		exists, err = store.Exists("4", &Fruit{})
+		exists, err = store.Exists(context.Background(), "4", &Fruit{})
 		assert.False(t, exists)
 		require.NoError(t, err)
 
-		err = store.Delete(&Fruit{ID: "4"})
+		err = store.Delete(context.Background(), &Fruit{ID: "4"})
 		require.ErrorIs(t, err, storage.ErrNotFound, "expected not found error")
 	})
 
@@ -264,15 +265,15 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				err := store.List(tt.models, tt.filter)
-				require.ErrorIs(t, err, tt.wantErr, "store.List() error = %v, wantErr %v", err, tt.wantErr)
+				err := store.List(context.Background(), tt.models, tt.filter)
+				require.ErrorIs(t, err, tt.wantErr, "store.List(context.Background(), ) error = %v, wantErr %v", err, tt.wantErr)
 			})
 		}
 	})
 
 	t.Run("TestList", func(t *testing.T) {
 		store := newStore()
-		err := store.Create(
+		err := store.Create(context.Background(),
 			Fruit{"1", "Apple", ColorGreen, nil},
 			Fruit{"2", "Banana", ColorYellow, nil},
 			Fruit{"3", "Mango", ColorOrange, nil},
@@ -280,7 +281,7 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		require.NoError(t, err)
 
 		actual := []Fruit{}
-		err = store.List(&actual, Fruit{})
+		err = store.List(context.Background(), &actual, Fruit{})
 		require.NoError(t, err)
 
 		expected := []Fruit{
@@ -294,7 +295,7 @@ func Run(t *testing.T, newStore func() storage.Store) {
 
 	t.Run("TestListFilter", func(t *testing.T) {
 		store := newStore()
-		err := store.Create(
+		err := store.Create(context.Background(),
 			Fruit{"1", "Apple", ColorGreen, nil},
 			Fruit{"2", "Banana", ColorYellow, nil},
 			Fruit{"3", "Mango", ColorOrange, nil},
@@ -307,7 +308,7 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		require.NoError(t, err)
 
 		actual := []Fruit{}
-		err = store.List(&actual, Fruit{Color: ColorGreen})
+		err = store.List(context.Background(), &actual, Fruit{Color: ColorGreen})
 		require.NoError(t, err)
 
 		expected := []Fruit{
@@ -320,7 +321,7 @@ func Run(t *testing.T, newStore func() storage.Store) {
 
 	t.Run("TestListFilterZero", func(t *testing.T) {
 		store := newStore()
-		err := store.Create(
+		err := store.Create(context.Background(),
 			Fruit{"1", "Apple", ColorGreen, pint(4)},
 			Fruit{"2", "Banana", ColorYellow, pint(3)},
 			Fruit{"3", "Mango", ColorOrange, pint(0)},
@@ -330,7 +331,7 @@ func Run(t *testing.T, newStore func() storage.Store) {
 		require.NoError(t, err)
 
 		actual := []Fruit{}
-		err = store.List(&actual, Fruit{Count: pint(0)})
+		err = store.List(context.Background(), &actual, Fruit{Count: pint(0)})
 		require.NoError(t, err)
 
 		expected := []Fruit{
@@ -343,14 +344,14 @@ func Run(t *testing.T, newStore func() storage.Store) {
 
 	t.Run("TestExists", func(t *testing.T) {
 		store := newStore()
-		exists, err := store.Exists("3", &Fruit{})
+		exists, err := store.Exists(context.Background(), "3", &Fruit{})
 		assert.False(t, exists)
 		require.NoError(t, err)
 
-		err = store.Create(&Fruit{ID: "3", Name: "Mango"})
+		err = store.Create(context.Background(), &Fruit{ID: "3", Name: "Mango"})
 		require.NoError(t, err)
 
-		exists, err = store.Exists("3", &Fruit{})
+		exists, err = store.Exists(context.Background(), "3", &Fruit{})
 		assert.True(t, exists)
 		require.NoError(t, err)
 	})

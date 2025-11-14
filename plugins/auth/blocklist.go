@@ -12,19 +12,22 @@ type blocklistKey struct{}
 // Blocklist is an interface for managed blocked tokens. By default identity
 // tokens are valid until they expire. This interface allows applications to
 // block tokens before they expire.
+//
+// All methods accept a context.Context as the first parameter to enable proper
+// cancellation, timeout, and tracing support through to the underlying storage.
 type Blocklist interface {
 	// IsBlocked checks if a token with the given key is blocked.
-	IsBlocked(key string) (bool, error)
+	IsBlocked(ctx context.Context, key string) (bool, error)
 
 	// Block adds a token to the blocklist. Key can be the token itself or a
 	// unique ID.
-	Block(key string) error
+	Block(ctx context.Context, key string) error
 }
 
 // IsBlocked checks if a token is blocked.
 func IsBlocked(ctx context.Context, key string) (bool, error) {
 	if bl, ok := ctx.Value(blocklistKey{}).(Blocklist); ok {
-		return bl.IsBlocked(key)
+		return bl.IsBlocked(ctx, key)
 	}
 	return false, nil
 }
@@ -38,7 +41,7 @@ func WithBlockist(ctx context.Context, bl Blocklist) context.Context {
 // context.
 func MaybeBlock(ctx context.Context, key string) error {
 	if bl, ok := ctx.Value(blocklistKey{}).(Blocklist); ok {
-		return bl.Block(key)
+		return bl.Block(ctx, key)
 	}
 	return nil
 }
@@ -53,12 +56,12 @@ type basicBlocklist struct {
 	store storage.Store
 }
 
-func (b *basicBlocklist) IsBlocked(key string) (bool, error) {
-	return b.store.Exists(key, &BlockedToken{})
+func (b *basicBlocklist) IsBlocked(ctx context.Context, key string) (bool, error) {
+	return b.store.Exists(ctx, key, &BlockedToken{})
 }
 
-func (b *basicBlocklist) Block(key string) error {
-	err := b.store.Create(&BlockedToken{Key: key})
+func (b *basicBlocklist) Block(ctx context.Context, key string) error {
+	err := b.store.Create(ctx, &BlockedToken{Key: key})
 	if errors.Is(err, storage.ErrAlreadyExists) {
 		return err
 	}

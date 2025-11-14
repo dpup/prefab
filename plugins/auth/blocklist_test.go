@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 
 	"github.com/dpup/prefab/plugins/storage"
@@ -20,11 +21,11 @@ func TestBlocklist_Block(t *testing.T) {
 	bl := NewBlocklist(store)
 
 	// Block a token
-	err := bl.Block("token123")
+	err := bl.Block(context.Background(), "token123")
 	require.NoError(t, err)
 
 	// Verify it's blocked
-	blocked, err := bl.IsBlocked("token123")
+	blocked, err := bl.IsBlocked(context.Background(), "token123")
 	require.NoError(t, err)
 	assert.True(t, blocked)
 }
@@ -34,11 +35,11 @@ func TestBlocklist_Block_AlreadyExists(t *testing.T) {
 	bl := NewBlocklist(store)
 
 	// Block a token
-	err := bl.Block("token123")
+	err := bl.Block(context.Background(), "token123")
 	require.NoError(t, err)
 
 	// Try to block the same token again - should return AlreadyExists error
-	err = bl.Block("token123")
+	err = bl.Block(context.Background(), "token123")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, storage.ErrAlreadyExists)
 }
@@ -47,7 +48,7 @@ func TestBlocklist_IsBlocked_NotBlocked(t *testing.T) {
 	store := memstore.New()
 	bl := NewBlocklist(store)
 
-	blocked, err := bl.IsBlocked("nonexistent-token")
+	blocked, err := bl.IsBlocked(context.Background(), "nonexistent-token")
 	require.NoError(t, err)
 	assert.False(t, blocked)
 }
@@ -57,7 +58,7 @@ func TestIsBlocked_WithContext(t *testing.T) {
 	bl := NewBlocklist(store)
 
 	// Block a token
-	err := bl.Block("token123")
+	err := bl.Block(context.Background(), "token123")
 	require.NoError(t, err)
 
 	// Check with context
@@ -92,7 +93,7 @@ func TestMaybeBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify it's blocked
-	blocked, err := bl.IsBlocked("token789")
+	blocked, err := bl.IsBlocked(context.Background(), "token789")
 	require.NoError(t, err)
 	assert.True(t, blocked)
 }
@@ -118,19 +119,19 @@ func TestBlocklist_Integration(t *testing.T) {
 	// Block multiple tokens
 	tokens := []string{"token1", "token2", "token3"}
 	for _, token := range tokens {
-		err := bl.Block(token)
+		err := bl.Block(context.Background(), token)
 		require.NoError(t, err)
 	}
 
 	// Verify all are blocked
 	for _, token := range tokens {
-		blocked, err := bl.IsBlocked(token)
+		blocked, err := bl.IsBlocked(context.Background(), token)
 		require.NoError(t, err)
 		assert.True(t, blocked, "token %s should be blocked", token)
 	}
 
 	// Verify unblocked token
-	blocked, err := bl.IsBlocked("unblocked-token")
+	blocked, err := bl.IsBlocked(context.Background(), "unblocked-token")
 	require.NoError(t, err)
 	assert.False(t, blocked)
 }

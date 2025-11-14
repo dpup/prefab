@@ -14,6 +14,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -69,11 +70,11 @@ func (s *store) InitModel(model storage.Model) error {
 	return s.ensureTable(name)
 }
 
-func (s *store) Create(models ...storage.Model) error {
-	return s.insert(false, models...)
+func (s *store) Create(ctx context.Context, models ...storage.Model) error {
+	return s.insert(ctx, false, models...)
 }
 
-func (s *store) Read(id string, model storage.Model) error {
+func (s *store) Read(ctx context.Context, id string, model storage.Model) error {
 	if err := storage.ValidateReceiver(model); err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func (s *store) Read(id string, model storage.Model) error {
 	} else {
 		query = "SELECT value FROM " + tableName + " WHERE id = ?"
 	}
-	row := s.db.QueryRow(query, id, storage.Name(model))
+	row := s.db.QueryRowContext(ctx, query, id, storage.Name(model))
 
 	var value []byte
 	err := row.Scan(&value)
@@ -95,8 +96,8 @@ func (s *store) Read(id string, model storage.Model) error {
 	return errors.MaybeWrap(json.Unmarshal(value, model), 0)
 }
 
-func (s *store) Update(models ...storage.Model) error {
-	tx, err := s.db.Begin()
+func (s *store) Update(ctx context.Context, models ...storage.Model) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -112,11 +113,11 @@ func (s *store) Update(models ...storage.Model) error {
 
 		var res sql.Result
 		if tableName, isDefault := s.tableName(model); isDefault {
-			res, err = prepareAndExec(tx,
+			res, err = prepareAndExec(ctx, tx,
 				"UPDATE "+tableName+" SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND entity_type = ?",
 				value, id, entityType)
 		} else {
-			res, err = prepareAndExec(tx,
+			res, err = prepareAndExec(ctx, tx,
 				"UPDATE "+tableName+" SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
 				value, id)
 		}
@@ -138,19 +139,19 @@ func (s *store) Update(models ...storage.Model) error {
 	return nil
 }
 
-func (s *store) Upsert(models ...storage.Model) error {
-	return s.insert(true, models...)
+func (s *store) Upsert(ctx context.Context, models ...storage.Model) error {
+	return s.insert(ctx, true, models...)
 }
 
-func (s *store) Delete(model storage.Model) error {
+func (s *store) Delete(ctx context.Context, model storage.Model) error {
 	var params []any
 	var stmt *sql.Stmt
 	var err error
 	if tableName, isDefault := s.tableName(model); isDefault {
-		stmt, err = s.db.Prepare("DELETE FROM " + tableName + " WHERE id = ? AND entity_type = ?")
+		stmt, err = s.db.PrepareContext(ctx, "DELETE FROM "+tableName+" WHERE id = ? AND entity_type = ?")
 		params = []any{model.PK(), storage.Name(model)}
 	} else {
-		stmt, err = s.db.Prepare("DELETE FROM " + tableName + " WHERE id = ?")
+		stmt, err = s.db.PrepareContext(ctx, "DELETE FROM "+tableName+" WHERE id = ?")
 		params = []any{model.PK()}
 	}
 	if err != nil {
@@ -158,7 +159,7 @@ func (s *store) Delete(model storage.Model) error {
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(params...)
+	res, err := stmt.ExecContext(ctx, params...)
 	if err != nil {
 		return translateError(err)
 	}
@@ -168,7 +169,7 @@ func (s *store) Delete(model storage.Model) error {
 	return nil
 }
 
-func (s *store) List(models any, filter storage.Model) error {
+func (s *store) List(ctx context.Context, models any, filter storage.Model) error {
 	modelsVal := reflect.ValueOf(models)
 	if modelsVal.Kind() != reflect.Ptr || modelsVal.Elem().Kind() != reflect.Slice {
 		return storage.ErrSliceRequired
@@ -180,7 +181,7 @@ func (s *store) List(models any, filter storage.Model) error {
 	}
 
 	query, args := s.buildListQuery(filter)
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return translateError(err)
 	}
@@ -211,7 +212,7 @@ func (s *store) List(models any, filter storage.Model) error {
 	return nil
 }
 
-func (s *store) Exists(id string, model storage.Model) (bool, error) {
+func (s *store) Exists(ctx context.Context, id string, model storage.Model) (bool, error) {
 	var query string
 	if tableName, isDefault := s.tableName(model); isDefault {
 		query = "SELECT COUNT(*) FROM " + tableName + " WHERE id = ? AND entity_type = ?"
@@ -220,7 +221,7 @@ func (s *store) Exists(id string, model storage.Model) (bool, error) {
 	}
 
 	var value int
-	err := s.db.QueryRow(query, id, storage.Name(model)).Scan(&value)
+	err := s.db.QueryRowContext(ctx, query, id, storage.Name(model)).Scan(&value)
 	if err != nil {
 		return false, translateError(err)
 	}
@@ -235,8 +236,8 @@ func (s *store) tableName(model storage.Model) (string, bool) {
 	return s.prefix + name, false
 }
 
-func (s *store) insert(upsert bool, models ...storage.Model) error {
-	tx, err := s.db.Begin()
+func (s *store) insert(ctx context.Context, upsert bool, models ...storage.Model) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return translateError(err)
 	}
@@ -258,16 +259,16 @@ func (s *store) insert(upsert bool, models ...storage.Model) error {
 					ON CONFLICT(id, entity_type) DO UPDATE SET 
 					value = excluded.value, updated_at = CURRENT_TIMESTAMP`
 			}
-			_, err = prepareAndExec(tx, query, id, entityType, value)
+			_, err = prepareAndExec(ctx, tx, query, id, entityType, value)
 		} else {
-			query := `INSERT INTO ` + tableName + ` (id, value, created_at, updated_at) 
+			query := `INSERT INTO ` + tableName + ` (id, value, created_at, updated_at)
 				VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 			if upsert {
 				query += `
-					ON CONFLICT(id) DO UPDATE SET 
+					ON CONFLICT(id) DO UPDATE SET
 					value = excluded.value, updated_at = CURRENT_TIMESTAMP`
 			}
-			_, err = prepareAndExec(tx, query, id, value)
+			_, err = prepareAndExec(ctx, tx, query, id, value)
 		}
 		if err != nil {
 			tx.Rollback()
@@ -283,7 +284,7 @@ func (s *store) insert(upsert bool, models ...storage.Model) error {
 }
 
 func (s *store) ensureDefaultTable() {
-	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.prefix + `default (
+	_, err := s.db.ExecContext(context.Background(), `CREATE TABLE IF NOT EXISTS `+s.prefix+`default (
 		id TEXT,
 		entity_type TEXT,
 		value BLOB,
@@ -297,7 +298,7 @@ func (s *store) ensureDefaultTable() {
 }
 
 func (s *store) ensureTable(tableName string) error {
-	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ` + s.prefix + tableName + ` (
+	_, err := s.db.ExecContext(context.Background(), `CREATE TABLE IF NOT EXISTS `+s.prefix+tableName+` (
 		id TEXT,
 		value BLOB,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -357,11 +358,11 @@ func translateError(err error) error {
 	return errors.MaybeWrap(err, 0)
 }
 
-func prepareAndExec(tx *sql.Tx, query string, params ...any) (sql.Result, error) {
-	stmt, err := tx.Prepare(query)
+func prepareAndExec(ctx context.Context, tx *sql.Tx, query string, params ...any) (sql.Result, error) {
+	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, errors.Wrap(err, 0)
 	}
 	defer stmt.Close()
-	return stmt.Exec(params...)
+	return stmt.ExecContext(ctx, params...)
 }

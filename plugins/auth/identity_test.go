@@ -151,7 +151,7 @@ func TestIdentityFromBearerToken_missingProvider(t *testing.T) {
 
 func TestIdentityFromBearerToken_blocked(t *testing.T) {
 	blocklist := NewBlocklist(memstore.New())
-	_ = blocklist.Block("12345")
+	_ = blocklist.Block(context.Background(), "12345")
 
 	ctx := WithBlockist(WithIdentityExtractorsForTest(t.Context()), blocklist)
 
