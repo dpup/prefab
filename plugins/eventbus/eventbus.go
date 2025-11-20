@@ -14,8 +14,43 @@ const (
 	PluginName = "eventbus"
 )
 
-// Function type for event subscribers.
+// Subscriber is a function type for event subscribers.
 type Subscriber func(context.Context, any) error
+
+// QueueSubscriber is a function type for queue subscribers that receive messages
+// with acknowledgment capability.
+type QueueSubscriber func(context.Context, *Message) error
+
+// Message wraps event data with metadata for queue-based delivery.
+type Message struct {
+	// ID uniquely identifies this message.
+	ID string
+	// Topic is the event/queue name.
+	Topic string
+	// Data is the message payload.
+	Data any
+	// Attempt is the delivery attempt number (1-based).
+	Attempt int
+
+	// ack is called to acknowledge successful processing.
+	ack func()
+	// nack is called to indicate processing failure.
+	nack func()
+}
+
+// Ack acknowledges successful processing of the message.
+func (m *Message) Ack() {
+	if m.ack != nil {
+		m.ack()
+	}
+}
+
+// Nack indicates the message failed to process and should be redelivered.
+func (m *Message) Nack() {
+	if m.nack != nil {
+		m.nack()
+	}
+}
 
 // EventBus provides a simple publish/subscribe interface for publishing and
 // subscribing to events.
@@ -28,6 +63,15 @@ type EventBus interface {
 
 	// Publish an event. The event will be sent to all subscribers.
 	Publish(event string, data any)
+
+	// SubscribeQueue subscribes to a queue with consumer group semantics.
+	// Only one subscriber in the group will receive each message.
+	// The group parameter identifies the consumer group.
+	SubscribeQueue(topic string, group string, subscriber QueueSubscriber)
+
+	// Enqueue adds a message to a queue for single-consumer processing.
+	// Unlike Publish, only one subscriber will receive the message.
+	Enqueue(topic string, data any)
 
 	// Wait for the event bus to finish processing all events. You should ensure
 	// that publishers are also stopped as the event bus won't reject new events.

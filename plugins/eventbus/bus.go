@@ -2,12 +2,21 @@ package eventbus
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 )
+
+// consumerGroup tracks subscribers in a queue consumer group.
+type consumerGroup struct {
+	subscribers []QueueSubscriber
+	counter     atomic.Uint64 // For round-robin delivery
+}
 
 // BusOption configures the event bus.
 type BusOption func(*Bus)
@@ -43,8 +52,9 @@ type job struct {
 
 // Implementation of EventBus which uses a simple map to store subscribers.
 type Bus struct {
-	subscribers   map[string][]Subscriber
-	subscriberCtx context.Context
+	subscribers      map[string][]Subscriber
+	queueSubscribers map[string]map[string]*consumerGroup // topic -> group -> consumers
+	subscriberCtx    context.Context
 
 	mu sync.Mutex     // Protects subscribers.
 	wg sync.WaitGroup // Waits for active subscribers to complete.
@@ -94,6 +104,105 @@ func (b *Bus) Publish(event string, data any) {
 		}
 	}
 	b.mu.Unlock()
+}
+
+// SubscribeQueue subscribes to a queue with consumer group semantics.
+func (b *Bus) SubscribeQueue(topic string, group string, subscriber QueueSubscriber) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.queueSubscribers == nil {
+		b.queueSubscribers = make(map[string]map[string]*consumerGroup)
+	}
+	if b.queueSubscribers[topic] == nil {
+		b.queueSubscribers[topic] = make(map[string]*consumerGroup)
+	}
+	if b.queueSubscribers[topic][group] == nil {
+		b.queueSubscribers[topic][group] = &consumerGroup{}
+	}
+	b.queueSubscribers[topic][group].subscribers = append(
+		b.queueSubscribers[topic][group].subscribers,
+		subscriber,
+	)
+}
+
+// Enqueue adds a message to a queue for single-consumer processing.
+func (b *Bus) Enqueue(topic string, data any) {
+	b.mu.Lock()
+
+	// Start workers on first use (lazy initialization)
+	if !b.started {
+		b.startWorkers()
+		b.started = true
+	}
+
+	groups, ok := b.queueSubscribers[topic]
+	if !ok || len(groups) == 0 {
+		b.mu.Unlock()
+		return
+	}
+
+	ctx := logging.With(b.subscriberCtx, logging.FromContext(b.subscriberCtx).Named(topic))
+	logging.Infow(ctx, "enqueueing message", "data", data)
+
+	// Deliver to one subscriber per consumer group
+	for _, cg := range groups {
+		if len(cg.subscribers) == 0 {
+			continue
+		}
+
+		// Round-robin selection within the group
+		idx := cg.counter.Add(1) - 1
+		sub := cg.subscribers[idx%uint64(len(cg.subscribers))]
+
+		msg := &Message{
+			ID:      generateMessageID(),
+			Topic:   topic,
+			Data:    data,
+			Attempt: 1,
+			// In-memory implementation: ack/nack are no-ops
+			// Distributed implementations would handle redelivery
+			ack:  func() {},
+			nack: func() {},
+		}
+
+		b.wg.Add(1)
+		if b.workers == 0 {
+			go b.executeQueue(ctx, sub, msg)
+		} else {
+			// Wrap queue subscriber in job
+			b.jobs <- job{
+				ctx:  ctx,
+				sub:  func(ctx context.Context, _ any) error { return sub(ctx, msg) },
+				data: nil,
+			}
+		}
+	}
+	b.mu.Unlock()
+}
+
+// generateMessageID creates a random message ID.
+func generateMessageID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// executeQueue runs a queue subscriber with panic recovery.
+func (b *Bus) executeQueue(ctx context.Context, sub QueueSubscriber, msg *Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			err, _ := errors.ParseStack(debug.Stack())
+			skipFrames := 3
+			numFrames := 5
+			logging.Errorw(ctx, "eventbus: recovered from panic",
+				"error", r, "error.stack_trace", err.MinimalStack(skipFrames, numFrames))
+		}
+		b.wg.Done()
+	}()
+	if err := sub(ctx, msg); err != nil {
+		logging.Errorw(b.subscriberCtx, "eventbus: queue subscriber error", "error", err, "message_id", msg.ID)
+	}
 }
 
 // startWorkers starts the worker pool goroutines.

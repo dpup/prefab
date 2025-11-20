@@ -297,3 +297,181 @@ func TestBus_CustomWorkerPoolSize(t *testing.T) {
 
 	assert.Equal(t, 20, called, "all subscribers should be called")
 }
+
+func TestBus_BasicQueue(t *testing.T) {
+	bus := NewBus(logging.EnsureLogger(t.Context()))
+
+	var received *Message
+	bus.SubscribeQueue("queue", "group1", func(ctx context.Context, msg *Message) error {
+		received = msg
+		return nil
+	})
+
+	bus.Enqueue("queue", "hello")
+
+	assert.Eventually(t, func() bool { return received != nil },
+		time.Millisecond*10,
+		time.Millisecond,
+		"subscriber should have received message")
+
+	assert.Equal(t, "hello", received.Data)
+	assert.Equal(t, "queue", received.Topic)
+	assert.Equal(t, 1, received.Attempt)
+	assert.NotEmpty(t, received.ID)
+}
+
+func TestBus_QueueSingleConsumerPerGroup(t *testing.T) {
+	bus := NewBus(logging.EnsureLogger(t.Context()))
+
+	var callCount int
+	var mu sync.Mutex
+
+	// Add 3 subscribers to the same group
+	for range 3 {
+		bus.SubscribeQueue("queue", "group1", func(ctx context.Context, msg *Message) error {
+			mu.Lock()
+			callCount++
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Enqueue one message
+	bus.Enqueue("queue", "hello")
+
+	// Wait for processing
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
+	defer cancel()
+	require.NoError(t, bus.Wait(ctx))
+
+	// Only one subscriber should have received the message
+	assert.Equal(t, 1, callCount, "only one subscriber per group should receive message")
+}
+
+func TestBus_QueueMultipleGroups(t *testing.T) {
+	bus := NewBus(logging.EnsureLogger(t.Context()))
+
+	var group1Called, group2Called bool
+	var mu sync.Mutex
+
+	bus.SubscribeQueue("queue", "group1", func(ctx context.Context, msg *Message) error {
+		mu.Lock()
+		group1Called = true
+		mu.Unlock()
+		return nil
+	})
+
+	bus.SubscribeQueue("queue", "group2", func(ctx context.Context, msg *Message) error {
+		mu.Lock()
+		group2Called = true
+		mu.Unlock()
+		return nil
+	})
+
+	bus.Enqueue("queue", "hello")
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
+	defer cancel()
+	require.NoError(t, bus.Wait(ctx))
+
+	assert.True(t, group1Called, "group1 should have received message")
+	assert.True(t, group2Called, "group2 should have received message")
+}
+
+func TestBus_QueueRoundRobin(t *testing.T) {
+	bus := NewBus(logging.EnsureLogger(t.Context()))
+
+	callCounts := make([]int, 3)
+	var mu sync.Mutex
+
+	// Add 3 subscribers to the same group
+	for i := range 3 {
+		idx := i // Capture loop variable
+		bus.SubscribeQueue("queue", "group1", func(ctx context.Context, msg *Message) error {
+			mu.Lock()
+			callCounts[idx]++
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Enqueue 6 messages - should distribute 2 to each subscriber
+	for range 6 {
+		bus.Enqueue("queue", "hello")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
+	defer cancel()
+	require.NoError(t, bus.Wait(ctx))
+
+	// Each subscriber should have received 2 messages
+	for i, count := range callCounts {
+		assert.Equal(t, 2, count, "subscriber %d should receive 2 messages", i)
+	}
+}
+
+func TestBus_QueueAckNack(t *testing.T) {
+	bus := NewBus(logging.EnsureLogger(t.Context()))
+
+	var ackCalled, nackCalled bool
+
+	bus.SubscribeQueue("queue", "group1", func(ctx context.Context, msg *Message) error {
+		msg.Ack()
+		ackCalled = true
+		return nil
+	})
+
+	bus.SubscribeQueue("queue2", "group1", func(ctx context.Context, msg *Message) error {
+		msg.Nack()
+		nackCalled = true
+		return nil
+	})
+
+	bus.Enqueue("queue", "hello")
+	bus.Enqueue("queue2", "hello")
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
+	defer cancel()
+	require.NoError(t, bus.Wait(ctx))
+
+	// In-memory implementation, ack/nack are no-ops but should not panic
+	assert.True(t, ackCalled, "ack should have been called")
+	assert.True(t, nackCalled, "nack should have been called")
+}
+
+func TestBus_QueueNoSubscribers(t *testing.T) {
+	bus := NewBus(logging.EnsureLogger(t.Context()))
+
+	// Enqueue without subscribers should not panic
+	bus.Enqueue("queue", "hello")
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*10)
+	defer cancel()
+	require.NoError(t, bus.Wait(ctx))
+}
+
+func TestBus_QueueLegacyMode(t *testing.T) {
+	// Test queue with workers=0 (unbounded goroutines)
+	ctx := logging.EnsureLogger(t.Context())
+	bus := NewBus(ctx, WithWorkerPool(0))
+
+	var called int
+	var mu sync.Mutex
+
+	for range 3 {
+		bus.SubscribeQueue("queue", "group1", func(ctx context.Context, msg *Message) error {
+			mu.Lock()
+			called++
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	bus.Enqueue("queue", "hello")
+
+	tctx, cancel := context.WithTimeout(ctx, time.Millisecond*100)
+	defer cancel()
+	require.NoError(t, bus.Wait(tctx))
+
+	assert.Equal(t, 1, called, "only one subscriber should receive message")
+}
