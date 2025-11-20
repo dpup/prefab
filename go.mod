@@ -1,6 +1,7 @@
 module github.com/dpup/prefab
 
 go 1.24.1
+
 tool (
 	github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
 	github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
@@ -16,7 +17,7 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/gertd/go-pluralize v0.2.1
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.2.0
