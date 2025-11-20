@@ -82,7 +82,16 @@ func (p *TemplatePlugin) Load(dirs []string) error {
 	return nil
 }
 
-// Render a template.
+// Render executes a template by name with the provided data.
+//
+// The data parameter is wrapped in a TemplateData struct before being passed to the
+// template. Within templates, access your data fields using .Data.FieldName, not
+// .FieldName directly. The Config field provides access to all configuration values.
+//
+// Example template usage:
+//
+//	Hello, {{.Data.Name}}!
+//	App version: {{.Config.app.version}}
 func (p *TemplatePlugin) Render(ctx context.Context, name string, data interface{}) (string, error) {
 	if p.alwaysParse {
 		if err := p.parseAll(); err != nil {
@@ -97,7 +106,7 @@ func (p *TemplatePlugin) Render(ctx context.Context, name string, data interface
 	err := p.templates.ExecuteTemplate(w, name, TemplateData{Data: data, Config: prefab.Config.All()})
 	if err != nil {
 		w.Flush()
-		return "", err
+		return "", errors.WrapPrefix(err, "template execution failed (hint: data is wrapped, use .Data.FieldName to access fields)", 0)
 	}
 	w.Flush()
 
@@ -133,7 +142,11 @@ func (p *TemplatePlugin) parse(dir string) error {
 	})
 }
 
+// TemplateData is the wrapper struct passed to all templates during rendering.
+// Templates should access the original data via .Data and configuration via .Config.
 type TemplateData struct {
-	Data   interface{}
+	// Data contains the user-provided data passed to Render.
+	Data interface{}
+	// Config contains all configuration values from prefab.Config.
 	Config map[string]interface{}
 }
