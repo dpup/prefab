@@ -15,13 +15,13 @@ const (
 )
 
 // Subscriber is a function type for event subscribers.
+// Deprecated: Use Handler instead for new code.
 type Subscriber func(context.Context, any) error
 
-// QueueSubscriber is a function type for queue subscribers that receive messages
-// with acknowledgment capability.
-type QueueSubscriber func(context.Context, *Message) error
+// Handler processes messages from the event bus.
+type Handler func(context.Context, *Message) error
 
-// Message wraps event data with metadata for queue-based delivery.
+// Message wraps event data with metadata.
 type Message struct {
 	// ID uniquely identifies this message.
 	ID string
@@ -52,29 +52,23 @@ func (m *Message) Nack() {
 	}
 }
 
-// EventBus provides a simple publish/subscribe interface for publishing and
-// subscribing to events.
+// EventBus provides publish/subscribe and queue-based message delivery.
 type EventBus interface {
-	// Subscribe to an event. The handler will be called when the event is
-	// published. Depending on the implementation errors may be logged or retried.
-	// Subscribers should assume that they may be called multiple times
-	// concurrently.
-	Subscribe(event string, subscriber Subscriber)
+	// Subscribe registers a handler that receives all published messages
+	// on the topic (broadcast semantics).
+	Subscribe(topic string, handler Handler)
 
-	// Publish an event. The event will be sent to all subscribers.
-	Publish(event string, data any)
+	// Publish sends a message to all subscribers of the topic.
+	Publish(topic string, data any)
 
-	// SubscribeQueue subscribes to a queue with consumer group semantics.
-	// Only one subscriber in the group will receive each message.
-	// The group parameter identifies the consumer group.
-	SubscribeQueue(topic string, group string, subscriber QueueSubscriber)
+	// SubscribeQueue registers a handler that competes with other queue
+	// subscribers for messages (only one handler processes each message).
+	SubscribeQueue(topic string, handler Handler)
 
-	// Enqueue adds a message to a queue for single-consumer processing.
-	// Unlike Publish, only one subscriber will receive the message.
+	// Enqueue sends a message to exactly one queue subscriber.
 	Enqueue(topic string, data any)
 
-	// Wait for the event bus to finish processing all events. You should ensure
-	// that publishers are also stopped as the event bus won't reject new events.
+	// Wait blocks until all pending messages are processed.
 	Wait(ctx context.Context) error
 }
 
