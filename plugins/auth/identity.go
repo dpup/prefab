@@ -42,6 +42,10 @@ type Identity struct {
 	// Name received from the identity provider, if available. Maps to `name` JWT
 	// claim.
 	Name string
+
+	// Delegation contains metadata when this identity was assumed by an admin user.
+	// If nil, this is a normal (non-delegated) identity.
+	Delegation *DelegationInfo
 }
 
 // IdentityExtractor is a function which returns a user identity from a given
@@ -98,6 +102,16 @@ func IdentityToken(ctx context.Context, identity Identity) (string, error) {
 		Provider:      identity.Provider,
 		AuthTime:      jwt.NewNumericDate(identity.AuthTime),
 	}
+
+	// Include delegation information if present
+	if identity.Delegation != nil {
+		claims.DelegatorSub = identity.Delegation.DelegatorSub
+		claims.DelegatorProvider = identity.Delegation.DelegatorProvider
+		claims.DelegatorSessionID = identity.Delegation.DelegatorSessionId
+		claims.DelegationReason = identity.Delegation.Reason
+		claims.DelegatedAt = identity.Delegation.DelegatedAt
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	ss, err := token.SignedString(signingKeyFromContext(ctx))
 	if err != nil {
@@ -140,7 +154,7 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 			return Identity{}, ErrRevoked
 		}
 
-		return Identity{
+		identity := Identity{
 			Provider:      claims.Provider,
 			SessionID:     claims.ID,
 			AuthTime:      claims.AuthTime.Time,
@@ -148,7 +162,20 @@ func ParseIdentityToken(ctx context.Context, tokenString string) (Identity, erro
 			Email:         claims.Email,
 			EmailVerified: claims.EmailVerified,
 			Name:          claims.Name,
-		}, nil
+		}
+
+		// Extract delegation information if present
+		if claims.DelegatorSub != "" {
+			identity.Delegation = &DelegationInfo{
+				DelegatorSub:       claims.DelegatorSub,
+				DelegatorProvider:  claims.DelegatorProvider,
+				DelegatorSessionId: claims.DelegatorSessionID,
+				Reason:             claims.DelegationReason,
+				DelegatedAt:        claims.DelegatedAt,
+			}
+		}
+
+		return identity, nil
 	}
 
 	return Identity{}, errors.Mark(ErrInvalidToken, 0).Append("invalid claims")

@@ -20,6 +20,24 @@ func init() {
 			Type:        "duration",
 			Default:     "24h",
 		},
+		prefab.ConfigKeyInfo{
+			Key:         "auth.delegation.enabled",
+			Description: "Enable identity delegation (admin assume user)",
+			Type:        "bool",
+			Default:     "false",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "auth.delegation.requireReason",
+			Description: "Require reason field for identity delegation",
+			Type:        "bool",
+			Default:     "true",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "auth.delegation.expiration",
+			Description: "Maximum duration for delegated identity tokens (defaults to auth.expiration if not set)",
+			Type:        "duration",
+			Default:     "",
+		},
 	)
 }
 

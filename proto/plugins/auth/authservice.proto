@@ -39,6 +39,15 @@ service AuthService {
     };
   }
 
+  // AssumeIdentity allows admin users to assume another user's identity.
+  // Requires delegation to be enabled and the caller to have admin privileges.
+  rpc AssumeIdentity(AssumeIdentityRequest) returns (AssumeIdentityResponse) {
+    option (google.api.http) = {
+      post: "/api/auth/assume"
+      body: "*"
+    };
+  }
+
 }
 
 // A client request to authenticate the user. For instance:
@@ -124,4 +133,43 @@ message IdentityResponse {
 
   // A name associated with the identity, if available.
   string name = 5;
+
+  // Delegation information if this identity was assumed by an admin.
+  DelegationInfo delegation = 6;
+}
+
+// Metadata about identity delegation when an admin assumes another user's identity.
+message DelegationInfo {
+  // Original admin's subject identifier (e.g., "google123")
+  string delegator_sub = 1;
+
+  // Original admin's identity provider (e.g., "google")
+  string delegator_provider = 2;
+
+  // Original admin's session ID (jti claim)
+  string delegator_session_id = 3;
+
+  // Reason provided for the delegation (e.g., "support-case-873")
+  string reason = 4;
+
+  // Timestamp when the delegation occurred (Unix timestamp in seconds)
+  int64 delegated_at = 5;
+}
+
+// Request to assume another user's identity.
+message AssumeIdentityRequest {
+  // Target user's identity provider (e.g., "google")
+  string provider = 1;
+
+  // Target user's subject identifier
+  string subject = 2;
+
+  // Reason for assuming this identity (required for audit trail)
+  string reason = 3;
+}
+
+// Response containing the delegated identity token.
+message AssumeIdentityResponse {
+  // JWT token with the assumed identity and delegation metadata
+  string token = 1;
 }

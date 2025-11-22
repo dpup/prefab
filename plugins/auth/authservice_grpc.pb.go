@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthService_Login_FullMethodName    = "/prefab.auth.AuthService/Login"
-	AuthService_Logout_FullMethodName   = "/prefab.auth.AuthService/Logout"
-	AuthService_Identity_FullMethodName = "/prefab.auth.AuthService/Identity"
+	AuthService_Login_FullMethodName          = "/prefab.auth.AuthService/Login"
+	AuthService_Logout_FullMethodName         = "/prefab.auth.AuthService/Logout"
+	AuthService_Identity_FullMethodName       = "/prefab.auth.AuthService/Identity"
+	AuthService_AssumeIdentity_FullMethodName = "/prefab.auth.AuthService/AssumeIdentity"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -38,6 +39,9 @@ type AuthServiceClient interface {
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	// Identity returns information about the authenticated user.
 	Identity(ctx context.Context, in *IdentityRequest, opts ...grpc.CallOption) (*IdentityResponse, error)
+	// AssumeIdentity allows admin users to assume another user's identity.
+	// Requires delegation to be enabled and the caller to have admin privileges.
+	AssumeIdentity(ctx context.Context, in *AssumeIdentityRequest, opts ...grpc.CallOption) (*AssumeIdentityResponse, error)
 }
 
 type authServiceClient struct {
@@ -78,6 +82,16 @@ func (c *authServiceClient) Identity(ctx context.Context, in *IdentityRequest, o
 	return out, nil
 }
 
+func (c *authServiceClient) AssumeIdentity(ctx context.Context, in *AssumeIdentityRequest, opts ...grpc.CallOption) (*AssumeIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AssumeIdentityResponse)
+	err := c.cc.Invoke(ctx, AuthService_AssumeIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -92,6 +106,9 @@ type AuthServiceServer interface {
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	// Identity returns information about the authenticated user.
 	Identity(context.Context, *IdentityRequest) (*IdentityResponse, error)
+	// AssumeIdentity allows admin users to assume another user's identity.
+	// Requires delegation to be enabled and the caller to have admin privileges.
+	AssumeIdentity(context.Context, *AssumeIdentityRequest) (*AssumeIdentityResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -110,6 +127,9 @@ func (UnimplementedAuthServiceServer) Logout(context.Context, *LogoutRequest) (*
 }
 func (UnimplementedAuthServiceServer) Identity(context.Context, *IdentityRequest) (*IdentityResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Identity not implemented")
+}
+func (UnimplementedAuthServiceServer) AssumeIdentity(context.Context, *AssumeIdentityRequest) (*AssumeIdentityResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AssumeIdentity not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -186,6 +206,24 @@ func _AuthService_Identity_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_AssumeIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AssumeIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).AssumeIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_AssumeIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).AssumeIdentity(ctx, req.(*AssumeIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -204,6 +242,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Identity",
 			Handler:    _AuthService_Identity_Handler,
+		},
+		{
+			MethodName: "AssumeIdentity",
+			Handler:    _AuthService_AssumeIdentity_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

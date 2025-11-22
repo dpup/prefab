@@ -54,11 +54,41 @@ type Claims struct {
 
 	// Custom claims.
 	Provider string `json:"idp"`
+
+	// Delegation claims (optional, only present when identity was assumed).
+	DelegatorSub       string `json:"delegator_sub,omitempty"`
+	DelegatorProvider  string `json:"delegator_provider,omitempty"`
+	DelegatorSessionID string `json:"delegator_session_id,omitempty"`
+	DelegationReason   string `json:"delegation_reason,omitempty"`
+	DelegatedAt        int64  `json:"delegated_at,omitempty"`
 }
 
 func (c *Claims) Validate() error {
 	if c.Provider == "" {
 		return errors.Mark(ErrInvalidToken, 0).Append("missing provider")
 	}
+
+	// Validate delegation claims - if any delegation field is set, all must be set
+	hasDelegation := c.DelegatorSub != "" || c.DelegatorProvider != "" ||
+		c.DelegatorSessionID != "" || c.DelegationReason != ""
+
+	if hasDelegation {
+		if c.DelegatorSub == "" {
+			return errors.Mark(ErrInvalidToken, 0).Append("missing delegator_sub")
+		}
+		if c.DelegatorProvider == "" {
+			return errors.Mark(ErrInvalidToken, 0).Append("missing delegator_provider")
+		}
+		if c.DelegatorSessionID == "" {
+			return errors.Mark(ErrInvalidToken, 0).Append("missing delegator_session_id")
+		}
+		if c.DelegationReason == "" {
+			return errors.Mark(ErrInvalidToken, 0).Append("missing delegation_reason")
+		}
+		if c.DelegatedAt <= 0 {
+			return errors.Mark(ErrInvalidToken, 0).Append("missing or invalid delegated_at")
+		}
+	}
+
 	return nil
 }
