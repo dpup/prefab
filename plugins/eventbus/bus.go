@@ -29,13 +29,12 @@ func WithWorkerPool(size int) BusOption {
 	}
 }
 
-// NewBus returns a new EventBus. ctx is passed to subscribers when they are
-// executed.
+// NewBus returns a new EventBus.
 func NewBus(ctx context.Context, opts ...BusOption) EventBus {
 	b := &Bus{
 		subscriberCtx: logging.With(ctx, logging.FromContext(ctx).Named("eventbus")),
-		workers:       100,                 // Default: 100 workers
-		jobs:          make(chan job, 500), // Buffer 500 jobs
+		workers:       100,
+		jobs:          make(chan job, 500),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -56,13 +55,12 @@ type Bus struct {
 	queueSubscribers map[string]*queueState
 	subscriberCtx    context.Context
 
-	mu sync.Mutex     // Protects subscribers.
-	wg sync.WaitGroup // Waits for active subscribers to complete.
+	mu sync.Mutex
+	wg sync.WaitGroup
 
-	// Worker pool for bounded concurrency
-	jobs    chan job // Job queue
-	workers int      // Number of workers
-	started bool     // Track if workers have been started
+	jobs    chan job
+	workers int
+	started bool
 }
 
 // Subscribe registers a handler for broadcast messages.
@@ -79,7 +77,6 @@ func (b *Bus) Subscribe(topic string, handler Handler) {
 func (b *Bus) Publish(topic string, data any) {
 	b.mu.Lock()
 
-	// Start workers on first publish (lazy initialization)
 	if !b.started {
 		b.startWorkers()
 		b.started = true
@@ -92,7 +89,6 @@ func (b *Bus) Publish(topic string, data any) {
 	}
 
 	ctx := logging.With(b.subscriberCtx, logging.FromContext(b.subscriberCtx).Named(topic))
-	logging.Infow(ctx, "publishing message", "data", data)
 
 	for _, handler := range handlers {
 		msg := &Message{
@@ -106,10 +102,8 @@ func (b *Bus) Publish(topic string, data any) {
 
 		b.wg.Add(1)
 		if b.workers == 0 {
-			// Legacy mode: unbounded goroutines
 			go b.execute(ctx, handler, msg)
 		} else {
-			// Worker pool mode: send jobs to channel
 			b.jobs <- job{ctx: ctx, handler: handler, msg: msg}
 		}
 	}
@@ -134,7 +128,6 @@ func (b *Bus) SubscribeQueue(topic string, handler Handler) {
 func (b *Bus) Enqueue(topic string, data any) {
 	b.mu.Lock()
 
-	// Start workers on first use (lazy initialization)
 	if !b.started {
 		b.startWorkers()
 		b.started = true
@@ -147,9 +140,7 @@ func (b *Bus) Enqueue(topic string, data any) {
 	}
 
 	ctx := logging.With(b.subscriberCtx, logging.FromContext(b.subscriberCtx).Named(topic))
-	logging.Infow(ctx, "enqueueing message", "data", data)
 
-	// Round-robin selection
 	idx := qs.counter.Add(1) - 1
 	handler := qs.handlers[idx%uint64(len(qs.handlers))]
 
@@ -171,24 +162,21 @@ func (b *Bus) Enqueue(topic string, data any) {
 	b.mu.Unlock()
 }
 
-// generateMessageID creates a random message ID.
 func generateMessageID() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
-// startWorkers starts the worker pool goroutines.
 func (b *Bus) startWorkers() {
 	if b.workers == 0 {
-		return // No worker pool
+		return
 	}
 	for range b.workers {
 		go b.worker()
 	}
 }
 
-// worker processes jobs from the job queue.
 func (b *Bus) worker() {
 	for job := range b.jobs {
 		b.execute(job.ctx, job.handler, job.msg)

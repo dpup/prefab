@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	// Constant name for identifying the eventbus plugin.
+	// PluginName identifies this plugin.
 	PluginName = "eventbus"
 )
 
 // Subscriber is a function type for event subscribers.
-// Deprecated: Use Handler instead for new code.
+// Deprecated: Use Handler instead.
 type Subscriber func(context.Context, any) error
 
 // Handler processes messages from the event bus.
@@ -23,19 +23,13 @@ type Handler func(context.Context, *Message) error
 
 // Message wraps event data with metadata.
 type Message struct {
-	// ID uniquely identifies this message.
-	ID string
-	// Topic is the event/queue name.
-	Topic string
-	// Data is the message payload.
-	Data any
-	// Attempt is the delivery attempt number (1-based).
-	Attempt int
+	ID      string // Unique identifier
+	Topic   string // Topic name
+	Data    any    // Payload
+	Attempt int    // Delivery attempt (1-based)
 
-	// ack is called to acknowledge successful processing.
-	ack func()
-	// nack is called to indicate processing failure.
-	nack func()
+	ack  func() // Called on successful processing
+	nack func() // Called on processing failure
 }
 
 // Ack acknowledges successful processing of the message.
