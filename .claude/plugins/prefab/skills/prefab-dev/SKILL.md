@@ -58,10 +58,15 @@ Load these resources based on the specific task:
 - **[SSE Streaming](resources/sse.md)** - Server-Sent Events for real-time updates
 - **[Configuration](resources/configuration.md)** - YAML, environment variables, functional options
 - **[Storage](resources/storage.md)** - Storage plugins (memory, SQLite)
+- **[File Uploads](resources/uploads.md)** - File upload/download with authorization
+- **[Email](resources/email.md)** - SMTP email sending
+- **[Templates](resources/templates.md)** - Go HTML template rendering
+- **[Event Bus](resources/eventbus.md)** - Publish/subscribe inter-plugin communication
 
 ### Development
 - **[Custom Plugins](resources/plugins.md)** - Creating plugins with dependencies and lifecycle
 - **[Error Handling](resources/errors.md)** - Stack traces, gRPC codes, log fields
+- **[Logging](resources/logging.md)** - Structured context-aware logging
 - **[Security](resources/security.md)** - CSRF, headers, HTTPS, token security
 
 ## Build Commands
@@ -82,12 +87,17 @@ Load these resources based on the specific task:
 
 | Task | Resources to Load |
 |------|-------------------|
-| Creating a new server | server-setup.md, configuration.md |
+| Creating a new server | server-setup.md, configuration.md, logging.md |
 | Adding authentication | auth.md, server-setup.md |
 | Setting up access control | authz.md, auth.md |
 | Adding real-time features | sse.md |
-| Creating a custom plugin | plugins.md |
-| Handling errors properly | errors.md |
+| Creating a custom plugin | plugins.md, eventbus.md |
+| Handling errors properly | errors.md, logging.md |
 | Security review | security.md |
 | Adding storage | storage.md |
 | Adding HTTP/gRPC endpoints | grpc-http.md |
+| Adding file uploads | uploads.md, authz.md |
+| Sending emails | email.md, templates.md |
+| Rendering templates | templates.md |
+| Inter-plugin communication | eventbus.md |
+| Setting up logging | logging.md |

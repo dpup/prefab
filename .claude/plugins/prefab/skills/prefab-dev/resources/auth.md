@@ -82,6 +82,62 @@ s := prefab.New(
 )
 ```
 
+## API Key Authentication
+
+For programmatic access to your API:
+
+```go
+import (
+    "github.com/dpup/prefab/plugins/auth/apikey"
+)
+
+s := prefab.New(
+    prefab.WithPlugin(auth.Plugin()),
+    prefab.WithPlugin(apikey.Plugin(
+        apikey.WithKeyFunc(func(ctx context.Context, key string) (*apikey.KeyOwner, error) {
+            // Look up key in your database
+            owner, err := db.GetAPIKeyOwner(ctx, key)
+            if err != nil {
+                return nil, err
+            }
+            return &apikey.KeyOwner{
+                UserID:        owner.UserID,
+                Email:         owner.Email,
+                EmailVerified: true,
+                Name:          owner.Name,
+                KeyCreatedAt:  owner.CreatedAt,
+            }, nil
+        }),
+        apikey.WithKeyPrefix("myapp"), // Keys will be "myapp_xxx..."
+    )),
+)
+```
+
+### Generating API Keys
+
+```go
+// In your user management service
+func (s *Server) CreateAPIKey(ctx context.Context, req *pb.CreateAPIKeyRequest) (*pb.APIKey, error) {
+    apiKeyPlugin := s.registry.Get("auth_apikey").(*apikey.APIPlugin)
+
+    key := apiKeyPlugin.NewKey() // Generates "myapp_<random>"
+
+    // Store key hash in database (never store plain key)
+    if err := s.db.StoreAPIKey(ctx, req.UserId, hashKey(key)); err != nil {
+        return nil, err
+    }
+
+    // Return plain key to user (only time it's visible)
+    return &pb.APIKey{Key: key}, nil
+}
+```
+
+### Client Usage
+
+```bash
+curl -H "Authorization: myapp_abc123def456..." https://api.example.com/endpoint
+```
+
 ## Accessing Identity in Handlers
 
 ```go
