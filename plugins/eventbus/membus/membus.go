@@ -1,4 +1,5 @@
-package eventbus
+// Package membus provides an in-memory implementation of eventbus.EventBus.
+package membus
 
 import (
 	"context"
@@ -10,27 +11,27 @@ import (
 
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/plugins/eventbus"
 )
 
-// queueState tracks queue subscribers with round-robin counter.
 type queueState struct {
-	handlers []Handler
+	handlers []eventbus.Handler
 	counter  atomic.Uint64
 }
 
-// BusOption configures the event bus.
-type BusOption func(*Bus)
+// Option configures the bus.
+type Option func(*Bus)
 
 // WithWorkerPool sets the number of worker goroutines for processing events.
-// Default is 100 workers. Set to 0 to use unbounded goroutines (legacy behavior).
-func WithWorkerPool(size int) BusOption {
+// Default is 100 workers. Set to 0 to use unbounded goroutines.
+func WithWorkerPool(size int) Option {
 	return func(b *Bus) {
 		b.workers = size
 	}
 }
 
-// NewBus returns a new EventBus.
-func NewBus(ctx context.Context, opts ...BusOption) EventBus {
+// New returns a new in-memory EventBus.
+func New(ctx context.Context, opts ...Option) eventbus.EventBus {
 	b := &Bus{
 		subscriberCtx: logging.With(ctx, logging.FromContext(ctx).Named("eventbus")),
 		workers:       100,
@@ -42,16 +43,15 @@ func NewBus(ctx context.Context, opts ...BusOption) EventBus {
 	return b
 }
 
-// job represents work to be processed by the worker pool.
 type job struct {
 	ctx     context.Context
-	handler Handler
-	msg     *Message
+	handler eventbus.Handler
+	msg     *eventbus.Message
 }
 
 // Bus is an in-memory implementation of EventBus.
 type Bus struct {
-	subscribers      map[string][]Handler
+	subscribers      map[string][]eventbus.Handler
 	queueSubscribers map[string]*queueState
 	subscriberCtx    context.Context
 
@@ -64,11 +64,11 @@ type Bus struct {
 }
 
 // Subscribe registers a handler for broadcast messages.
-func (b *Bus) Subscribe(topic string, handler Handler) {
+func (b *Bus) Subscribe(topic string, handler eventbus.Handler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.subscribers == nil {
-		b.subscribers = make(map[string][]Handler)
+		b.subscribers = make(map[string][]eventbus.Handler)
 	}
 	b.subscribers[topic] = append(b.subscribers[topic], handler)
 }
@@ -91,14 +91,7 @@ func (b *Bus) Publish(topic string, data any) {
 	ctx := logging.With(b.subscriberCtx, logging.FromContext(b.subscriberCtx).Named(topic))
 
 	for _, handler := range handlers {
-		msg := &Message{
-			ID:      generateMessageID(),
-			Topic:   topic,
-			Data:    data,
-			Attempt: 1,
-			ack:     func() {},
-			nack:    func() {},
-		}
+		msg := eventbus.NewMessage(generateMessageID(), topic, data)
 
 		b.wg.Add(1)
 		if b.workers == 0 {
@@ -111,7 +104,7 @@ func (b *Bus) Publish(topic string, data any) {
 }
 
 // SubscribeQueue registers a handler for queue messages.
-func (b *Bus) SubscribeQueue(topic string, handler Handler) {
+func (b *Bus) SubscribeQueue(topic string, handler eventbus.Handler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -144,14 +137,7 @@ func (b *Bus) Enqueue(topic string, data any) {
 	idx := qs.counter.Add(1) - 1
 	handler := qs.handlers[idx%uint64(len(qs.handlers))]
 
-	msg := &Message{
-		ID:      generateMessageID(),
-		Topic:   topic,
-		Data:    data,
-		Attempt: 1,
-		ack:     func() {},
-		nack:    func() {},
-	}
+	msg := eventbus.NewMessage(generateMessageID(), topic, data)
 
 	b.wg.Add(1)
 	if b.workers == 0 {
@@ -209,7 +195,7 @@ func (b *Bus) Wait(ctx context.Context) error {
 	}
 }
 
-func (b *Bus) execute(ctx context.Context, handler Handler, msg *Message) {
+func (b *Bus) execute(ctx context.Context, handler eventbus.Handler, msg *eventbus.Message) {
 	defer func() {
 		if r := recover(); r != nil {
 			err, _ := errors.ParseStack(debug.Stack())

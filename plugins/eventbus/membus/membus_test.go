@@ -1,4 +1,4 @@
-package eventbus
+package membus
 
 import (
 	"context"
@@ -9,15 +9,16 @@ import (
 	"time"
 
 	"github.com/dpup/prefab/logging"
+	"github.com/dpup/prefab/plugins/eventbus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBus_BasicPubSub(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	var called bool
-	bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+	bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 		assert.Equal(t, "hello", msg.Data)
 		called = true
 		return nil
@@ -32,12 +33,12 @@ func TestBus_BasicPubSub(t *testing.T) {
 }
 
 func TestBus_MultipleSubscribers(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	var called []int
 	var mu sync.Mutex
 	for i := range 10 {
-		bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			defer mu.Unlock()
 			assert.Equal(t, "hello", msg.Data)
@@ -59,10 +60,10 @@ func TestBus_MultipleSubscribers(t *testing.T) {
 }
 
 func TestBus_Wait(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	var called bool
-	bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+	bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 		assert.Equal(t, "hello", msg.Data)
 		time.Sleep(time.Millisecond * 50)
 		called = true
@@ -76,10 +77,10 @@ func TestBus_Wait(t *testing.T) {
 }
 
 func TestBus_WaitTimeout(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	var called bool
-	bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+	bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 		assert.Equal(t, "hello", msg.Data)
 		time.Sleep(time.Millisecond * 50)
 		called = true
@@ -97,9 +98,9 @@ func TestBus_WaitTimeout(t *testing.T) {
 
 func TestBus_SubscriberError(t *testing.T) {
 	ctx := logging.With(t.Context(), logging.NewDevLogger())
-	bus := NewBus(ctx)
+	bus := New(ctx)
 
-	bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+	bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 		return errors.New("subscriber error")
 	})
 
@@ -111,9 +112,9 @@ func TestBus_SubscriberError(t *testing.T) {
 
 func TestBus_SubscriberPanic(t *testing.T) {
 	ctx := logging.With(t.Context(), logging.NewDevLogger())
-	bus := NewBus(ctx)
+	bus := New(ctx)
 
-	bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+	bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 		panic("subscriber panic")
 	})
 
@@ -124,14 +125,14 @@ func TestBus_SubscriberPanic(t *testing.T) {
 }
 
 func TestBus_WorkerPoolConcurrency(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	var mu sync.Mutex
 	var concurrent int
 	var maxConcurrent int
 
 	for range 200 {
-		bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			concurrent++
 			if concurrent > maxConcurrent {
@@ -158,14 +159,14 @@ func TestBus_WorkerPoolConcurrency(t *testing.T) {
 
 func TestBus_WorkerPoolLimit(t *testing.T) {
 	ctx := logging.EnsureLogger(t.Context())
-	bus := NewBus(ctx, WithWorkerPool(10))
+	bus := New(ctx, WithWorkerPool(10))
 
 	var called int
 	var mu sync.Mutex
 
 	// Add many subscribers
 	for range 100 {
-		bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			called++
 			mu.Unlock()
@@ -186,14 +187,14 @@ func TestBus_WorkerPoolLimit(t *testing.T) {
 
 func TestBus_HighLoad(t *testing.T) {
 	ctx := logging.EnsureLogger(t.Context())
-	bus := NewBus(ctx, WithWorkerPool(50))
+	bus := New(ctx, WithWorkerPool(50))
 
 	var processed sync.WaitGroup
 	processed.Add(1000)
 
 	// Add 1000 subscribers
 	for range 1000 {
-		bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			processed.Done()
 			return nil
 		})
@@ -221,14 +222,14 @@ func TestBus_HighLoad(t *testing.T) {
 
 func TestBus_GracefulShutdown(t *testing.T) {
 	ctx := logging.EnsureLogger(t.Context())
-	bus := NewBus(ctx, WithWorkerPool(10)).(*Bus)
+	bus := New(ctx, WithWorkerPool(10)).(*Bus)
 
 	var completed int
 	var mu sync.Mutex
 
 	// Add subscribers that take time
 	for range 50 {
-		bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			time.Sleep(time.Millisecond * 10)
 			mu.Lock()
 			completed++
@@ -256,13 +257,13 @@ func TestBus_GracefulShutdown(t *testing.T) {
 func TestBus_LegacyMode(t *testing.T) {
 	// Test with workers=0 (unbounded goroutines, legacy behavior)
 	ctx := logging.EnsureLogger(t.Context())
-	bus := NewBus(ctx, WithWorkerPool(0))
+	bus := New(ctx, WithWorkerPool(0))
 
 	var called int
 	var mu sync.Mutex
 
 	for range 10 {
-		bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			called++
 			mu.Unlock()
@@ -278,13 +279,13 @@ func TestBus_LegacyMode(t *testing.T) {
 
 func TestBus_CustomWorkerPoolSize(t *testing.T) {
 	ctx := logging.EnsureLogger(t.Context())
-	bus := NewBus(ctx, WithWorkerPool(5))
+	bus := New(ctx, WithWorkerPool(5))
 
 	var called int
 	var mu sync.Mutex
 
 	for range 20 {
-		bus.Subscribe("topic", func(ctx context.Context, msg *Message) error {
+		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			called++
 			mu.Unlock()
@@ -299,10 +300,10 @@ func TestBus_CustomWorkerPoolSize(t *testing.T) {
 }
 
 func TestBus_BasicQueue(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
-	var received *Message
-	bus.SubscribeQueue("queue", func(ctx context.Context, msg *Message) error {
+	var received *eventbus.Message
+	bus.SubscribeQueue("queue", func(ctx context.Context, msg *eventbus.Message) error {
 		received = msg
 		return nil
 	})
@@ -321,14 +322,14 @@ func TestBus_BasicQueue(t *testing.T) {
 }
 
 func TestBus_QueueSingleConsumer(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	var callCount int
 	var mu sync.Mutex
 
 	// Add 3 subscribers
 	for range 3 {
-		bus.SubscribeQueue("queue", func(ctx context.Context, msg *Message) error {
+		bus.SubscribeQueue("queue", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			callCount++
 			mu.Unlock()
@@ -349,7 +350,7 @@ func TestBus_QueueSingleConsumer(t *testing.T) {
 }
 
 func TestBus_QueueRoundRobin(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	callCounts := make([]int, 3)
 	var mu sync.Mutex
@@ -357,7 +358,7 @@ func TestBus_QueueRoundRobin(t *testing.T) {
 	// Add 3 subscribers
 	for i := range 3 {
 		idx := i // Capture loop variable
-		bus.SubscribeQueue("queue", func(ctx context.Context, msg *Message) error {
+		bus.SubscribeQueue("queue", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			callCounts[idx]++
 			mu.Unlock()
@@ -381,17 +382,17 @@ func TestBus_QueueRoundRobin(t *testing.T) {
 }
 
 func TestBus_QueueAckNack(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	var ackCalled, nackCalled bool
 
-	bus.SubscribeQueue("queue", func(ctx context.Context, msg *Message) error {
+	bus.SubscribeQueue("queue", func(ctx context.Context, msg *eventbus.Message) error {
 		msg.Ack()
 		ackCalled = true
 		return nil
 	})
 
-	bus.SubscribeQueue("queue2", func(ctx context.Context, msg *Message) error {
+	bus.SubscribeQueue("queue2", func(ctx context.Context, msg *eventbus.Message) error {
 		msg.Nack()
 		nackCalled = true
 		return nil
@@ -410,7 +411,7 @@ func TestBus_QueueAckNack(t *testing.T) {
 }
 
 func TestBus_QueueNoSubscribers(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
 	// Enqueue without subscribers should not panic
 	bus.Enqueue("queue", "hello")
@@ -423,13 +424,13 @@ func TestBus_QueueNoSubscribers(t *testing.T) {
 func TestBus_QueueLegacyMode(t *testing.T) {
 	// Test queue with workers=0 (unbounded goroutines)
 	ctx := logging.EnsureLogger(t.Context())
-	bus := NewBus(ctx, WithWorkerPool(0))
+	bus := New(ctx, WithWorkerPool(0))
 
 	var called int
 	var mu sync.Mutex
 
 	for range 3 {
-		bus.SubscribeQueue("queue", func(ctx context.Context, msg *Message) error {
+		bus.SubscribeQueue("queue", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			called++
 			mu.Unlock()
@@ -447,10 +448,10 @@ func TestBus_QueueLegacyMode(t *testing.T) {
 }
 
 func TestBus_MessageMetadata(t *testing.T) {
-	bus := NewBus(logging.EnsureLogger(t.Context()))
+	bus := New(logging.EnsureLogger(t.Context()))
 
-	var msg *Message
-	bus.Subscribe("topic", func(ctx context.Context, m *Message) error {
+	var msg *eventbus.Message
+	bus.Subscribe("topic", func(ctx context.Context, m *eventbus.Message) error {
 		msg = m
 		return nil
 	})
