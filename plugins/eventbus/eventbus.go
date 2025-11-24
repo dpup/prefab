@@ -10,27 +10,85 @@ import (
 )
 
 const (
-	// Constant name for identifying the eventbus plugin.
+	// PluginName identifies this plugin.
 	PluginName = "eventbus"
 )
 
-// Function type for event subscribers.
+// Subscriber is a function type for event subscribers.
+// Deprecated: Use Handler instead.
 type Subscriber func(context.Context, any) error
 
-// EventBus provides a simple publish/subscribe interface for publishing and
-// subscribing to events.
+// Handler processes messages from the event bus.
+type Handler func(context.Context, *Message) error
+
+// Message wraps event data with metadata.
+type Message struct {
+	ID      string // Unique identifier
+	Topic   string // Topic name
+	Data    any    // Payload
+	Attempt int    // Delivery attempt (1-based)
+
+	ack  func() // Called on successful processing
+	nack func() // Called on processing failure
+}
+
+// Ack acknowledges successful processing of the message.
+func (m *Message) Ack() {
+	if m.ack != nil {
+		m.ack()
+	}
+}
+
+// Nack indicates the message failed to process and should be redelivered.
+func (m *Message) Nack() {
+	if m.nack != nil {
+		m.nack()
+	}
+}
+
+// NewMessage creates a message with default no-op ack/nack functions.
+func NewMessage(id, topic string, data any) *Message {
+	return &Message{
+		ID:      id,
+		Topic:   topic,
+		Data:    data,
+		Attempt: 1,
+		ack:     func() {},
+		nack:    func() {},
+	}
+}
+
+// NewMessageWithCallbacks creates a message with custom ack/nack callbacks.
+func NewMessageWithCallbacks(id, topic string, data any, attempt int, ack, nack func()) *Message {
+	return &Message{
+		ID:      id,
+		Topic:   topic,
+		Data:    data,
+		Attempt: attempt,
+		ack:     ack,
+		nack:    nack,
+	}
+}
+
+// EventBus provides publish/subscribe and queue-based message delivery.
 type EventBus interface {
-	// Subscribe to an event. The handler will be called when the event is
-	// published. Depending on the implementation errors may be logged or retried.
-	// Subscribers should assume that they may be called multiple times
-	// concurrently.
-	Subscribe(event string, subscriber Subscriber)
+	// Subscribe registers a handler that receives all published messages
+	// on the topic (broadcast semantics).
+	Subscribe(topic string, handler Handler)
 
-	// Publish an event. The event will be sent to all subscribers.
-	Publish(event string, data any)
+	// Publish sends a message to all subscribers of the topic.
+	Publish(topic string, data any)
 
-	// Wait for the event bus to finish processing all events. You should ensure
-	// that publishers are also stopped as the event bus won't reject new events.
+	// SubscribeQueue registers a handler that competes with other queue
+	// subscribers for messages (only one handler processes each message).
+	SubscribeQueue(topic string, handler Handler)
+
+	// Enqueue sends a message to exactly one queue subscriber.
+	Enqueue(topic string, data any)
+
+	// Wait blocks until locally-initiated operations complete. For in-memory
+	// implementations, this means all handlers have finished. For distributed
+	// implementations, this means messages have been sent to the remote system.
 	Wait(ctx context.Context) error
 }
 
@@ -62,22 +120,26 @@ func (p *EventBusPlugin) ServerOptions() []prefab.ServerOption {
 	}
 }
 
+// Shutdownable is implemented by EventBus implementations that need graceful shutdown.
+type Shutdownable interface {
+	Shutdown(ctx context.Context) error
+}
+
 // From prefab.ShutdownPlugin.
 func (p *EventBusPlugin) Shutdown(ctx context.Context) error {
-	// If the underlying bus has a Shutdown method (like *Bus), call it
-	// to close the worker pool gracefully
-	if bus, ok := p.EventBus.(*Bus); ok {
+	// If the bus implements Shutdownable, use that for graceful shutdown
+	if bus, ok := p.EventBus.(Shutdownable); ok {
 		err := bus.Shutdown(ctx)
 		if err == nil {
-			logging.Info(ctx, "👍 Event bus drained")
+			logging.Info(ctx, "Event bus drained")
 		}
 		return err
 	}
 
-	// Otherwise, just wait for completion (legacy behavior)
+	// Otherwise, just wait for completion
 	err := p.Wait(ctx)
 	if err == nil {
-		logging.Info(ctx, "👍 Event bus drained")
+		logging.Info(ctx, "Event bus drained")
 	}
 	return err
 }
