@@ -36,5 +36,6 @@ Follow patterns in existing code for consistency. Use provided Go tools and lint
 
 ## Docs
 
-Prefab maintains documentation targeted at AI Coding tools within the `/docs/` folder. `/docs/reference.md` contains
-examples and coding guidlines. When making changes ensure the reference material is kept up to date.
+Prefab includes a Claude Code plugin at `.claude/plugins/prefab/` with comprehensive skills and resources
+for building Prefab servers. The plugin provides topic-specific documentation that is dynamically loaded
+based on the task at hand. Additional documentation is in the `/docs/` folder.

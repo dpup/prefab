@@ -3,20 +3,12 @@
 Welcome to the Prefab documentation! Prefab is a Go library that simplifies creating gRPC servers with a JSON/REST
 Gateway. This documentation will help AI coding assistants effectively use Prefab in your projects.
 
-## Instructions
+## Claude Code Plugin
 
-### Claude Code
-
-1. Copy the `/docs/` folder into your project repo.
-2. Add the following snippet into your `CLAUDE.md`
-
-```
-  ## Prefab Documentation
-  - See `/docs/prefab/README.md` for Prefab usage documentation
-  - Key patterns: `/docs/prefab/getting-started.md` and `/docs/prefab/plugins.md`
-  - For security best practices: `/docs/prefab/security.md`
-  - For detailed implementation examples: `/docs/prefab/reference.md`
-```
+Prefab includes a Claude Code plugin at `.claude/plugins/prefab/` with comprehensive skills and resources
+for building Prefab servers. The plugin provides topic-specific documentation that is dynamically loaded
+based on your task, covering server setup, authentication, authorization, SSE streaming, configuration,
+storage, and more.
 
 ## Contents
 
@@ -25,7 +17,8 @@ Gateway. This documentation will help AI coding assistants effectively use Prefa
 - [Configuration](configuration.md) - How to configure Prefab servers
 - [Plugins](plugins.md) - Using and creating plugins
 - [Security](security.md) - CSRF protection, security headers, and best practices
-- [Reference](reference.md) - Detailed implementation patterns and examples
+- [Authorization](authz.md) - Declarative access control
+- [Logging](logging.md) - Structured context-aware logging
 
 ## Key Features
 
