@@ -36,6 +36,6 @@ Follow patterns in existing code for consistency. Use provided Go tools and lint
 
 ## Docs
 
-Prefab includes a Claude Code plugin at `.claude/plugins/prefab/` with comprehensive skills and resources
+Prefab includes a Claude Code plugin at `.claude-plugin/` with comprehensive skills and resources
 for building Prefab servers. The plugin provides topic-specific documentation that is dynamically loaded
 based on the task at hand. Additional documentation is in the `/docs/` folder.

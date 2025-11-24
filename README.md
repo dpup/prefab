@@ -11,10 +11,12 @@ authentication, authorization, logging, and templating.
 ## 🤖 Agentic Coding Support
 
 Prefab is designed to make agentic coding simple. A Claude Code plugin is included
-at `.claude/plugins/prefab/` with comprehensive skills and resources for building
+at `.claude-plugin/` with comprehensive skills and resources for building
 Prefab servers. The plugin provides topic-specific documentation that is dynamically
 loaded based on your task, covering server setup, authentication, authorization,
 SSE streaming, configuration, storage, and more.
+
+Install the plugin via: `/plugin marketplace add dpup/prefab`
 
 ## ✅ Features
 

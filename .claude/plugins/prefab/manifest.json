@@ -1,7 +1,0 @@
-{
-  "name": "prefab",
-  "version": "1.0.0",
-  "description": "Skills for developing Go applications with the Prefab server framework",
-  "author": "prefab",
-  "repository": "https://github.com/dpup/prefab"
-}

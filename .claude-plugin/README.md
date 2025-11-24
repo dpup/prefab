@@ -17,6 +17,12 @@ A comprehensive skill for building Prefab-based servers, including:
 - Error handling best practices
 - Security patterns
 
+## Installation
+
+```
+/plugin marketplace add dpup/prefab
+```
+
 ## Usage
 
 Once installed, Claude will automatically use this skill when you're working on Prefab-based projects or ask about Prefab patterns and features.
@@ -25,6 +31,7 @@ Once installed, Claude will automatically use this skill when you're working on 
 
 The skill dynamically loads topic-specific resources based on your task:
 
+- `project-setup.md` - Proto files, Makefile, project structure
 - `server-setup.md` - Server creation and initialization
 - `grpc-http.md` - gRPC services and HTTP handlers
 - `auth.md` - Authentication plugins and patterns
@@ -32,6 +39,11 @@ The skill dynamically loads topic-specific resources based on your task:
 - `sse.md` - Server-Sent Events streaming
 - `configuration.md` - Configuration management
 - `storage.md` - Storage plugins
+- `uploads.md` - File upload/download
+- `email.md` - SMTP email sending
+- `templates.md` - Go HTML templates
+- `eventbus.md` - Publish/subscribe events
+- `logging.md` - Structured logging
 - `plugins.md` - Custom plugin development
 - `errors.md` - Error handling patterns
 - `security.md` - Security best practices

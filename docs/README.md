@@ -5,10 +5,12 @@ Gateway. This documentation will help AI coding assistants effectively use Prefa
 
 ## Claude Code Plugin
 
-Prefab includes a Claude Code plugin at `.claude/plugins/prefab/` with comprehensive skills and resources
+Prefab includes a Claude Code plugin at `.claude-plugin/` with comprehensive skills and resources
 for building Prefab servers. The plugin provides topic-specific documentation that is dynamically loaded
 based on your task, covering server setup, authentication, authorization, SSE streaming, configuration,
 storage, and more.
+
+Install via: `/plugin marketplace add dpup/prefab`
 
 ## Contents
 
