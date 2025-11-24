@@ -1,0 +1,20 @@
+{
+  "name": "prefab",
+  "version": "1.0.0",
+  "description": "Skills for developing Go applications with the Prefab server framework. Includes comprehensive resources for server setup, authentication, authorization, SSE streaming, configuration, storage, and more.",
+  "author": {
+    "name": "Dan Pupius",
+    "url": "https://github.com/dpup"
+  },
+  "repository": "https://github.com/dpup/prefab",
+  "homepage": "https://github.com/dpup/prefab",
+  "tags": [
+    "go",
+    "golang",
+    "grpc",
+    "server",
+    "framework",
+    "authentication",
+    "authorization"
+  ]
+}
