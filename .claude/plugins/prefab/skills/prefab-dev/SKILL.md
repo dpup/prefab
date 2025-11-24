@@ -49,6 +49,7 @@ func main() {
 Load these resources based on the specific task:
 
 ### Server & Services
+- **[Project Setup](resources/project-setup.md)** - Proto files, Makefile, project structure
 - **[Server Setup](resources/server-setup.md)** - Server creation, initialization, and basic configuration
 - **[gRPC & HTTP](resources/grpc-http.md)** - Registering services, HTTP handlers, static files
 
@@ -71,13 +72,6 @@ Load these resources based on the specific task:
 - **[Logging](resources/logging.md)** - Structured context-aware logging
 - **[Security](resources/security.md)** - CSRF, headers, HTTPS, token security
 
-## Build Commands
-
-- `make test` - Run all tests
-- `make lint` - Run golangci-lint
-- `make gen-proto` - Generate protocol buffer code
-- `go test ./path/to/package -run TestName` - Run specific test
-
 ## Code Style
 
 - Use `errors.New()`, `errors.NewC()`, `errors.Wrap()` for errors with stack traces
@@ -89,6 +83,7 @@ Load these resources based on the specific task:
 
 | Task | Resources to Load |
 |------|-------------------|
+| Starting a new project | project-setup.md, server-setup.md |
 | Creating a new server | server-setup.md, configuration.md, logging.md |
 | Adding authentication | auth.md, server-setup.md |
 | Setting up access control | authz.md, auth.md |
