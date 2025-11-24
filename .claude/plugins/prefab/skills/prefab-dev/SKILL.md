@@ -18,6 +18,8 @@ Prefab is a Go server framework that simplifies building production-ready gRPC a
 - **Services**: gRPC service implementations with automatic HTTP gateway
 - **Handlers**: Custom HTTP handlers for non-gRPC endpoints
 
+Prefab servers commonly compose multiple gRPC services into a single process. This enables a service-oriented monolith architecture where related services share infrastructure (auth, storage, logging) while maintaining clear boundaries. As utilization requirements become known, individual services can be extracted into separate deployments without changing their interfaces.
+
 ## Quick Start Pattern
 
 ```go
