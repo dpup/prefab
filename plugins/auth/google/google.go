@@ -1,4 +1,4 @@
-// Package Google provides authentication via Google SSO.
+// Package google provides authentication via Google SSO.
 //
 // Two methods of authentication are supported:
 // - Client side via the Google SDK.
@@ -217,6 +217,12 @@ func (p *GooglePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	}
 	if p.clientSecret == "" {
 		return errors.New("google: config missing client secret")
+	}
+
+	// Warn if offline access is enabled but no token handler is configured.
+	// The refresh token would be obtained but discarded, which is likely a mistake.
+	if p.offlineAccess && p.tokenHandler == nil {
+		logging.Warn(ctx, "google: offline access enabled but no token handler configured; refresh tokens will be discarded")
 	}
 
 	ap := r.Get(auth.PluginName).(*auth.AuthPlugin)

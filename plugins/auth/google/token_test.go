@@ -183,3 +183,20 @@ func TestPlugin_CombinedOptions(t *testing.T) {
 	_ = p.tokenHandler(context.Background(), auth.Identity{}, OAuthToken{})
 	assert.True(t, handlerCalled)
 }
+
+func TestWithTokenHandler_ErrorAborts(t *testing.T) {
+	expectedErr := assert.AnError
+
+	handler := func(ctx context.Context, identity auth.Identity, token OAuthToken) error {
+		return expectedErr
+	}
+
+	p := Plugin(
+		WithClient("test-id", "test-secret"),
+		WithTokenHandler(handler),
+	)
+
+	// Verify handler returns the error
+	err := p.tokenHandler(context.Background(), auth.Identity{}, OAuthToken{})
+	assert.ErrorIs(t, err, expectedErr)
+}
