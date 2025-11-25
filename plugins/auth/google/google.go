@@ -1,4 +1,4 @@
-// Package Google provides authentication via Google SSO.
+// Package google provides authentication via Google SSO.
 //
 // Two methods of authentication are supported:
 // - Client side via the Google SDK.
@@ -122,6 +122,55 @@ func WithClient(id, secret string) GoogleOption {
 	}
 }
 
+// WithOfflineAccess configures the plugin to request offline access from Google.
+// This causes Google to return a refresh token that can be used to obtain new
+// access tokens after the user's session ends.
+//
+// Note: Google only returns a refresh token on the first authorization or when
+// the user explicitly re-consents. If you need to force a new refresh token,
+// the user must revoke access in their Google account settings.
+//
+// Use in combination with WithTokenHandler to receive and store the tokens.
+func WithOfflineAccess() GoogleOption {
+	return func(p *GooglePlugin) {
+		p.offlineAccess = true
+	}
+}
+
+// WithScopes adds additional OAuth scopes beyond the default profile and email
+// scopes. Use this to request access to other Google APIs.
+//
+// Example scopes:
+//   - "https://www.googleapis.com/auth/gmail.readonly" - Read Gmail messages
+//   - "https://www.googleapis.com/auth/calendar.readonly" - Read calendar events
+//   - "https://www.googleapis.com/auth/drive.readonly" - Read Google Drive files
+//
+// See https://developers.google.com/identity/protocols/oauth2/scopes for a
+// complete list of available scopes.
+func WithScopes(scopes ...string) GoogleOption {
+	return func(p *GooglePlugin) {
+		p.extraScopes = append(p.extraScopes, scopes...)
+	}
+}
+
+// WithTokenHandler registers a callback that receives OAuth tokens after
+// successful authentication. The handler is called with the authenticated
+// identity and the OAuth tokens before the login event is published.
+//
+// Use this to store tokens for later use with Google APIs. The application
+// is responsible for securely storing and refreshing tokens as needed.
+//
+// If the handler returns an error, the login flow is aborted and the error
+// is returned to the user.
+//
+// Note: The handler is only called for server-side OAuth flows (authorization
+// code). Client-side flows using ID tokens do not provide OAuth tokens.
+func WithTokenHandler(handler TokenHandler) GoogleOption {
+	return func(p *GooglePlugin) {
+		p.tokenHandler = handler
+	}
+}
+
 // Plugin for handling Google authentication.
 func Plugin(opts ...GoogleOption) *GooglePlugin {
 	p := &GooglePlugin{
@@ -136,8 +185,11 @@ func Plugin(opts ...GoogleOption) *GooglePlugin {
 
 // GooglePlugin for handling Google authentication.
 type GooglePlugin struct {
-	clientID     string
-	clientSecret string
+	clientID      string
+	clientSecret  string
+	offlineAccess bool
+	extraScopes   []string
+	tokenHandler  TokenHandler
 }
 
 // From prefab.Plugin.
@@ -167,6 +219,12 @@ func (p *GooglePlugin) Init(ctx context.Context, r *prefab.Registry) error {
 		return errors.New("google: config missing client secret")
 	}
 
+	// Warn if offline access is enabled but no token handler is configured.
+	// The refresh token would be obtained but discarded, which is likely a mistake.
+	if p.offlineAccess && p.tokenHandler == nil {
+		logging.Warn(ctx, "google: offline access enabled but no token handler configured; refresh tokens will be discarded")
+	}
+
 	ap := r.Get(auth.PluginName).(*auth.AuthPlugin)
 	ap.AddLoginHandler(ProviderName, p.handleLogin)
 
@@ -179,14 +237,17 @@ func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) 
 	}
 
 	var userInfo *UserInfo
+	var oauthToken *OAuthToken
 	var err error
+
 	switch {
 	case req.Creds["code"] != "":
 		// Exchanges an authorization code for an access token, and sets up the
-		// identity cookies.
-		userInfo, err = p.handleAuthorizationCode(ctx, req.Creds["code"], req.Creds["state"])
+		// identity cookies. Also returns the OAuth token for the application.
+		userInfo, oauthToken, err = p.handleAuthorizationCode(ctx, req.Creds["code"], req.Creds["state"])
 	case req.Creds["idtoken"] != "":
 		// Verifies the id token and uses the claims to set up the identity cookies.
+		// Note: ID token flow does not provide OAuth tokens for API access.
 		userInfo, err = p.handleIDToken(ctx, req.Creds["idtoken"])
 	case len(req.Creds) == 0 || req.Creds["state"] != "":
 		// Initiates a server side OAuth flow.
@@ -198,7 +259,7 @@ func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) 
 	if err != nil {
 		return nil, err
 	}
-	return p.authenticateUserInfo(ctx, userInfo, req)
+	return p.authenticateUserInfo(ctx, userInfo, oauthToken, req)
 }
 
 // Trigger a redirect to google login. This will result in an authorization code
@@ -206,14 +267,28 @@ func (p *GooglePlugin) handleLogin(ctx context.Context, req *auth.LoginRequest) 
 func (p *GooglePlugin) redirectToGoogle(ctx context.Context, dest string, state string) (*auth.LoginResponse, error) {
 	wrappedState := p.newOauthState(dest, state)
 
+	// Build scope string with default scopes plus any extra scopes.
+	scopes := "openid email profile"
+	for _, scope := range p.extraScopes {
+		scopes += " " + scope
+	}
+
 	q := url.Values{}
 	q.Add("client_id", p.clientID)
-	q.Add("scope", "openid email profile")
+	q.Add("scope", scopes)
 	q.Add("response_type", "code")
-	q.Add("access_type", "online") // Refresh token not needed as token is ephemeral.
-	q.Add("prompt", "select_account")
 	q.Add("redirect_uri", oauthCallback(ctx))
 	q.Add("state", wrappedState.Encode())
+
+	if p.offlineAccess {
+		q.Add("access_type", "offline")
+		// Use "consent" to ensure refresh token is returned. Google only returns
+		// a refresh token on the first authorization or when user re-consents.
+		q.Add("prompt", "consent")
+	} else {
+		q.Add("access_type", "online")
+		q.Add("prompt", "select_account")
+	}
 
 	u := url.URL{
 		Scheme:   "https",
@@ -269,27 +344,42 @@ func (p *GooglePlugin) handleGoogleCallback(w http.ResponseWriter, r *http.Reque
 // This endpoint can either be called by a client who received the `code`
 // directly from Google, or it can be called via the HTTP callback handler
 // following the auth flow being triggered by `redirectToGoogle`.
-func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawState string) (*UserInfo, error) {
+//
+// Returns the user info and OAuth token. The OAuth token includes a refresh
+// token if offline access was requested via WithOfflineAccess().
+func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawState string) (*UserInfo, *OAuthToken, error) {
 	_, err := p.parseState(rawState)
 	if err != nil {
-		return nil, errors.Codef(codes.InvalidArgument, "google: failed to parse state: %s", err)
+		return nil, nil, errors.Codef(codes.InvalidArgument, "google: failed to parse state: %s", err)
 	}
+
+	// Build scopes list including any extra scopes.
+	scopes := []string{
+		"https://www.googleapis.com/auth/userinfo.profile",
+		"https://www.googleapis.com/auth/userinfo.email",
+	}
+	scopes = append(scopes, p.extraScopes...)
 
 	var conf = &oauth2.Config{
 		ClientID:     p.clientID,
 		ClientSecret: p.clientSecret,
 		Endpoint:     google.Endpoint,
 		RedirectURL:  oauthCallback(ctx),
-		Scopes: []string{
-			"https://www.googleapis.com/auth/userinfo.profile",
-			"https://www.googleapis.com/auth/userinfo.email",
-		},
+		Scopes:       scopes,
 	}
 
 	// Exchange authorization code for an access token.
 	token, err := conf.Exchange(ctx, code)
 	if err != nil {
-		return nil, errors.Codef(codes.Internal, "google: token exchange failed: %s", err)
+		return nil, nil, errors.Codef(codes.Internal, "google: token exchange failed: %s", err)
+	}
+
+	// Convert to our OAuthToken type.
+	oauthToken := &OAuthToken{
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		TokenType:    token.TokenType,
+		Expiry:       token.Expiry,
 	}
 
 	// Use the access token to fetch the user's profile.
@@ -297,13 +387,18 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawSta
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, userInfoEndpoint, nil)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, errors.Codef(codes.Internal, "google: failed to fetch user profile: %s", err)
+		return nil, nil, errors.Codef(codes.Internal, "google: failed to fetch user profile: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Codef(codes.Internal, "google: failed to get user info, status: %d", resp.StatusCode)
+		return nil, nil, errors.Codef(codes.Internal, "google: failed to get user info, status: %d", resp.StatusCode)
 	}
-	return UserInfoFromJSON(resp.Body)
+
+	userInfo, err := UserInfoFromJSON(resp.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+	return userInfo, oauthToken, nil
 }
 
 // Handle an ID Token retrieved via a clientside login. See:
@@ -317,10 +412,14 @@ func (p *GooglePlugin) handleIDToken(ctx context.Context, token string) (*UserIn
 	return UserInfoFromClaims(payload.Claims)
 }
 
-// Maps the Google UserInfo to a prefab Identity. Is req.IssueToken is true,
+// Maps the Google UserInfo to a prefab Identity. If req.IssueToken is true,
 // then the token is returned to the client. If not, then the token is set as a
 // cookie.
-func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserInfo, req *auth.LoginRequest) (*auth.LoginResponse, error) {
+//
+// If a TokenHandler is configured and an OAuth token is provided, the handler
+// is called before the login event is published. This allows applications to
+// store tokens for later use with Google APIs.
+func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserInfo, oauthToken *OAuthToken, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	identity := auth.Identity{
 		Provider:      ProviderName,
 		SessionID:     uuid.NewString(),
@@ -331,13 +430,23 @@ func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserI
 		EmailVerified: userInfo.IsConfirmed(),
 	}
 
-	// Create an identity token based and return it to the client..
+	// Create an identity token and return it to the client.
 	idt, err := auth.IdentityToken(ctx, identity)
 	if err != nil {
 		return nil, err
 	}
 
 	logging.Infow(ctx, "google: user authenticated", "subject", identity.Subject, "email", identity.Email)
+
+	// Call the token handler if configured and we have an OAuth token.
+	// This is called before the login event so the application can associate
+	// the token with the user before other handlers react to the login.
+	if p.tokenHandler != nil && oauthToken != nil {
+		if err := p.tokenHandler(ctx, identity, *oauthToken); err != nil {
+			logging.Errorw(ctx, "google: token handler failed", "error", err)
+			return nil, errors.Wrap(err, 0).WithCode(codes.Internal).Append("google: token handler failed")
+		}
+	}
 
 	if bus := eventbus.FromContext(ctx); bus != nil {
 		bus.Publish(auth.LoginEvent, auth.NewAuthEvent(identity))
