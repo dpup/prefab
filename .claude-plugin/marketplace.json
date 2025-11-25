@@ -25,7 +25,7 @@
         "server",
         "framework"
       ],
-      "source": "."
+      "source": "./"
     }
   ]
 }
