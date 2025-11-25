@@ -340,7 +340,7 @@ func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserI
 	logging.Infow(ctx, "google: user authenticated", "subject", identity.Subject, "email", identity.Email)
 
 	if bus := eventbus.FromContext(ctx); bus != nil {
-		bus.Publish(auth.LoginEvent, auth.AuthEvent{Identity: identity})
+		bus.Publish(auth.LoginEvent, auth.NewAuthEvent(identity))
 	}
 
 	if req.IssueToken {

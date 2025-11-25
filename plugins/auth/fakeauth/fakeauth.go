@@ -122,7 +122,7 @@ func (p *FakeAuthPlugin) handleLogin(ctx context.Context, req *auth.LoginRequest
 
 	// Publish login event if event bus is available
 	if bus := eventbus.FromContext(ctx); bus != nil {
-		bus.Publish(auth.LoginEvent, auth.AuthEvent{Identity: id})
+		bus.Publish(auth.LoginEvent, auth.NewAuthEvent(id))
 	}
 
 	// Return token directly or set a cookie based on request

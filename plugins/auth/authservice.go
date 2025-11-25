@@ -103,7 +103,7 @@ func (s *impl) Logout(ctx context.Context, in *LogoutRequest) (*LogoutResponse, 
 	}
 
 	if bus := eventbus.FromContext(ctx); bus != nil {
-		bus.Publish(LogoutEvent, AuthEvent{Identity: id})
+		bus.Publish(LogoutEvent, NewAuthEvent(id))
 	}
 
 	// For gateway requests, send the HTTP headers.
