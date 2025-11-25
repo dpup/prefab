@@ -38,11 +38,12 @@ func TestBus_MultipleSubscribers(t *testing.T) {
 	var called []int
 	var mu sync.Mutex
 	for i := range 10 {
+		idx := i // Capture loop variable
 		bus.Subscribe("topic", func(ctx context.Context, msg *eventbus.Message) error {
 			mu.Lock()
 			defer mu.Unlock()
 			assert.Equal(t, "hello", msg.Data)
-			called = append(called, i)
+			called = append(called, idx)
 			return nil
 		})
 	}
@@ -50,13 +51,18 @@ func TestBus_MultipleSubscribers(t *testing.T) {
 	bus.Publish("topic", "hello")
 
 	assert.Eventually(t, func() bool {
-		slices.Sort(called) // Execution order isn't gauranteed.
-		assert.Equal(t, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, called)
+		mu.Lock()
+		defer mu.Unlock()
 		return len(called) == 10
 	},
 		time.Millisecond*10,
 		time.Millisecond,
 		"subscribers should have been called")
+
+	mu.Lock()
+	slices.Sort(called) // Execution order isn't gauranteed.
+	assert.Equal(t, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, called)
+	mu.Unlock()
 }
 
 func TestBus_Wait(t *testing.T) {
