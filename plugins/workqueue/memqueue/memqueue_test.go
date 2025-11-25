@@ -234,3 +234,141 @@ func TestQueue_TaskMetadata(t *testing.T) {
 	assert.Equal(t, "hello", task.Data)
 	assert.Equal(t, 1, task.Attempt)
 }
+
+func TestQueue_MultipleQueues(t *testing.T) {
+	queue := New(logging.EnsureLogger(t.Context()))
+
+	var queue1Called, queue2Called bool
+
+	queue.Subscribe("queue1", func(ctx context.Context, task *workqueue.Task) error {
+		assert.Equal(t, "message1", task.Data)
+		queue1Called = true
+		return nil
+	})
+
+	queue.Subscribe("queue2", func(ctx context.Context, task *workqueue.Task) error {
+		assert.Equal(t, "message2", task.Data)
+		queue2Called = true
+		return nil
+	})
+
+	queue.Enqueue("queue1", "message1")
+	queue.Enqueue("queue2", "message2")
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
+	defer cancel()
+	require.NoError(t, queue.Wait(ctx))
+
+	assert.True(t, queue1Called, "queue1 handler should have been called")
+	assert.True(t, queue2Called, "queue2 handler should have been called")
+}
+
+func TestQueue_Wait(t *testing.T) {
+	queue := New(logging.EnsureLogger(t.Context()))
+
+	var called bool
+	queue.Subscribe("tasks", func(ctx context.Context, task *workqueue.Task) error {
+		assert.Equal(t, "hello", task.Data)
+		time.Sleep(time.Millisecond * 50)
+		called = true
+		return nil
+	})
+
+	queue.Enqueue("tasks", "hello")
+
+	require.NoError(t, queue.Wait(logging.EnsureLogger(t.Context())))
+	assert.True(t, called, "handler should have been called")
+}
+
+func TestQueue_WaitTimeout(t *testing.T) {
+	queue := New(logging.EnsureLogger(t.Context()))
+
+	var called bool
+	queue.Subscribe("tasks", func(ctx context.Context, task *workqueue.Task) error {
+		assert.Equal(t, "hello", task.Data)
+		time.Sleep(time.Millisecond * 50)
+		called = true
+		return nil
+	})
+
+	queue.Enqueue("tasks", "hello")
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
+	defer cancel()
+
+	require.Error(t, queue.Wait(ctx))
+	assert.False(t, called, "handler should not have been called yet")
+}
+
+func TestQueue_GracefulShutdown(t *testing.T) {
+	ctx := logging.EnsureLogger(t.Context())
+	queue := New(ctx, WithWorkerPool(10)).(*Queue)
+
+	var completed int
+	var mu sync.Mutex
+
+	// Add handlers that take time
+	for range 50 {
+		queue.Subscribe("tasks", func(ctx context.Context, task *workqueue.Task) error {
+			time.Sleep(time.Millisecond * 10)
+			mu.Lock()
+			completed++
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Enqueue 50 tasks
+	for range 50 {
+		queue.Enqueue("tasks", "hello")
+	}
+
+	// Give workers time to start processing
+	time.Sleep(time.Millisecond * 5)
+
+	// Shutdown should wait for all jobs to complete
+	require.NoError(t, queue.Shutdown(ctx))
+
+	mu.Lock()
+	final := completed
+	mu.Unlock()
+
+	assert.Equal(t, 50, final, "all handlers should complete")
+}
+
+func TestQueue_HighLoad(t *testing.T) {
+	ctx := logging.EnsureLogger(t.Context())
+	queue := New(ctx, WithWorkerPool(50))
+
+	var processed sync.WaitGroup
+	processed.Add(100)
+
+	// Add 10 handlers
+	for range 10 {
+		queue.Subscribe("tasks", func(ctx context.Context, task *workqueue.Task) error {
+			processed.Done()
+			return nil
+		})
+	}
+
+	// Enqueue 100 tasks - should distribute via round-robin
+	for range 100 {
+		queue.Enqueue("tasks", "hello")
+	}
+
+	// Wait for all to complete
+	done := make(chan struct{})
+	go func() {
+		processed.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(time.Second * 5):
+		t.Fatal("timeout waiting for high load processing")
+	}
+
+	assert.NoError(t, queue.Wait(ctx))
+}
