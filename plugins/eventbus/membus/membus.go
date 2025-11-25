@@ -7,17 +7,11 @@ import (
 	"encoding/hex"
 	"runtime/debug"
 	"sync"
-	"sync/atomic"
 
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"github.com/dpup/prefab/plugins/eventbus"
 )
-
-type queueState struct {
-	handlers []eventbus.Handler
-	counter  atomic.Uint64
-}
 
 // Option configures the bus.
 type Option func(*Bus)
@@ -51,9 +45,8 @@ type job struct {
 
 // Bus is an in-memory implementation of EventBus.
 type Bus struct {
-	subscribers      map[string][]eventbus.Handler
-	queueSubscribers map[string]*queueState
-	subscriberCtx    context.Context
+	subscribers   map[string][]eventbus.Handler
+	subscriberCtx context.Context
 
 	mu sync.Mutex
 	wg sync.WaitGroup
@@ -99,51 +92,6 @@ func (b *Bus) Publish(topic string, data any) {
 		} else {
 			b.jobs <- job{ctx: ctx, handler: handler, msg: msg}
 		}
-	}
-	b.mu.Unlock()
-}
-
-// SubscribeQueue registers a handler for queue messages.
-func (b *Bus) SubscribeQueue(topic string, handler eventbus.Handler) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.queueSubscribers == nil {
-		b.queueSubscribers = make(map[string]*queueState)
-	}
-	if b.queueSubscribers[topic] == nil {
-		b.queueSubscribers[topic] = &queueState{}
-	}
-	b.queueSubscribers[topic].handlers = append(b.queueSubscribers[topic].handlers, handler)
-}
-
-// Enqueue sends a message to one queue subscriber.
-func (b *Bus) Enqueue(topic string, data any) {
-	b.mu.Lock()
-
-	if !b.started {
-		b.startWorkers()
-		b.started = true
-	}
-
-	qs, ok := b.queueSubscribers[topic]
-	if !ok || len(qs.handlers) == 0 {
-		b.mu.Unlock()
-		return
-	}
-
-	ctx := logging.With(b.subscriberCtx, logging.FromContext(b.subscriberCtx).Named(topic))
-
-	idx := qs.counter.Add(1) - 1
-	handler := qs.handlers[idx%uint64(len(qs.handlers))]
-
-	msg := eventbus.NewMessage(generateMessageID(), topic, data)
-
-	b.wg.Add(1)
-	if b.workers == 0 {
-		go b.execute(ctx, handler, msg)
-	} else {
-		b.jobs <- job{ctx: ctx, handler: handler, msg: msg}
 	}
 	b.mu.Unlock()
 }

@@ -70,21 +70,14 @@ func NewMessageWithCallbacks(id, topic string, data any, attempt int, ack, nack 
 	}
 }
 
-// EventBus provides publish/subscribe and queue-based message delivery.
+// EventBus provides publish/subscribe with broadcast semantics.
+// All subscribers receive every published message.
 type EventBus interface {
-	// Subscribe registers a handler that receives all published messages
-	// on the topic (broadcast semantics).
+	// Subscribe registers a handler that receives all published messages.
 	Subscribe(topic string, handler Handler)
 
 	// Publish sends a message to all subscribers of the topic.
 	Publish(topic string, data any)
-
-	// SubscribeQueue registers a handler that competes with other queue
-	// subscribers for messages (only one handler processes each message).
-	SubscribeQueue(topic string, handler Handler)
-
-	// Enqueue sends a message to exactly one queue subscriber.
-	Enqueue(topic string, data any)
 
 	// Wait blocks until locally-initiated operations complete. For in-memory
 	// implementations, this means all handlers have finished. For distributed
