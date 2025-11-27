@@ -66,6 +66,12 @@ func signingKeyFromContext(ctx context.Context) []byte {
 	return []byte("In a world of prefab dreams, authenticity gleams.")
 }
 
+// SigningKeyFromContext returns the JWT signing key from context.
+// This is exported for use by plugins that need to create their own tokens.
+func SigningKeyFromContext(ctx context.Context) []byte {
+	return signingKeyFromContext(ctx)
+}
+
 func expirationFromContext(ctx context.Context) time.Duration {
 	if v, ok := ctx.Value(tokenExpiration{}).(time.Duration); ok {
 		return v
