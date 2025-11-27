@@ -55,6 +55,7 @@ Load these resources based on the specific task:
 
 ### Authentication & Authorization
 - **[Authentication](resources/auth.md)** - OAuth, password auth, magic links, fake auth for testing
+- **[OAuth Server](resources/oauth-server.md)** - Build an OAuth2 authorization server for third-party apps
 - **[Authorization](resources/authz.md)** - Declarative access control with proto annotations, policies, role describers
 
 ### Features
@@ -86,6 +87,7 @@ Load these resources based on the specific task:
 | Starting a new project | project-setup.md, server-setup.md |
 | Creating a new server | server-setup.md, configuration.md, logging.md |
 | Adding authentication | auth.md, server-setup.md |
+| Building an OAuth server | oauth-server.md, auth.md, storage.md |
 | Setting up access control | authz.md, auth.md |
 | Adding real-time features | sse.md |
 | Creating a custom plugin | plugins.md, eventbus.md |
