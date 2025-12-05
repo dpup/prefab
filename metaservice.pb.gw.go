@@ -35,6 +35,9 @@ func request_MetaService_ClientConfig_0(ctx context.Context, marshaler runtime.M
 		protoReq ClientConfigRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
 	msg, err := client.ClientConfig(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }

@@ -114,9 +114,11 @@ func Plugin(opts ...AuthOption) *AuthPlugin {
 		ap.requireReason = prefab.ConfigBool("auth.delegation.requireReason")
 	}
 
-	// Load delegation expiration from config if set
+	// Load delegation expiration from config if set and non-zero
 	if prefab.Config.Exists("auth.delegation.expiration") {
-		ap.delegationExpiration = prefab.ConfigMustDuration("auth.delegation.expiration")
+		if d := prefab.ConfigDuration("auth.delegation.expiration"); d > 0 {
+			ap.delegationExpiration = d
+		}
 	}
 
 	for _, opt := range opts {
