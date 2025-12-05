@@ -369,10 +369,12 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawSta
 	}
 
 	// Exchange authorization code for an access token.
+	logging.Infow(ctx, "google: starting token exchange", "redirect_url", conf.RedirectURL)
 	token, err := conf.Exchange(ctx, code)
 	if err != nil {
 		return nil, nil, errors.Codef(codes.Internal, "google: token exchange failed: %s", err)
 	}
+	logging.Info(ctx, "google: token exchange completed successfully")
 
 	// Convert to our OAuthToken type.
 	oauthToken := &OAuthToken{
@@ -383,6 +385,7 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawSta
 	}
 
 	// Use the access token to fetch the user's profile.
+	logging.Info(ctx, "google: fetching user profile")
 	client := conf.Client(ctx, token)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, userInfoEndpoint, nil)
 	resp, err := client.Do(req)
@@ -393,6 +396,7 @@ func (p *GooglePlugin) handleAuthorizationCode(ctx context.Context, code, rawSta
 	if resp.StatusCode != http.StatusOK {
 		return nil, nil, errors.Codef(codes.Internal, "google: failed to get user info, status: %d", resp.StatusCode)
 	}
+	logging.Info(ctx, "google: user profile fetched successfully")
 
 	userInfo, err := UserInfoFromJSON(resp.Body)
 	if err != nil {
@@ -442,10 +446,11 @@ func (p *GooglePlugin) authenticateUserInfo(ctx context.Context, userInfo *UserI
 	// This is called before the login event so the application can associate
 	// the token with the user before other handlers react to the login.
 	if p.tokenHandler != nil && oauthToken != nil {
+		logging.Info(ctx, "google: calling token handler")
 		if err := p.tokenHandler(ctx, identity, *oauthToken); err != nil {
-			logging.Errorw(ctx, "google: token handler failed", "error", err)
 			return nil, errors.Wrap(err, 0).WithCode(codes.Internal).Append("google: token handler failed")
 		}
+		logging.Info(ctx, "google: token handler completed successfully")
 	}
 
 	if bus := eventbus.FromContext(ctx); bus != nil {
