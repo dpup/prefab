@@ -8,7 +8,8 @@
   },
   "repository": "https://github.com/dpup/prefab",
   "homepage": "https://github.com/dpup/prefab",
-  "tags": [
+  "license": "MIT",
+  "keywords": [
     "go",
     "golang",
     "grpc",
@@ -16,5 +17,6 @@
     "framework",
     "authentication",
     "authorization"
-  ]
+  ],
+  "skills": "./skills/"
 }

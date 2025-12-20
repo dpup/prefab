@@ -1,8 +1,7 @@
 {
   "name": "prefab-marketplace",
   "owner": {
-    "name": "Dan Pupius",
-    "url": "https://github.com/dpup"
+    "name": "Dan Pupius"
   },
   "metadata": {
     "description": "Official Prefab plugin marketplace for Claude Code",
@@ -14,16 +13,19 @@
       "description": "Skills for developing Go applications with the Prefab server framework",
       "version": "1.0.0",
       "author": {
-        "name": "Dan Pupius",
-        "url": "https://github.com/dpup"
+        "name": "Dan Pupius"
       },
       "homepage": "https://github.com/dpup/prefab",
-      "tags": [
+      "repository": "https://github.com/dpup/prefab",
+      "license": "MIT",
+      "keywords": [
         "go",
         "golang",
         "grpc",
         "server",
-        "framework"
+        "framework",
+        "authentication",
+        "authorization"
       ],
       "source": "./"
     }
