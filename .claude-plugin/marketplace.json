@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "Official Prefab plugin marketplace for Claude Code",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "plugins": [
     {
       "name": "prefab",
       "description": "Skills for developing Go applications with the Prefab server framework",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Dan Pupius"
       },
