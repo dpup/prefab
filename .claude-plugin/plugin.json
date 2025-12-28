@@ -1,6 +1,6 @@
 {
   "name": "prefab",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Skills for developing Go applications with the Prefab server framework. Includes comprehensive resources for server setup, authentication, authorization, SSE streaming, configuration, storage, and more.",
   "author": {
     "name": "Dan Pupius",
@@ -18,5 +18,5 @@
     "authentication",
     "authorization"
   ],
-  "skills": "./skills/"
+  "skills": "./skills/prefab-dev/"
 }
