@@ -51,12 +51,6 @@ func New(opts ...ServerOption) *Server {
 		panic(FormatValidationErrors(errors))
 	}
 
-	// Check for unknown config keys and warn about potential typos
-	if warnings := config.ValidateConfigKeys(Config); len(warnings) > 0 {
-		ctx := logging.EnsureLogger(context.Background())
-		logging.Warn(ctx, config.FormatValidationWarnings(warnings))
-	}
-
 	b := &builder{
 		host:            Config.String("server.host"),
 		port:            Config.Int("server.port"),
@@ -157,6 +151,11 @@ func (b *builder) build() *Server {
 		ctx = logging.With(ctx, b.logger)
 	} else {
 		ctx = logging.EnsureLogger(ctx)
+	}
+
+	// Check for unknown config keys and warn about potential typos
+	if warnings := config.ValidateConfigKeys(Config); len(warnings) > 0 {
+		logging.Warn(ctx, config.FormatValidationWarnings(warnings))
 	}
 
 	s := &Server{
