@@ -16,12 +16,52 @@ func (p *OAuthPlugin) authorizeHandler() http.Handler {
 			logger = logging.NewDevLogger()
 		}
 
+		// Enforce PKCE for public clients if configured
+		if p.shouldEnforcePKCE() {
+			if err := p.validatePKCERequired(r); err != nil {
+				logger.Warn("PKCE validation failed", "error", err)
+				writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
+				return
+			}
+		}
+
 		err := p.server.HandleAuthorizeRequest(w, r)
 		if err != nil {
 			logger.Error("authorization error", "error", err)
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "The request is invalid")
 		}
 	})
+}
+
+// validatePKCERequired checks if PKCE is required for the client and validates accordingly.
+func (p *OAuthPlugin) validatePKCERequired(r *http.Request) error {
+	clientID := r.FormValue("client_id")
+	if clientID == "" {
+		return nil // Let the main handler deal with missing client_id
+	}
+
+	client, err := p.clientStore.store.GetClient(r.Context(), clientID)
+	if err != nil {
+		return nil // Let the main handler deal with invalid client
+	}
+
+	// Only enforce PKCE for public clients
+	if !client.Public {
+		return nil
+	}
+
+	codeChallenge := r.FormValue("code_challenge")
+	if codeChallenge == "" {
+		return ErrPKCERequired
+	}
+
+	// Validate code_challenge_method if provided
+	method := r.FormValue("code_challenge_method")
+	if method != "" && method != "plain" && method != "S256" {
+		return ErrInvalidGrant
+	}
+
+	return nil
 }
 
 // tokenHandler handles the OAuth2 token endpoint.

@@ -27,6 +27,7 @@ type OAuthPlugin struct {
 	refreshTokenExpiry time.Duration
 	authCodeExpiry     time.Duration
 	issuer             string
+	enforcePKCE        *bool // nil means use config, non-nil means use this value
 
 	staticClients   []Client
 	userClientStore ClientStore
@@ -94,6 +95,14 @@ func (b *Builder) WithClientStore(store ClientStore) *Builder {
 // Use this when you need to persist tokens across server restarts or in a distributed environment.
 func (b *Builder) WithTokenStore(store TokenStore) *Builder {
 	b.plugin.userTokenStore = store
+	return b
+}
+
+// WithEnforcePKCE sets whether PKCE is required for public clients.
+// When true, public clients must provide a code_challenge in authorization requests.
+// If not set, the value is read from config key "oauth.enforcePkce".
+func (b *Builder) WithEnforcePKCE(enforce bool) *Builder {
+	b.plugin.enforcePKCE = &enforce
 	return b
 }
 
@@ -224,7 +233,10 @@ func (p *OAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 
 	// Set issuer from config if not set
 	if p.issuer == "" {
-		p.issuer = prefab.Config.String("server.address")
+		p.issuer = prefab.Config.String("oauth.issuer")
+		if p.issuer == "" {
+			p.issuer = prefab.Config.String("server.address")
+		}
 	}
 
 	// Configure user authorization handler
@@ -239,6 +251,14 @@ func (p *OAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	})
 
 	return nil
+}
+
+// shouldEnforcePKCE returns whether PKCE should be enforced for public clients.
+func (p *OAuthPlugin) shouldEnforcePKCE() bool {
+	if p.enforcePKCE != nil {
+		return *p.enforcePKCE
+	}
+	return prefab.Config.Bool("oauth.enforcePkce")
 }
 
 // ServerOptions returns the server options for the OAuth plugin.

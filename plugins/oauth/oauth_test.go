@@ -458,3 +458,56 @@ func TestOAuthPlugin_RedirectURIValidation(t *testing.T) {
 	assert.Contains(t, domain, "http://localhost:3000/callback")
 	assert.Contains(t, domain, "https://example.com/oauth/callback")
 }
+
+func TestOAuthPlugin_PKCEEnforcement(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "public-client",
+			Secret:       "",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       true,
+		}).
+		WithClient(Client{
+			ID:           "confidential-client",
+			Secret:       "secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       false,
+		}).
+		WithEnforcePKCE(true).
+		Build()
+
+	// Test that public client without code_challenge is rejected
+	req := httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback", nil)
+	err := plugin.validatePKCERequired(req)
+	assert.ErrorIs(t, err, ErrPKCERequired)
+
+	// Test that public client with code_challenge is accepted
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=S256", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.NoError(t, err)
+
+	// Test that confidential client without code_challenge is accepted (PKCE not required)
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=confidential-client&response_type=code&redirect_uri=http://localhost/callback", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.NoError(t, err)
+
+	// Test invalid code_challenge_method
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=invalid", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.ErrorIs(t, err, ErrInvalidGrant)
+}
+
+func TestOAuthPlugin_PKCEEnforcementDisabled(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "public-client",
+			Secret:       "",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       true,
+		}).
+		WithEnforcePKCE(false).
+		Build()
+
+	// When PKCE is not enforced, public client without code_challenge should be allowed
+	assert.False(t, plugin.shouldEnforcePKCE())
+}
