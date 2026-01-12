@@ -266,6 +266,8 @@ func (p *OAuthPlugin) ServerOptions() []prefab.ServerOption {
 	return []prefab.ServerOption{
 		prefab.WithHTTPHandler("/oauth/authorize", p.authorizeHandler()),
 		prefab.WithHTTPHandler("/oauth/token", p.tokenHandler()),
+		prefab.WithHTTPHandler("/oauth/revoke", p.revokeHandler()),
+		prefab.WithHTTPHandler("/oauth/introspect", p.introspectHandler()),
 		prefab.WithHTTPHandler("/.well-known/oauth-authorization-server", p.metadataHandler()),
 		prefab.WithRequestConfig(p.injectOAuthContext),
 	}
