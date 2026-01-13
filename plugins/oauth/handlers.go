@@ -1,6 +1,8 @@
 package oauth
 
 import (
+	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -43,7 +45,9 @@ func (p *OAuthPlugin) validatePKCERequired(r *http.Request) error {
 
 	client, err := p.clientStore.store.GetClient(r.Context(), clientID)
 	if err != nil {
-		return nil // Let the main handler deal with invalid client
+		// Client not found - defer validation to the OAuth library which provides
+		// proper error responses. We only validate PKCE for known public clients.
+		return nil //nolint:nilerr // intentionally defer client validation to OAuth library
 	}
 
 	// Only enforce PKCE for public clients
@@ -86,10 +90,13 @@ func (p *OAuthPlugin) tokenHandler() http.Handler {
 func writeOAuthError(w http.ResponseWriter, status int, errorCode, description string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"error":             errorCode,
 		"error_description": description,
-	})
+	}); err != nil {
+		// Logging would require context; error is already written to response
+		_ = err
+	}
 }
 
 // metadataHandler returns OAuth2 authorization server metadata.
@@ -105,14 +112,14 @@ func (p *OAuthPlugin) metadataHandler() http.Handler {
 		}
 
 		metadata := map[string]interface{}{
-			"issuer":                                issuer,
-			"authorization_endpoint":                issuer + "/oauth/authorize",
-			"token_endpoint":                        issuer + "/oauth/token",
-			"revocation_endpoint":                   issuer + "/oauth/revoke",
-			"introspection_endpoint":                issuer + "/oauth/introspect",
-			"response_types_supported":              []string{"code"},
-			"grant_types_supported":                 []string{"authorization_code", "refresh_token", "client_credentials"},
-			"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post"},
+			"issuer":                                        issuer,
+			"authorization_endpoint":                        issuer + "/oauth/authorize",
+			"token_endpoint":                                issuer + "/oauth/token",
+			"revocation_endpoint":                           issuer + "/oauth/revoke",
+			"introspection_endpoint":                        issuer + "/oauth/introspect",
+			"response_types_supported":                      []string{"code"},
+			"grant_types_supported":                         []string{"authorization_code", "refresh_token", "client_credentials"},
+			"token_endpoint_auth_methods_supported":         []string{"client_secret_basic", "client_secret_post"},
 			"revocation_endpoint_auth_methods_supported":    []string{"client_secret_basic", "client_secret_post"},
 			"introspection_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post"},
 			"code_challenge_methods_supported":              []string{"plain", "S256"},
@@ -126,7 +133,7 @@ func (p *OAuthPlugin) metadataHandler() http.Handler {
 }
 
 // revokeHandler handles token revocation requests per RFC 7009.
-// Clients can revoke access tokens or refresh tokens they have issued.
+// Clients can only revoke tokens that were issued to them.
 func (p *OAuthPlugin) revokeHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -141,14 +148,8 @@ func (p *OAuthPlugin) revokeHandler() http.Handler {
 		}
 
 		// Authenticate the client
-		clientID, clientSecret, err := p.getClientCredentials(r)
+		client, err := p.authenticateClient(r)
 		if err != nil {
-			writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")
-			return
-		}
-
-		client, err := p.clientStore.store.GetClient(ctx, clientID)
-		if err != nil || (!client.Public && client.Secret != clientSecret) {
 			writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")
 			return
 		}
@@ -161,27 +162,11 @@ func (p *OAuthPlugin) revokeHandler() http.Handler {
 
 		tokenTypeHint := r.FormValue("token_type_hint")
 
-		// Try to revoke based on hint, or try both if no hint provided
-		var revoked bool
-		switch tokenTypeHint {
-		case "refresh_token":
-			if err := p.tokenStore.store.RemoveByRefresh(ctx, token); err == nil {
-				revoked = true
-			}
-		case "access_token", "":
-			// Try access token first
-			if err := p.tokenStore.store.RemoveByAccess(ctx, token); err == nil {
-				revoked = true
-			} else if tokenTypeHint == "" {
-				// If no hint and access token removal failed, try refresh token
-				if err := p.tokenStore.store.RemoveByRefresh(ctx, token); err == nil {
-					revoked = true
-				}
-			}
-		}
+		// Try to find and revoke the token, verifying ownership
+		revoked := p.revokeTokenWithOwnershipCheck(ctx, token, tokenTypeHint, client.ID)
 
 		if revoked {
-			logger.Info("token revoked", "client_id", clientID)
+			logger.Info("token revoked", "client_id", client.ID)
 		}
 
 		// RFC 7009: Always return 200 OK, even if token was not found
@@ -189,8 +174,43 @@ func (p *OAuthPlugin) revokeHandler() http.Handler {
 	})
 }
 
+// revokeTokenWithOwnershipCheck attempts to revoke a token after verifying
+// it belongs to the requesting client. Returns true if a token was revoked.
+func (p *OAuthPlugin) revokeTokenWithOwnershipCheck(ctx context.Context, token, tokenTypeHint, clientID string) bool {
+	switch tokenTypeHint {
+	case "refresh_token":
+		return p.tryRevokeRefreshToken(ctx, token, clientID)
+	case "access_token":
+		return p.tryRevokeAccessToken(ctx, token, clientID)
+	default:
+		// No hint: try access token first, then refresh token
+		if p.tryRevokeAccessToken(ctx, token, clientID) {
+			return true
+		}
+		return p.tryRevokeRefreshToken(ctx, token, clientID)
+	}
+}
+
+// tryRevokeAccessToken attempts to revoke an access token if it belongs to the client.
+func (p *OAuthPlugin) tryRevokeAccessToken(ctx context.Context, token, clientID string) bool {
+	info, err := p.tokenStore.store.GetByAccess(ctx, token)
+	if err != nil || info.ClientID != clientID {
+		return false
+	}
+	return p.tokenStore.store.RemoveByAccess(ctx, token) == nil
+}
+
+// tryRevokeRefreshToken attempts to revoke a refresh token if it belongs to the client.
+func (p *OAuthPlugin) tryRevokeRefreshToken(ctx context.Context, token, clientID string) bool {
+	info, err := p.tokenStore.store.GetByRefresh(ctx, token)
+	if err != nil || info.ClientID != clientID {
+		return false
+	}
+	return p.tokenStore.store.RemoveByRefresh(ctx, token) == nil
+}
+
 // introspectHandler handles token introspection requests per RFC 7662.
-// Resource servers can validate tokens and retrieve their metadata.
+// Clients can only introspect tokens that were issued to them.
 func (p *OAuthPlugin) introspectHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -205,14 +225,8 @@ func (p *OAuthPlugin) introspectHandler() http.Handler {
 		}
 
 		// Authenticate the client
-		clientID, clientSecret, err := p.getClientCredentials(r)
+		client, err := p.authenticateClient(r)
 		if err != nil {
-			writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")
-			return
-		}
-
-		client, err := p.clientStore.store.GetClient(ctx, clientID)
-		if err != nil || (!client.Public && client.Secret != clientSecret) {
 			writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")
 			return
 		}
@@ -226,79 +240,95 @@ func (p *OAuthPlugin) introspectHandler() http.Handler {
 		tokenTypeHint := r.FormValue("token_type_hint")
 
 		// Try to find the token
-		var tokenInfo TokenInfo
-		var found bool
-
-		switch tokenTypeHint {
-		case "refresh_token":
-			if info, err := p.tokenStore.store.GetByRefresh(ctx, token); err == nil {
-				tokenInfo = info
-				found = true
-			}
-		case "access_token", "":
-			// Try access token first
-			if info, err := p.tokenStore.store.GetByAccess(ctx, token); err == nil {
-				tokenInfo = info
-				found = true
-			} else if tokenTypeHint == "" {
-				// If no hint and access token lookup failed, try refresh token
-				if info, err := p.tokenStore.store.GetByRefresh(ctx, token); err == nil {
-					tokenInfo = info
-					found = true
-				}
-			}
-		}
+		tokenInfo, found := p.findToken(ctx, token, tokenTypeHint)
 
 		if !found {
 			// Token not found - return inactive
-			writeIntrospectionResponse(w, map[string]interface{}{"active": false})
+			writeIntrospectionResponse(w, logger, map[string]interface{}{"active": false})
+			return
+		}
+
+		// Verify token ownership - clients can only introspect their own tokens
+		if tokenInfo.ClientID != client.ID {
+			writeIntrospectionResponse(w, logger, map[string]interface{}{"active": false})
 			return
 		}
 
 		// Check if token is expired
-		var expiresAt time.Time
-		var isAccessToken bool
-		if tokenInfo.Access == token {
-			expiresAt = tokenInfo.AccessCreateAt.Add(tokenInfo.AccessExpiresIn)
-			isAccessToken = true
-		} else {
-			expiresAt = tokenInfo.RefreshCreateAt.Add(tokenInfo.RefreshExpiresIn)
-		}
+		expiresAt, isAccessToken := p.getTokenExpiry(tokenInfo, token)
 
 		if time.Now().After(expiresAt) {
-			writeIntrospectionResponse(w, map[string]interface{}{"active": false})
+			writeIntrospectionResponse(w, logger, map[string]interface{}{"active": false})
 			return
 		}
 
 		// Build introspection response
-		response := map[string]interface{}{
-			"active":    true,
-			"client_id": tokenInfo.ClientID,
-			"exp":       expiresAt.Unix(),
-		}
+		response := p.buildIntrospectionResponse(tokenInfo, expiresAt, isAccessToken)
 
-		if tokenInfo.Scope != "" {
-			response["scope"] = tokenInfo.Scope
-		}
-
-		if tokenInfo.UserID != "" {
-			response["sub"] = tokenInfo.UserID
-		}
-
-		if isAccessToken {
-			response["token_type"] = "Bearer"
-			response["iat"] = tokenInfo.AccessCreateAt.Unix()
-		} else {
-			response["iat"] = tokenInfo.RefreshCreateAt.Unix()
-		}
-
-		if p.issuer != "" {
-			response["iss"] = p.issuer
-		}
-
-		logger.Debug("token introspected", "client_id", clientID, "active", true)
-		writeIntrospectionResponse(w, response)
+		logger.Debug("token introspected", "client_id", client.ID, "active", true)
+		writeIntrospectionResponse(w, logger, response)
 	})
+}
+
+// findToken looks up a token by access or refresh token based on the hint.
+func (p *OAuthPlugin) findToken(ctx context.Context, token, tokenTypeHint string) (TokenInfo, bool) {
+	switch tokenTypeHint {
+	case "refresh_token":
+		if info, err := p.tokenStore.store.GetByRefresh(ctx, token); err == nil {
+			return info, true
+		}
+	case "access_token":
+		if info, err := p.tokenStore.store.GetByAccess(ctx, token); err == nil {
+			return info, true
+		}
+	default:
+		// No hint: try access token first, then refresh token
+		if info, err := p.tokenStore.store.GetByAccess(ctx, token); err == nil {
+			return info, true
+		}
+		if info, err := p.tokenStore.store.GetByRefresh(ctx, token); err == nil {
+			return info, true
+		}
+	}
+	return TokenInfo{}, false
+}
+
+// getTokenExpiry returns the expiration time and whether it's an access token.
+func (p *OAuthPlugin) getTokenExpiry(tokenInfo TokenInfo, token string) (time.Time, bool) {
+	if tokenInfo.Access == token {
+		return tokenInfo.AccessCreateAt.Add(tokenInfo.AccessExpiresIn), true
+	}
+	return tokenInfo.RefreshCreateAt.Add(tokenInfo.RefreshExpiresIn), false
+}
+
+// buildIntrospectionResponse builds the introspection response map.
+func (p *OAuthPlugin) buildIntrospectionResponse(tokenInfo TokenInfo, expiresAt time.Time, isAccessToken bool) map[string]interface{} {
+	response := map[string]interface{}{
+		"active":    true,
+		"client_id": tokenInfo.ClientID,
+		"exp":       expiresAt.Unix(),
+	}
+
+	if tokenInfo.Scope != "" {
+		response["scope"] = tokenInfo.Scope
+	}
+
+	if tokenInfo.UserID != "" {
+		response["sub"] = tokenInfo.UserID
+	}
+
+	if isAccessToken {
+		response["token_type"] = "Bearer"
+		response["iat"] = tokenInfo.AccessCreateAt.Unix()
+	} else {
+		response["iat"] = tokenInfo.RefreshCreateAt.Unix()
+	}
+
+	if p.issuer != "" {
+		response["iss"] = p.issuer
+	}
+
+	return response
 }
 
 // getClientCredentials extracts client credentials from the request.
@@ -325,10 +355,40 @@ func (p *OAuthPlugin) getClientCredentials(r *http.Request) (clientID, clientSec
 	return clientID, clientSecret, nil
 }
 
+// authenticateClient authenticates a client from request credentials.
+// Uses constant-time comparison to prevent timing attacks on client secrets.
+func (p *OAuthPlugin) authenticateClient(r *http.Request) (*Client, error) {
+	clientID, clientSecret, err := p.getClientCredentials(r)
+	if err != nil {
+		return nil, ErrInvalidClient
+	}
+
+	client, err := p.clientStore.store.GetClient(r.Context(), clientID)
+	if err != nil {
+		return nil, ErrInvalidClient
+	}
+
+	// Public clients don't require secret validation
+	if client.Public {
+		return client, nil
+	}
+
+	// Use constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(client.Secret), []byte(clientSecret)) != 1 {
+		return nil, ErrInvalidClient
+	}
+
+	return client, nil
+}
+
 // writeIntrospectionResponse writes a JSON introspection response.
-func writeIntrospectionResponse(w http.ResponseWriter, response map[string]interface{}) {
+func writeIntrospectionResponse(w http.ResponseWriter, logger logging.Logger, response map[string]interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		if logger != nil {
+			logger.Error("failed to encode introspection response", "error", err)
+		}
+	}
 }

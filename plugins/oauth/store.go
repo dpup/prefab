@@ -248,41 +248,41 @@ type tokenInfoAdapter struct {
 	info TokenInfo
 }
 
-func (t *tokenInfoAdapter) New() oauth2.TokenInfo                             { return &tokenInfoAdapter{} }
-func (t *tokenInfoAdapter) GetClientID() string                               { return t.info.ClientID }
-func (t *tokenInfoAdapter) SetClientID(s string)                              { t.info.ClientID = s }
-func (t *tokenInfoAdapter) GetUserID() string                                 { return t.info.UserID }
-func (t *tokenInfoAdapter) SetUserID(s string)                                { t.info.UserID = s }
-func (t *tokenInfoAdapter) GetScope() string                                  { return t.info.Scope }
-func (t *tokenInfoAdapter) SetScope(s string)                                 { t.info.Scope = s }
-func (t *tokenInfoAdapter) GetCode() string                                   { return t.info.Code }
-func (t *tokenInfoAdapter) SetCode(s string)                                  { t.info.Code = s }
-func (t *tokenInfoAdapter) GetCodeCreateAt() time.Time                        { return t.info.CodeCreateAt }
-func (t *tokenInfoAdapter) SetCodeCreateAt(s time.Time)                       { t.info.CodeCreateAt = s }
-func (t *tokenInfoAdapter) GetCodeExpiresIn() time.Duration                   { return t.info.CodeExpiresIn }
-func (t *tokenInfoAdapter) SetCodeExpiresIn(s time.Duration)                  { t.info.CodeExpiresIn = s }
-func (t *tokenInfoAdapter) GetCodeChallenge() string                          { return t.info.CodeChallenge }
-func (t *tokenInfoAdapter) SetCodeChallenge(s string)                         { t.info.CodeChallenge = s }
+func (t *tokenInfoAdapter) New() oauth2.TokenInfo            { return &tokenInfoAdapter{} }
+func (t *tokenInfoAdapter) GetClientID() string              { return t.info.ClientID }
+func (t *tokenInfoAdapter) SetClientID(s string)             { t.info.ClientID = s }
+func (t *tokenInfoAdapter) GetUserID() string                { return t.info.UserID }
+func (t *tokenInfoAdapter) SetUserID(s string)               { t.info.UserID = s }
+func (t *tokenInfoAdapter) GetScope() string                 { return t.info.Scope }
+func (t *tokenInfoAdapter) SetScope(s string)                { t.info.Scope = s }
+func (t *tokenInfoAdapter) GetCode() string                  { return t.info.Code }
+func (t *tokenInfoAdapter) SetCode(s string)                 { t.info.Code = s }
+func (t *tokenInfoAdapter) GetCodeCreateAt() time.Time       { return t.info.CodeCreateAt }
+func (t *tokenInfoAdapter) SetCodeCreateAt(s time.Time)      { t.info.CodeCreateAt = s }
+func (t *tokenInfoAdapter) GetCodeExpiresIn() time.Duration  { return t.info.CodeExpiresIn }
+func (t *tokenInfoAdapter) SetCodeExpiresIn(s time.Duration) { t.info.CodeExpiresIn = s }
+func (t *tokenInfoAdapter) GetCodeChallenge() string         { return t.info.CodeChallenge }
+func (t *tokenInfoAdapter) SetCodeChallenge(s string)        { t.info.CodeChallenge = s }
 func (t *tokenInfoAdapter) GetCodeChallengeMethod() oauth2.CodeChallengeMethod {
 	return oauth2.CodeChallengeMethod(t.info.CodeChallengeMethod)
 }
 func (t *tokenInfoAdapter) SetCodeChallengeMethod(s oauth2.CodeChallengeMethod) {
 	t.info.CodeChallengeMethod = string(s)
 }
-func (t *tokenInfoAdapter) GetAccess() string                  { return t.info.Access }
-func (t *tokenInfoAdapter) SetAccess(s string)                 { t.info.Access = s }
-func (t *tokenInfoAdapter) GetAccessCreateAt() time.Time       { return t.info.AccessCreateAt }
-func (t *tokenInfoAdapter) SetAccessCreateAt(s time.Time)      { t.info.AccessCreateAt = s }
-func (t *tokenInfoAdapter) GetAccessExpiresIn() time.Duration  { return t.info.AccessExpiresIn }
-func (t *tokenInfoAdapter) SetAccessExpiresIn(s time.Duration) { t.info.AccessExpiresIn = s }
-func (t *tokenInfoAdapter) GetRefresh() string                 { return t.info.Refresh }
-func (t *tokenInfoAdapter) SetRefresh(s string)                { t.info.Refresh = s }
-func (t *tokenInfoAdapter) GetRefreshCreateAt() time.Time      { return t.info.RefreshCreateAt }
-func (t *tokenInfoAdapter) SetRefreshCreateAt(s time.Time)     { t.info.RefreshCreateAt = s }
-func (t *tokenInfoAdapter) GetRefreshExpiresIn() time.Duration { return t.info.RefreshExpiresIn }
+func (t *tokenInfoAdapter) GetAccess() string                   { return t.info.Access }
+func (t *tokenInfoAdapter) SetAccess(s string)                  { t.info.Access = s }
+func (t *tokenInfoAdapter) GetAccessCreateAt() time.Time        { return t.info.AccessCreateAt }
+func (t *tokenInfoAdapter) SetAccessCreateAt(s time.Time)       { t.info.AccessCreateAt = s }
+func (t *tokenInfoAdapter) GetAccessExpiresIn() time.Duration   { return t.info.AccessExpiresIn }
+func (t *tokenInfoAdapter) SetAccessExpiresIn(s time.Duration)  { t.info.AccessExpiresIn = s }
+func (t *tokenInfoAdapter) GetRefresh() string                  { return t.info.Refresh }
+func (t *tokenInfoAdapter) SetRefresh(s string)                 { t.info.Refresh = s }
+func (t *tokenInfoAdapter) GetRefreshCreateAt() time.Time       { return t.info.RefreshCreateAt }
+func (t *tokenInfoAdapter) SetRefreshCreateAt(s time.Time)      { t.info.RefreshCreateAt = s }
+func (t *tokenInfoAdapter) GetRefreshExpiresIn() time.Duration  { return t.info.RefreshExpiresIn }
 func (t *tokenInfoAdapter) SetRefreshExpiresIn(s time.Duration) { t.info.RefreshExpiresIn = s }
-func (t *tokenInfoAdapter) GetRedirectURI() string             { return t.info.RedirectURI }
-func (t *tokenInfoAdapter) SetRedirectURI(s string)            { t.info.RedirectURI = s }
+func (t *tokenInfoAdapter) GetRedirectURI() string              { return t.info.RedirectURI }
+func (t *tokenInfoAdapter) SetRedirectURI(s string)             { t.info.RedirectURI = s }
 
 // memoryTokenStore is an in-memory implementation of TokenStore.
 type memoryTokenStore struct {
