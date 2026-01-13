@@ -35,9 +35,26 @@
 package oauth
 
 import (
+	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/errors"
 	"google.golang.org/grpc/codes"
 )
+
+func init() {
+	prefab.RegisterConfigKeys(
+		prefab.ConfigKeyInfo{
+			Key:         "oauth.enforcePkce",
+			Description: "Require PKCE (Proof Key for Code Exchange) for public OAuth clients",
+			Type:        "bool",
+			Default:     "false",
+		},
+		prefab.ConfigKeyInfo{
+			Key:         "oauth.issuer",
+			Description: "OAuth token issuer URL (defaults to server.address)",
+			Type:        "string",
+		},
+	)
+}
 
 // PluginName is the identifier for the OAuth plugin.
 const PluginName = "oauth"
@@ -48,4 +65,8 @@ var (
 	ErrInvalidGrant  = errors.NewC("invalid_grant", codes.InvalidArgument)
 	ErrInvalidScope  = errors.NewC("invalid_scope", codes.InvalidArgument)
 	ErrAccessDenied  = errors.NewC("access_denied", codes.PermissionDenied)
+	ErrPKCERequired  = errors.NewC("invalid_request: code_challenge required for public clients", codes.InvalidArgument)
+	ErrInvalidToken  = errors.NewC("invalid_token", codes.Unauthenticated)
+	ErrTokenNotFound = errors.NewC("token_not_found", codes.NotFound)
+	ErrTokenRevoked  = errors.NewC("token_revoked", codes.Unauthenticated)
 )

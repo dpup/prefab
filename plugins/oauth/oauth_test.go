@@ -205,37 +205,37 @@ type mockTokenInfo struct {
 	code     string
 }
 
-func (m *mockTokenInfo) New() oauth2.TokenInfo         { return &mockTokenInfo{} }
-func (m *mockTokenInfo) GetClientID() string           { return m.clientID }
-func (m *mockTokenInfo) SetClientID(s string)          { m.clientID = s }
-func (m *mockTokenInfo) GetUserID() string             { return m.userID }
-func (m *mockTokenInfo) SetUserID(s string)            { m.userID = s }
-func (m *mockTokenInfo) GetScope() string              { return m.scope }
-func (m *mockTokenInfo) SetScope(s string)             { m.scope = s }
-func (m *mockTokenInfo) GetCode() string               { return m.code }
-func (m *mockTokenInfo) SetCode(s string)              { m.code = s }
-func (m *mockTokenInfo) GetAccess() string             { return m.access }
-func (m *mockTokenInfo) SetAccess(s string)            { m.access = s }
-func (m *mockTokenInfo) GetRefresh() string            { return m.refresh }
-func (m *mockTokenInfo) SetRefresh(s string)           { m.refresh = s }
-func (m *mockTokenInfo) GetRedirectURI() string        { return "" }
-func (m *mockTokenInfo) SetRedirectURI(string)         {}
-func (m *mockTokenInfo) GetAccessCreateAt() time.Time  { return time.Now() }
-func (m *mockTokenInfo) SetAccessCreateAt(time.Time)   {}
-func (m *mockTokenInfo) GetAccessExpiresIn() time.Duration { return time.Hour }
-func (m *mockTokenInfo) SetAccessExpiresIn(time.Duration) {}
-func (m *mockTokenInfo) GetRefreshCreateAt() time.Time  { return time.Now() }
-func (m *mockTokenInfo) SetRefreshCreateAt(time.Time)   {}
-func (m *mockTokenInfo) GetRefreshExpiresIn() time.Duration { return 24 * time.Hour }
-func (m *mockTokenInfo) SetRefreshExpiresIn(time.Duration) {}
-func (m *mockTokenInfo) GetCodeCreateAt() time.Time     { return time.Now() }
-func (m *mockTokenInfo) SetCodeCreateAt(time.Time)      {}
-func (m *mockTokenInfo) GetCodeExpiresIn() time.Duration { return 10 * time.Minute }
-func (m *mockTokenInfo) SetCodeExpiresIn(time.Duration) {}
-func (m *mockTokenInfo) GetCodeChallenge() string       { return "" }
-func (m *mockTokenInfo) SetCodeChallenge(string)        {}
+func (m *mockTokenInfo) New() oauth2.TokenInfo                              { return &mockTokenInfo{} }
+func (m *mockTokenInfo) GetClientID() string                                { return m.clientID }
+func (m *mockTokenInfo) SetClientID(s string)                               { m.clientID = s }
+func (m *mockTokenInfo) GetUserID() string                                  { return m.userID }
+func (m *mockTokenInfo) SetUserID(s string)                                 { m.userID = s }
+func (m *mockTokenInfo) GetScope() string                                   { return m.scope }
+func (m *mockTokenInfo) SetScope(s string)                                  { m.scope = s }
+func (m *mockTokenInfo) GetCode() string                                    { return m.code }
+func (m *mockTokenInfo) SetCode(s string)                                   { m.code = s }
+func (m *mockTokenInfo) GetAccess() string                                  { return m.access }
+func (m *mockTokenInfo) SetAccess(s string)                                 { m.access = s }
+func (m *mockTokenInfo) GetRefresh() string                                 { return m.refresh }
+func (m *mockTokenInfo) SetRefresh(s string)                                { m.refresh = s }
+func (m *mockTokenInfo) GetRedirectURI() string                             { return "" }
+func (m *mockTokenInfo) SetRedirectURI(string)                              {}
+func (m *mockTokenInfo) GetAccessCreateAt() time.Time                       { return time.Now() }
+func (m *mockTokenInfo) SetAccessCreateAt(time.Time)                        {}
+func (m *mockTokenInfo) GetAccessExpiresIn() time.Duration                  { return time.Hour }
+func (m *mockTokenInfo) SetAccessExpiresIn(time.Duration)                   {}
+func (m *mockTokenInfo) GetRefreshCreateAt() time.Time                      { return time.Now() }
+func (m *mockTokenInfo) SetRefreshCreateAt(time.Time)                       {}
+func (m *mockTokenInfo) GetRefreshExpiresIn() time.Duration                 { return 24 * time.Hour }
+func (m *mockTokenInfo) SetRefreshExpiresIn(time.Duration)                  {}
+func (m *mockTokenInfo) GetCodeCreateAt() time.Time                         { return time.Now() }
+func (m *mockTokenInfo) SetCodeCreateAt(time.Time)                          {}
+func (m *mockTokenInfo) GetCodeExpiresIn() time.Duration                    { return 10 * time.Minute }
+func (m *mockTokenInfo) SetCodeExpiresIn(time.Duration)                     {}
+func (m *mockTokenInfo) GetCodeChallenge() string                           { return "" }
+func (m *mockTokenInfo) SetCodeChallenge(string)                            {}
 func (m *mockTokenInfo) GetCodeChallengeMethod() oauth2.CodeChallengeMethod { return "" }
-func (m *mockTokenInfo) SetCodeChallengeMethod(oauth2.CodeChallengeMethod) {}
+func (m *mockTokenInfo) SetCodeChallengeMethod(oauth2.CodeChallengeMethod)  {}
 
 func TestScopeHelpers(t *testing.T) {
 	// Test ParseScopes
@@ -439,8 +439,8 @@ func TestOAuthPlugin_ScopeValidation(t *testing.T) {
 func TestOAuthPlugin_RedirectURIValidation(t *testing.T) {
 	plugin := NewBuilder().
 		WithClient(Client{
-			ID:           "multi-redirect-client",
-			Secret:       "secret",
+			ID:     "multi-redirect-client",
+			Secret: "secret",
 			RedirectURIs: []string{
 				"http://localhost:8080/callback",
 				"http://localhost:3000/callback",
@@ -457,4 +457,688 @@ func TestOAuthPlugin_RedirectURIValidation(t *testing.T) {
 	assert.Contains(t, domain, "http://localhost:8080/callback")
 	assert.Contains(t, domain, "http://localhost:3000/callback")
 	assert.Contains(t, domain, "https://example.com/oauth/callback")
+}
+
+func TestOAuthPlugin_PKCEEnforcement(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "public-client",
+			Secret:       "",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       true,
+		}).
+		WithClient(Client{
+			ID:           "confidential-client",
+			Secret:       "secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       false,
+		}).
+		WithEnforcePKCE(true).
+		Build()
+
+	// Test that public client without code_challenge is rejected
+	req := httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback", nil)
+	err := plugin.validatePKCERequired(req)
+	assert.ErrorIs(t, err, ErrPKCERequired)
+
+	// Test that public client with code_challenge is accepted
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=S256", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.NoError(t, err)
+
+	// Test that confidential client without code_challenge is accepted (PKCE not required)
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=confidential-client&response_type=code&redirect_uri=http://localhost/callback", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.NoError(t, err)
+
+	// Test invalid code_challenge_method
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=invalid", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.ErrorIs(t, err, ErrInvalidGrant)
+}
+
+func TestOAuthPlugin_PKCEEnforcementDisabled(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "public-client",
+			Secret:       "",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       true,
+		}).
+		WithEnforcePKCE(false).
+		Build()
+
+	// When PKCE is not enforced, public client without code_challenge should be allowed
+	assert.False(t, plugin.shouldEnforcePKCE())
+}
+
+func TestOAuthPlugin_TokenRevocation(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	// Create a token in the store
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:         "test-client",
+		UserID:           "user-1",
+		Scope:            "read write",
+		Access:           "test-access-token-revoke",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "test-refresh-token-revoke",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	// Verify token exists
+	_, err = plugin.tokenStore.store.GetByAccess(ctx, "test-access-token-revoke")
+	require.NoError(t, err)
+
+	handler := plugin.revokeHandler()
+
+	// Test revocation with Basic auth
+	form := url.Values{}
+	form.Set("token", "test-access-token-revoke")
+	form.Set("token_type_hint", "access_token")
+
+	req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify token was removed
+	_, err = plugin.tokenStore.store.GetByAccess(ctx, "test-access-token-revoke")
+	assert.Error(t, err)
+}
+
+func TestOAuthPlugin_TokenRevocation_InvalidClient(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	handler := plugin.revokeHandler()
+
+	form := url.Values{}
+	form.Set("token", "some-token")
+
+	req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("wrong-client", "wrong-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestOAuthPlugin_TokenRevocation_NonExistentToken(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	handler := plugin.revokeHandler()
+
+	form := url.Values{}
+	form.Set("token", "non-existent-token")
+
+	req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	// RFC 7009: Always return 200 OK even for non-existent tokens
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestOAuthPlugin_TokenIntrospection(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		WithIssuer("https://auth.example.com").
+		Build()
+
+	// Create a token in the store
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:         "test-client",
+		UserID:           "user-123",
+		Scope:            "read write",
+		Access:           "test-access-token-introspect",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "test-refresh-token-introspect",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.introspectHandler()
+
+	// Test introspection of valid access token
+	form := url.Values{}
+	form.Set("token", "test-access-token-introspect")
+
+	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, true, response["active"])
+	assert.Equal(t, "test-client", response["client_id"])
+	assert.Equal(t, "user-123", response["sub"])
+	assert.Equal(t, "read write", response["scope"])
+	assert.Equal(t, "Bearer", response["token_type"])
+	assert.Equal(t, "https://auth.example.com", response["iss"])
+}
+
+func TestOAuthPlugin_TokenIntrospection_ExpiredToken(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	// Create an expired token
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:        "test-client",
+		UserID:          "user-123",
+		Access:          "expired-token",
+		AccessCreateAt:  time.Now().Add(-2 * time.Hour),
+		AccessExpiresIn: time.Hour, // Expired 1 hour ago
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.introspectHandler()
+
+	form := url.Values{}
+	form.Set("token", "expired-token")
+
+	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, false, response["active"])
+}
+
+func TestOAuthPlugin_TokenIntrospection_NotFound(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	handler := plugin.introspectHandler()
+
+	form := url.Values{}
+	form.Set("token", "non-existent-token")
+
+	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, false, response["active"])
+}
+
+func TestOAuthPlugin_MetadataIncludesNewEndpoints(t *testing.T) {
+	plugin := NewBuilder().
+		WithIssuer("https://auth.example.com").
+		Build()
+
+	handler := plugin.metadataHandler()
+
+	req := httptest.NewRequest("GET", "/.well-known/oauth-authorization-server", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var meta map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &meta)
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://auth.example.com/oauth/revoke", meta["revocation_endpoint"])
+	assert.Equal(t, "https://auth.example.com/oauth/introspect", meta["introspection_endpoint"])
+}
+
+func TestOAuthPlugin_TokenRevocation_OwnershipValidation(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "client-a",
+			Secret:       "secret-a",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		WithClient(Client{
+			ID:           "client-b",
+			Secret:       "secret-b",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	// Create a token owned by client-a
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:         "client-a",
+		UserID:           "user-1",
+		Scope:            "read write",
+		Access:           "token-owned-by-client-a",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "refresh-owned-by-client-a",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.revokeHandler()
+
+	// client-b tries to revoke client-a's token - should not work
+	form := url.Values{}
+	form.Set("token", "token-owned-by-client-a")
+
+	req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("client-b", "secret-b")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	// RFC 7009: Always return 200 OK (but token should NOT be revoked)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Token should still exist
+	_, err = plugin.tokenStore.store.GetByAccess(ctx, "token-owned-by-client-a")
+	require.NoError(t, err, "token should not have been revoked by wrong client")
+
+	// Now client-a revokes its own token - should work
+	req = httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("client-a", "secret-a")
+	w = httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Token should be gone now
+	_, err = plugin.tokenStore.store.GetByAccess(ctx, "token-owned-by-client-a")
+	assert.Error(t, err, "token should have been revoked by owning client")
+}
+
+func TestOAuthPlugin_TokenIntrospection_OwnershipValidation(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "client-a",
+			Secret:       "secret-a",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		WithClient(Client{
+			ID:           "client-b",
+			Secret:       "secret-b",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		WithIssuer("https://auth.example.com").
+		Build()
+
+	// Create a token owned by client-a
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:         "client-a",
+		UserID:           "user-1",
+		Scope:            "read write",
+		Access:           "introspect-token-client-a",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "introspect-refresh-client-a",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.introspectHandler()
+
+	// client-b tries to introspect client-a's token - should return inactive
+	form := url.Values{}
+	form.Set("token", "introspect-token-client-a")
+
+	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("client-b", "secret-b")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, false, response["active"], "token should appear inactive to wrong client")
+
+	// client-a introspects its own token - should return active
+	req = httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("client-a", "secret-a")
+	w = httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, true, response["active"], "token should appear active to owning client")
+	assert.Equal(t, "client-a", response["client_id"])
+}
+
+func TestOAuthPlugin_RefreshTokenIntrospection(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	// Create a token with refresh token
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:         "test-client",
+		UserID:           "user-1",
+		Scope:            "read",
+		Access:           "access-for-refresh-test",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "refresh-token-to-introspect",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.introspectHandler()
+
+	// Introspect refresh token with hint
+	form := url.Values{}
+	form.Set("token", "refresh-token-to-introspect")
+	form.Set("token_type_hint", "refresh_token")
+
+	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, true, response["active"])
+	assert.Equal(t, "test-client", response["client_id"])
+	assert.Equal(t, "read", response["scope"])
+	// Refresh tokens don't have token_type
+	_, hasTokenType := response["token_type"]
+	assert.False(t, hasTokenType, "refresh tokens should not have token_type")
+}
+
+func TestOAuthPlugin_RevokeRefreshToken(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	// Create a token
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:         "test-client",
+		UserID:           "user-1",
+		Access:           "access-token-for-refresh-revoke",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "refresh-token-to-revoke",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.revokeHandler()
+
+	// Revoke the refresh token with hint
+	form := url.Values{}
+	form.Set("token", "refresh-token-to-revoke")
+	form.Set("token_type_hint", "refresh_token")
+
+	req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Refresh token should be gone
+	_, err = plugin.tokenStore.store.GetByRefresh(ctx, "refresh-token-to-revoke")
+	assert.Error(t, err)
+}
+
+func TestOAuthPlugin_AuthorizeHandler_PKCE(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "public-client",
+			Secret:       "",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       true,
+		}).
+		WithEnforcePKCE(true).
+		Build()
+
+	handler := plugin.authorizeHandler()
+
+	// Request without PKCE should fail for public client
+	req := httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "invalid_request", response["error"])
+}
+
+func TestOAuthPlugin_RevokeMethodNotAllowed(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	handler := plugin.revokeHandler()
+
+	// GET request should fail
+	req := httptest.NewRequest("GET", "/oauth/revoke?token=some-token", nil)
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestOAuthPlugin_IntrospectMethodNotAllowed(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	handler := plugin.introspectHandler()
+
+	// GET request should fail
+	req := httptest.NewRequest("GET", "/oauth/introspect?token=some-token", nil)
+	req.SetBasicAuth("test-client", "test-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+func TestOAuthPlugin_FormEncodedClientCredentials(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "test-client",
+			Secret:       "test-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	// Create a token
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:        "test-client",
+		UserID:          "user-1",
+		Access:          "token-for-form-auth",
+		AccessCreateAt:  time.Now(),
+		AccessExpiresIn: time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.introspectHandler()
+
+	// Use form-encoded credentials instead of Basic auth
+	form := url.Values{}
+	form.Set("token", "token-for-form-auth")
+	form.Set("client_id", "test-client")
+	form.Set("client_secret", "test-secret")
+
+	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, true, response["active"])
+}
+
+func TestOAuthPlugin_PublicClientRevocation(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "public-client",
+			Secret:       "",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Public:       true,
+		}).
+		Build()
+
+	// Create a token for the public client
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:        "public-client",
+		UserID:          "user-1",
+		Access:          "public-client-token",
+		AccessCreateAt:  time.Now(),
+		AccessExpiresIn: time.Hour,
+	}
+	err := plugin.tokenStore.store.Create(ctx, tokenInfo)
+	require.NoError(t, err)
+
+	handler := plugin.revokeHandler()
+
+	// Public client revokes its token (no secret required)
+	form := url.Values{}
+	form.Set("token", "public-client-token")
+	form.Set("client_id", "public-client")
+
+	req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Token should be revoked
+	_, err = plugin.tokenStore.store.GetByAccess(ctx, "public-client-token")
+	assert.Error(t, err)
 }
