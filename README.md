@@ -29,6 +29,7 @@ Install the plugin via: `/plugin marketplace add dpup/prefab`
 - **Security:** CSRF protection built-in and options for configuring CORS.
 - **Authn:** Authenticate users with Google, Magic Links, or Email/Password.
 - **Authz:** Use proto options to define access rules for RPC endpoints.
+- **OAuth2:** Turn your Prefab server into an OAuth2 authorization server.
 - **Templates:** Currently using standard go templates.
 
 ## 💡 Goals
@@ -87,6 +88,7 @@ func main() {
 - [Plugin Model Overview](#plugin-model-overview)
 - [Authentication](#authentication)
 - [Authorization](#authorization)
+- [OAuth2](#oauth2)
 - Email
 - Event Bus
 - [Storage](#storage)
@@ -207,6 +209,19 @@ The `authz` plugin provides declarative, protocol-buffer-based access control us
 - **Scope support**: Multi-tenant authorization with workspace/organization scoping
 
 See [docs/authz.md](./docs/authz.md) for comprehensive documentation and [examples](./examples/authz/) for complete working examples.
+
+### OAuth2
+
+The `oauth` plugin turns your Prefab server into an OAuth2 authorization server. It supports standard OAuth2 flows including authorization code (with PKCE), client credentials, and refresh tokens.
+
+**Key Features:**
+- **Standard OAuth2 flows**: Authorization code, client credentials, refresh tokens
+- **PKCE support**: Secure authorization for public clients (SPAs, mobile apps)
+- **Token management**: Token revocation (RFC 7009) and introspection (RFC 7662)
+- **Scope-based authorization**: Fine-grained access control with OAuth scopes
+- **Flexible storage**: In-memory or persistent storage for clients and tokens
+
+See [plugins/oauth/README.md](./plugins/oauth/README.md) for detailed documentation and [examples/oauthserver](./examples/oauthserver) for a complete working example.
 
 ### Storage
 
