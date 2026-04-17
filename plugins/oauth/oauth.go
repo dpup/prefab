@@ -61,12 +61,13 @@ const PluginName = "oauth"
 
 // Standard OAuth2 errors.
 var (
-	ErrInvalidClient = errors.NewC("invalid_client", codes.Unauthenticated)
-	ErrInvalidGrant  = errors.NewC("invalid_grant", codes.InvalidArgument)
-	ErrInvalidScope  = errors.NewC("invalid_scope", codes.InvalidArgument)
-	ErrAccessDenied  = errors.NewC("access_denied", codes.PermissionDenied)
-	ErrPKCERequired  = errors.NewC("invalid_request: code_challenge required for public clients", codes.InvalidArgument)
-	ErrInvalidToken  = errors.NewC("invalid_token", codes.Unauthenticated)
-	ErrTokenNotFound = errors.NewC("token_not_found", codes.NotFound)
-	ErrTokenRevoked  = errors.NewC("token_revoked", codes.Unauthenticated)
+	ErrInvalidClient     = errors.NewC("invalid_client", codes.Unauthenticated)
+	ErrInvalidGrant      = errors.NewC("invalid_grant", codes.InvalidArgument)
+	ErrInvalidScope      = errors.NewC("invalid_scope", codes.InvalidArgument)
+	ErrAccessDenied      = errors.NewC("access_denied", codes.PermissionDenied)
+	ErrPKCERequired      = errors.NewC("invalid_request: code_challenge required for public clients", codes.InvalidArgument)
+	ErrPKCEMethodRequired = errors.NewC("invalid_request: code_challenge_method=S256 required for public clients", codes.InvalidArgument)
+	ErrInvalidToken      = errors.NewC("invalid_token", codes.Unauthenticated)
+	ErrTokenNotFound     = errors.NewC("token_not_found", codes.NotFound)
+	ErrTokenRevoked      = errors.NewC("token_revoked", codes.Unauthenticated)
 )

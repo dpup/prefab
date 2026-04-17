@@ -37,6 +37,11 @@ func (p *OAuthPlugin) authorizeHandler() http.Handler {
 }
 
 // validatePKCERequired checks if PKCE is required for the client and validates accordingly.
+// When PKCE is enforced, only the S256 method is accepted. The `plain` method
+// provides no protection against the authorization-code interception attack
+// PKCE is designed to defeat (code_challenge == code_verifier), so we refuse to
+// accept it — including when the method parameter is omitted, which the
+// underlying library would default to plain.
 func (p *OAuthPlugin) validatePKCERequired(r *http.Request) error {
 	clientID := r.FormValue("client_id")
 	if clientID == "" {
@@ -60,10 +65,11 @@ func (p *OAuthPlugin) validatePKCERequired(r *http.Request) error {
 		return ErrPKCERequired
 	}
 
-	// Validate code_challenge_method if provided
+	// When PKCE is enforced, require S256. Missing method defaults to plain in
+	// the underlying library, so we reject that too.
 	method := r.FormValue("code_challenge_method")
-	if method != "" && method != "plain" && method != "S256" {
-		return ErrInvalidGrant
+	if method != "S256" {
+		return ErrPKCEMethodRequired
 	}
 
 	return nil
@@ -148,6 +154,13 @@ func (p *OAuthPlugin) metadataHandler() http.Handler {
 			issuer = scheme + "://" + r.Host
 		}
 
+		// Advertise only S256 when PKCE is enforced — the plain method
+		// offers no protection against authorization-code interception.
+		pkceMethods := []string{"S256"}
+		if !p.shouldEnforcePKCE() {
+			pkceMethods = []string{"plain", "S256"}
+		}
+
 		metadata := map[string]interface{}{
 			"issuer":                                        issuer,
 			"authorization_endpoint":                        issuer + "/oauth/authorize",
@@ -159,7 +172,7 @@ func (p *OAuthPlugin) metadataHandler() http.Handler {
 			"token_endpoint_auth_methods_supported":         []string{"client_secret_basic", "client_secret_post"},
 			"revocation_endpoint_auth_methods_supported":    []string{"client_secret_basic", "client_secret_post"},
 			"introspection_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post"},
-			"code_challenge_methods_supported":              []string{"plain", "S256"},
+			"code_challenge_methods_supported":              pkceMethods,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

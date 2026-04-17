@@ -494,7 +494,48 @@ func TestOAuthPlugin_PKCEEnforcement(t *testing.T) {
 	// Test invalid code_challenge_method
 	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=invalid", nil)
 	err = plugin.validatePKCERequired(req)
-	assert.ErrorIs(t, err, ErrInvalidGrant)
+	assert.ErrorIs(t, err, ErrPKCEMethodRequired)
+
+	// Plain PKCE offers no protection (challenge == verifier) and must be
+	// rejected when enforcement is on.
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=plain", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.ErrorIs(t, err, ErrPKCEMethodRequired)
+
+	// Missing method defaults to plain in the underlying library and must
+	// also be rejected when enforcement is on.
+	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123", nil)
+	err = plugin.validatePKCERequired(req)
+	assert.ErrorIs(t, err, ErrPKCEMethodRequired)
+}
+
+// TestOAuthPlugin_MetadataReflectsPKCEEnforcement verifies the advertised
+// PKCE methods match the enforcement configuration.
+func TestOAuthPlugin_MetadataReflectsPKCEEnforcement(t *testing.T) {
+	t.Run("enforcing advertises S256 only", func(t *testing.T) {
+		plugin := NewBuilder().WithEnforcePKCE(true).Build()
+		req := httptest.NewRequest("GET", "/.well-known/oauth-authorization-server", nil)
+		w := httptest.NewRecorder()
+		plugin.metadataHandler().ServeHTTP(w, req)
+
+		var meta map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &meta))
+		methods, _ := meta["code_challenge_methods_supported"].([]interface{})
+		assert.Equal(t, []interface{}{"S256"}, methods)
+	})
+
+	t.Run("not enforcing advertises plain and S256", func(t *testing.T) {
+		plugin := NewBuilder().WithEnforcePKCE(false).Build()
+		req := httptest.NewRequest("GET", "/.well-known/oauth-authorization-server", nil)
+		w := httptest.NewRecorder()
+		plugin.metadataHandler().ServeHTTP(w, req)
+
+		var meta map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &meta))
+		methods, _ := meta["code_challenge_methods_supported"].([]interface{})
+		assert.Contains(t, methods, "plain")
+		assert.Contains(t, methods, "S256")
+	})
 }
 
 func TestOAuthPlugin_PKCEEnforcementDisabled(t *testing.T) {
