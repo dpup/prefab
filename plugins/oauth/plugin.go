@@ -51,8 +51,14 @@ func NewBuilder() *Builder {
 	}
 }
 
-// WithClient adds a static OAuth client.
+// WithClient adds a static OAuth client. Panics if the client configuration is
+// invalid (e.g., confidential client with empty secret, redirect URI
+// containing control characters). Misconfigured static clients are programmer
+// errors that should fail loudly at startup rather than at first request.
 func (b *Builder) WithClient(client Client) *Builder {
+	if err := client.Validate(); err != nil {
+		panic("oauth: invalid static client: " + err.Error())
+	}
 	if client.CreatedAt.IsZero() {
 		client.CreatedAt = time.Now()
 	}
@@ -130,11 +136,15 @@ func (b *Builder) Build() *OAuthPlugin {
 	p.clientStore = newClientStoreAdapter(clientStore)
 	p.tokenStore = newTokenStoreAdapter(tokenStore)
 
-	// Register static clients (log errors but don't fail - allows re-registration on restart)
-	for _, client := range p.staticClients {
+	// Register static clients. On a fresh store CreateClient succeeds; on a
+	// persistent store the client may already exist, so fall back to Update.
+	// Both paths validate the client configuration.
+	for i := range p.staticClients {
+		client := p.staticClients[i]
 		if err := clientStore.CreateClient(context.Background(), &client); err != nil {
-			// Try update in case client already exists
-			_ = clientStore.UpdateClient(context.Background(), &client)
+			if updateErr := clientStore.UpdateClient(context.Background(), &client); updateErr != nil {
+				panic("oauth: failed to register static client " + client.ID + ": " + updateErr.Error())
+			}
 		}
 	}
 
@@ -316,9 +326,10 @@ func (p *OAuthPlugin) GetTokenStore() TokenStore {
 	return p.tokenStore.store
 }
 
-// AddClient adds a client dynamically at runtime.
-func (p *OAuthPlugin) AddClient(client Client) {
-	p.clientStore.store.CreateClient(context.Background(), &client)
+// AddClient adds a client dynamically at runtime. Returns an error if the
+// client configuration is invalid or if the store rejects the registration.
+func (p *OAuthPlugin) AddClient(client Client) error {
+	return p.clientStore.store.CreateClient(context.Background(), &client)
 }
 
 // validateScopes validates that the requested scopes are allowed for the client.

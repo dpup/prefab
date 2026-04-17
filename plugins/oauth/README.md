@@ -343,13 +343,15 @@ Add clients at runtime:
 oauthPlugin := registry.Get(oauth.PluginName).(*oauth.OAuthPlugin)
 
 // Add client dynamically
-oauthPlugin.AddClient(oauth.Client{
+if err := oauthPlugin.AddClient(oauth.Client{
     ID:           "new-client",
     Secret:       "new-secret",
     RedirectURIs: []string{"https://new.com/callback"},
     Scopes:       []string{"read"},
     CreatedBy:    "user123",
-})
+}); err != nil {
+    return err
+}
 ```
 
 Or use the client store directly:

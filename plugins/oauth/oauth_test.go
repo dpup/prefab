@@ -379,11 +379,11 @@ func TestOAuthPlugin_AddClient(t *testing.T) {
 	plugin := NewBuilder().Build()
 
 	// Add client dynamically
-	plugin.AddClient(Client{
+	require.NoError(t, plugin.AddClient(Client{
 		ID:           "dynamic-client",
 		Secret:       "secret",
 		RedirectURIs: []string{"http://localhost/callback"},
-	})
+	}))
 
 	// Verify it was added
 	client, err := plugin.GetClientStore().GetClient(context.Background(), "dynamic-client")
@@ -1334,53 +1334,119 @@ func TestOAuthPlugin_RefreshScopeEscalation(t *testing.T) {
 }
 
 // TestOAuthPlugin_EmptySecretConfidentialClient_Rejected verifies that a
-// confidential client misconfigured with an empty secret is not authenticated
-// by an empty-secret request. Without this check, subtle.ConstantTimeCompare
-// returns equal on ("", "") and authentication succeeds.
+// confidential client misconfigured with an empty secret is rejected at
+// registration time and — as defense in depth — that a client injected
+// directly into a store bypassing validation cannot authenticate with an
+// empty secret.
 func TestOAuthPlugin_EmptySecretConfidentialClient_Rejected(t *testing.T) {
-	plugin := NewBuilder().
-		WithClient(Client{
+	t.Run("WithClient panics on empty-secret confidential client", func(t *testing.T) {
+		defer func() {
+			r := recover()
+			assert.NotNil(t, r, "expected panic for invalid static client")
+		}()
+		_ = NewBuilder().
+			WithClient(Client{
+				ID:           "misconfigured",
+				Secret:       "",
+				Public:       false,
+				RedirectURIs: []string{"http://localhost/callback"},
+			}).
+			Build()
+	})
+
+	t.Run("authenticateClient rejects empty secret even if client bypasses validation", func(t *testing.T) {
+		plugin := NewBuilder().Build()
+		ctx := context.Background()
+
+		// Bypass validation by injecting directly into the adapter's store via
+		// a raw map-level memory store.
+		raw := newMemoryClientStore()
+		raw.clients["misconfigured"] = &Client{
 			ID:           "misconfigured",
-			Secret:       "",    // accidental empty secret
-			Public:       false, // still marked confidential
+			Secret:       "",
+			Public:       false,
 			RedirectURIs: []string{"http://localhost/callback"},
-		}).
-		Build()
+		}
+		plugin.clientStore = newClientStoreAdapter(raw)
+		require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+			ClientID:        "misconfigured",
+			UserID:          "user-1",
+			Access:          "a1",
+			AccessCreateAt:  time.Now(),
+			AccessExpiresIn: time.Hour,
+		}))
 
-	ctx := context.Background()
-	require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
-		ClientID:        "misconfigured",
-		UserID:          "user-1",
-		Access:          "a1",
-		AccessCreateAt:  time.Now(),
-		AccessExpiresIn: time.Hour,
-	}))
+		handler := plugin.introspectHandler()
+		form := url.Values{}
+		form.Set("token", "a1")
+		req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.SetBasicAuth("misconfigured", "")
+		w := httptest.NewRecorder()
 
-	// Introspect endpoint should reject the empty-secret client.
-	handler := plugin.introspectHandler()
-	form := url.Values{}
-	form.Set("token", "a1")
-	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("misconfigured", "")
-	w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
 
-	handler.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code,
+			"confidential client with empty stored secret must not authenticate")
+	})
+}
 
-	assert.Equal(t, http.StatusUnauthorized, w.Code,
-		"confidential client with empty stored secret must not authenticate")
-
-	// Token endpoint (client_credentials) should also reject.
-	tokenHandler := plugin.tokenHandler()
-	tcForm := url.Values{}
-	tcForm.Set("grant_type", "client_credentials")
-	tcForm.Set("client_id", "misconfigured")
-	tcForm.Set("client_secret", "")
-	tReq := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(tcForm.Encode()))
-	tReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	tw := httptest.NewRecorder()
-	tokenHandler.ServeHTTP(tw, tReq)
-
-	assert.NotEqual(t, http.StatusOK, tw.Code,
-		"token endpoint must reject empty-secret confidential client")
+// TestClient_Validate exercises the redirect URI and secret rules.
+func TestClient_Validate(t *testing.T) {
+	tests := []struct {
+		name   string
+		client Client
+		ok     bool
+	}{
+		{
+			name:   "confidential client without secret is rejected",
+			client: Client{ID: "c1", RedirectURIs: []string{"http://localhost/cb"}},
+			ok:     false,
+		},
+		{
+			name:   "public client with secret is rejected",
+			client: Client{ID: "c2", Secret: "s", Public: true, RedirectURIs: []string{"http://localhost/cb"}},
+			ok:     false,
+		},
+		{
+			name:   "redirect URI with embedded newline is rejected",
+			client: Client{ID: "c3", Secret: "s", RedirectURIs: []string{"http://good/cb\nhttp://evil/cb"}},
+			ok:     false,
+		},
+		{
+			name:   "redirect URI with carriage return is rejected",
+			client: Client{ID: "c4", Secret: "s", RedirectURIs: []string{"http://good/cb\revil"}},
+			ok:     false,
+		},
+		{
+			name:   "relative redirect URI is rejected",
+			client: Client{ID: "c5", Secret: "s", RedirectURIs: []string{"/not-absolute"}},
+			ok:     false,
+		},
+		{
+			name:   "missing ID is rejected",
+			client: Client{Secret: "s", RedirectURIs: []string{"http://localhost/cb"}},
+			ok:     false,
+		},
+		{
+			name:   "valid confidential client",
+			client: Client{ID: "ok", Secret: "s", RedirectURIs: []string{"http://localhost/cb"}},
+			ok:     true,
+		},
+		{
+			name:   "valid public client with no secret",
+			client: Client{ID: "ok", Public: true, RedirectURIs: []string{"myapp://cb"}},
+			ok:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.client.Validate()
+			if tt.ok {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
 }

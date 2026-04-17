@@ -296,7 +296,7 @@ Add clients at runtime:
 oauthPlugin := registry.Get("oauth").(*oauth.OAuthPlugin)
 
 // Add a new client
-oauthPlugin.AddClient(oauth.Client{
+if err := oauthPlugin.AddClient(oauth.Client{
     ID:           "new-client",
     Secret:       generateSecret(),
     Name:         "Dynamically Registered App",
@@ -304,7 +304,9 @@ oauthPlugin.AddClient(oauth.Client{
     Scopes:       []string{"read"},
     CreatedBy:    userID,
     CreatedAt:    time.Now(),
-})
+}); err != nil {
+    return err
+}
 
 // Or use the store directly for full CRUD
 store := oauthPlugin.GetClientStore()

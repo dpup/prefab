@@ -3,10 +3,12 @@ package oauth
 import (
 	"context"
 	"crypto/subtle"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/dpup/prefab/errors"
 	"github.com/go-oauth2/oauth2/v4"
 )
 
@@ -103,6 +105,10 @@ func (s *memoryClientStore) GetClient(ctx context.Context, clientID string) (*Cl
 
 // CreateClient creates a new client.
 func (s *memoryClientStore) CreateClient(ctx context.Context, client *Client) error {
+	if err := client.Validate(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -116,6 +122,10 @@ func (s *memoryClientStore) CreateClient(ctx context.Context, client *Client) er
 
 // UpdateClient updates an existing client.
 func (s *memoryClientStore) UpdateClient(ctx context.Context, client *Client) error {
+	if err := client.Validate(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -420,4 +430,45 @@ type Client struct {
 	CreatedBy string
 	// CreatedAt is when the client was registered.
 	CreatedAt time.Time
+}
+
+// Validate checks that the client has a well-formed configuration. It rejects
+// confidential clients with empty secrets and redirect URIs that contain
+// control characters or are not absolute URLs with a scheme.
+func (c *Client) Validate() error {
+	if c.ID == "" {
+		return errors.Wrap(ErrInvalidClient, 0).Append("client_id is required")
+	}
+	if !c.Public && c.Secret == "" {
+		return errors.Wrap(ErrInvalidClient, 0).Append("confidential client must have a non-empty secret")
+	}
+	if c.Public && c.Secret != "" {
+		return errors.Wrap(ErrInvalidClient, 0).Append("public client must not have a secret")
+	}
+	for _, u := range c.RedirectURIs {
+		if err := validateRedirectURI(u); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateRedirectURI rejects URIs that contain control characters (which
+// would allow smuggling extra entries past the newline-joined GetDomain
+// representation) or that are not absolute URLs.
+func validateRedirectURI(u string) error {
+	if u == "" {
+		return errors.Wrap(ErrInvalidClient, 0).Append("redirect_uri must not be empty")
+	}
+	if strings.ContainsAny(u, "\r\n\t\x00") {
+		return errors.Wrap(ErrInvalidClient, 0).Append("redirect_uri must not contain control characters")
+	}
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return errors.Wrap(ErrInvalidClient, 0).Append("redirect_uri is not a valid URL")
+	}
+	if parsed.Scheme == "" {
+		return errors.Wrap(ErrInvalidClient, 0).Append("redirect_uri must be an absolute URL with a scheme")
+	}
+	return nil
 }
