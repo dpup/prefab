@@ -1,0 +1,14 @@
+name: prefab
+runtime: docker
+dependencies:
+  - go
+  - make
+  - golangci-lint
+  - protoc
+  - git
+  - gh
+  - go-extras
+  - docker:dind
+grants:
+  - github
+  - ssh:github.com
