@@ -213,9 +213,11 @@ func (b *Builder) Build() *OAuthPlugin {
 	// Enforce the client's configured scope allowlist on client_credentials and
 	// password grants. Without this, go-oauth2 passes the requested scope
 	// through unchecked, letting any client mint tokens with arbitrary scopes.
+	// We return (false, nil) on invalid scope so go-oauth2 emits its standard
+	// invalid_scope response rather than surfacing an internal error.
 	p.server.SetClientScopeHandler(func(tgr *oauth2.TokenGenerateRequest) (bool, error) {
 		if _, err := p.validateScopes(tgr.Request.Context(), tgr.ClientID, tgr.Scope); err != nil {
-			return false, nil
+			return false, nil //nolint:nilerr // scope rejection is signalled via allowed=false; returning err would surface an internal error response
 		}
 		return true, nil
 	})

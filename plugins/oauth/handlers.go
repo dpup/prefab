@@ -10,6 +10,13 @@ import (
 	"github.com/dpup/prefab/logging"
 )
 
+// Form field and token_type_hint values used by the OAuth endpoints.
+const (
+	grantTypeRefreshToken     = "refresh_token"
+	tokenTypeHintRefreshToken = "refresh_token"
+	tokenTypeHintAccessToken  = "access_token"
+)
+
 // authorizeHandler handles the OAuth2 authorization endpoint.
 func (p *OAuthPlugin) authorizeHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +96,7 @@ func (p *OAuthPlugin) tokenHandler() http.Handler {
 		// token's owner — without this check, anyone who possesses a refresh
 		// token can exchange it for a new access token, bypassing client
 		// authentication entirely.
-		if err := r.ParseForm(); err == nil && r.FormValue("grant_type") == "refresh_token" {
+		if err := r.ParseForm(); err == nil && r.FormValue("grant_type") == grantTypeRefreshToken {
 			if err := p.authenticateRefreshGrant(r); err != nil {
 				logger.Warn("refresh token client authentication failed", "error", err)
 				writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")
@@ -250,9 +257,9 @@ func (p *OAuthPlugin) revokeHandler() http.Handler {
 // it belongs to the requesting client. Returns true if a token was revoked.
 func (p *OAuthPlugin) revokeTokenWithOwnershipCheck(ctx context.Context, token, tokenTypeHint, clientID string) bool {
 	switch tokenTypeHint {
-	case "refresh_token":
+	case tokenTypeHintRefreshToken:
 		return p.tryRevokeRefreshToken(ctx, token, clientID)
-	case "access_token":
+	case tokenTypeHintAccessToken:
 		return p.tryRevokeAccessToken(ctx, token, clientID)
 	default:
 		// No hint: try access token first, then refresh token
@@ -361,11 +368,11 @@ func (p *OAuthPlugin) introspectHandler() http.Handler {
 // findToken looks up a token by access or refresh token based on the hint.
 func (p *OAuthPlugin) findToken(ctx context.Context, token, tokenTypeHint string) (TokenInfo, bool) {
 	switch tokenTypeHint {
-	case "refresh_token":
+	case tokenTypeHintRefreshToken:
 		if info, err := p.tokenStore.store.GetByRefresh(ctx, token); err == nil {
 			return info, true
 		}
-	case "access_token":
+	case tokenTypeHintAccessToken:
 		if info, err := p.tokenStore.store.GetByAccess(ctx, token); err == nil {
 			return info, true
 		}

@@ -1249,7 +1249,7 @@ func TestOAuthPlugin_RefreshToken_RequiresClientAuth(t *testing.T) {
 	})
 
 	t.Run("cross-client refresh is rejected", func(t *testing.T) {
-		plugin := NewBuilder().
+		crossPlugin := NewBuilder().
 			WithClient(Client{
 				ID:           "victim",
 				Secret:       "victim-secret",
@@ -1262,8 +1262,8 @@ func TestOAuthPlugin_RefreshToken_RequiresClientAuth(t *testing.T) {
 			}).
 			Build()
 
-		ctx := context.Background()
-		require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+		crossCtx := context.Background()
+		require.NoError(t, crossPlugin.tokenStore.store.Create(crossCtx, TokenInfo{
 			ClientID:         "victim",
 			UserID:           "user-1",
 			Access:           "victim-access",
@@ -1274,7 +1274,7 @@ func TestOAuthPlugin_RefreshToken_RequiresClientAuth(t *testing.T) {
 			RefreshExpiresIn: 24 * time.Hour,
 		}))
 
-		handler := plugin.tokenHandler()
+		crossHandler := crossPlugin.tokenHandler()
 
 		form := url.Values{}
 		form.Set("grant_type", "refresh_token")
@@ -1284,7 +1284,7 @@ func TestOAuthPlugin_RefreshToken_RequiresClientAuth(t *testing.T) {
 		req.SetBasicAuth("attacker", "attacker-secret")
 		w := httptest.NewRecorder()
 
-		handler.ServeHTTP(w, req)
+		crossHandler.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code,
 			"attacker client must not be able to refresh another client's token")
@@ -1464,9 +1464,9 @@ func TestMemoryTokenStore_SweepsExpired(t *testing.T) {
 	}))
 
 	_, err := store.GetByAccess(ctx, "expired-access")
-	assert.Error(t, err, "expired access entries should be swept")
+	require.Error(t, err, "expired access entries should be swept")
 	_, err = store.GetByRefresh(ctx, "expired-refresh")
-	assert.Error(t, err, "expired refresh entries should be swept")
+	require.Error(t, err, "expired refresh entries should be swept")
 
 	// Fresh token still present.
 	_, err = store.GetByAccess(ctx, "fresh-access")
@@ -1511,9 +1511,9 @@ func TestOAuthPlugin_RevokeInvalidatesFullGrant(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		_, err := plugin.tokenStore.store.GetByAccess(ctx, "pair1-access")
-		assert.Error(t, err)
+		require.Error(t, err)
 		_, err = plugin.tokenStore.store.GetByRefresh(ctx, "pair1-refresh")
-		assert.Error(t, err, "revoking access token must also remove paired refresh token")
+		require.Error(t, err, "revoking access token must also remove paired refresh token")
 	})
 
 	t.Run("revoking refresh also removes paired access", func(t *testing.T) {
@@ -1539,9 +1539,9 @@ func TestOAuthPlugin_RevokeInvalidatesFullGrant(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		_, err := plugin.tokenStore.store.GetByRefresh(ctx, "pair2-refresh")
-		assert.Error(t, err)
+		require.Error(t, err)
 		_, err = plugin.tokenStore.store.GetByAccess(ctx, "pair2-access")
-		assert.Error(t, err, "revoking refresh token must also remove paired access token")
+		require.Error(t, err, "revoking refresh token must also remove paired access token")
 	})
 }
 
