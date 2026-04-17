@@ -95,8 +95,12 @@ func (p *OAuthPlugin) tokenHandler() http.Handler {
 		// RefreshAccessToken does not verify request credentials against the
 		// token's owner — without this check, anyone who possesses a refresh
 		// token can exchange it for a new access token, bypassing client
-		// authentication entirely.
-		if err := r.ParseForm(); err == nil && r.FormValue("grant_type") == grantTypeRefreshToken {
+		// authentication entirely. ParseForm errors are intentionally ignored:
+		// partial parses still populate r.Form with the values we need, and
+		// gating on err==nil would let a malformed field like `x=%ZZ` skip
+		// the entire auth check.
+		_ = r.ParseForm()
+		if r.FormValue("grant_type") == grantTypeRefreshToken {
 			if err := p.authenticateRefreshGrant(r); err != nil {
 				logger.Warn("refresh token client authentication failed", "error", err)
 				writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")

@@ -1306,6 +1306,50 @@ func TestOAuthPlugin_RefreshToken_RequiresClientAuth(t *testing.T) {
 	})
 }
 
+// TestOAuthPlugin_RefreshToken_MalformedBodyBypass verifies that a malformed
+// request body cannot be used to skip the refresh-grant client-auth check.
+// Go's ParseForm partial-parses on error (still populating r.Form with any
+// pairs it successfully parsed), so gating on err == nil would let a request
+// with a broken percent-escape slip straight into go-oauth2's refresh path
+// with no client authentication.
+func TestOAuthPlugin_RefreshToken_MalformedBodyBypass(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "confidential",
+			Secret:       "secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	ctx := context.Background()
+	require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+		ClientID:         "confidential",
+		UserID:           "user-1",
+		Access:           "access-token",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "refresh-token",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}))
+
+	handler := plugin.tokenHandler()
+
+	// Body contains valid grant_type and refresh_token but a malformed
+	// percent-escape (`%ZZ`) that causes ParseForm to return an error.
+	// Partial-parsed r.Form still exposes the refresh token to downstream
+	// FormValue calls, but the fix must still run the auth check.
+	body := "grant_type=refresh_token&refresh_token=refresh-token&poison=%ZZ"
+	req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code,
+		"malformed body must not bypass refresh-grant client auth; got %d body=%s", w.Code, w.Body.String())
+}
+
 // TestOAuthPlugin_ClientCredentialsScopeBypass verifies that the configured
 // client scope allowlist is enforced for the client_credentials grant. Without
 // this, clients could mint tokens with arbitrary scopes beyond their grant.
