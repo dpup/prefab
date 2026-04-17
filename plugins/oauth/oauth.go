@@ -50,7 +50,7 @@ func init() {
 		},
 		prefab.ConfigKeyInfo{
 			Key:         "oauth.issuer",
-			Description: "OAuth token issuer URL (defaults to server.address)",
+			Description: "OAuth token issuer URL (defaults to the server's address config key)",
 			Type:        "string",
 		},
 	)

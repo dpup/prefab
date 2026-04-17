@@ -274,11 +274,12 @@ func (p *OAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	// Register OAuth token identity extractor
 	authPlugin.AddIdentityExtractor(p.extractIdentityFromOAuthToken)
 
-	// Set issuer from config if not set
+	// Set issuer from config if not set. The global "address" key (not
+	// "server.address") is the canonical external URL for the service.
 	if p.issuer == "" {
 		p.issuer = prefab.Config.String("oauth.issuer")
 		if p.issuer == "" {
-			p.issuer = prefab.Config.String("server.address")
+			p.issuer = prefab.Config.String("address")
 		}
 	}
 

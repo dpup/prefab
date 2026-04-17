@@ -1470,6 +1470,26 @@ func TestOAuthPlugin_InjectOAuthContext_RejectsExpiredToken(t *testing.T) {
 	assert.False(t, HasScope(outCtx, "read"), "HasScope must not return true for expired token")
 }
 
+// TestOAuthPlugin_MetadataHandlerForwardedProto verifies the metadata
+// endpoint honors X-Forwarded-Proto so TLS-terminating proxies don't cause
+// the server to advertise http:// endpoints.
+func TestOAuthPlugin_MetadataHandlerForwardedProto(t *testing.T) {
+	plugin := NewBuilder().Build()
+	handler := plugin.metadataHandler()
+
+	req := httptest.NewRequest("GET", "/.well-known/oauth-authorization-server", nil)
+	req.Host = "api.example.com"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	var meta map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &meta))
+
+	assert.Equal(t, "https://api.example.com", meta["issuer"])
+	assert.Equal(t, "https://api.example.com/oauth/token", meta["token_endpoint"])
+}
+
 // TestClient_Validate exercises the redirect URI and secret rules.
 func TestClient_Validate(t *testing.T) {
 	tests := []struct {

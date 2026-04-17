@@ -129,6 +129,24 @@ func (p *OAuthPlugin) authenticateRefreshGrant(r *http.Request) error {
 	return nil
 }
 
+// requestBaseURL derives the externally-visible base URL from the request,
+// honoring X-Forwarded-Proto and X-Forwarded-Host so that servers behind
+// TLS-terminating proxies advertise https:// instead of http://.
+func requestBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
+		scheme = fwd
+	}
+	host := r.Host
+	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
+		host = fwd
+	}
+	return scheme + "://" + host
+}
+
 // writeOAuthError writes a standard OAuth2 error response.
 func writeOAuthError(w http.ResponseWriter, status int, errorCode, description string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -143,15 +161,19 @@ func writeOAuthError(w http.ResponseWriter, status int, errorCode, description s
 }
 
 // metadataHandler returns OAuth2 authorization server metadata.
+//
+// Operators should configure oauth.issuer (or the global address config) so
+// the advertised issuer is stable and does not depend on request-level data.
+// When the issuer is not configured the handler derives it from the request,
+// honoring X-Forwarded-Proto/Host so that TLS-terminating proxies do not
+// cause the endpoint to advertise http:// URLs. This derived form is
+// convenient for development but is vulnerable to Host-header poisoning: set
+// oauth.issuer in production.
 func (p *OAuthPlugin) metadataHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		issuer := p.issuer
 		if issuer == "" {
-			scheme := "https"
-			if r.TLS == nil {
-				scheme = "http"
-			}
-			issuer = scheme + "://" + r.Host
+			issuer = requestBaseURL(r)
 		}
 
 		// Advertise only S256 when PKCE is enforced — the plain method
