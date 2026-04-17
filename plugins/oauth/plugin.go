@@ -382,6 +382,14 @@ func (p *OAuthPlugin) injectOAuthContext(ctx context.Context) context.Context {
 		return ctx
 	}
 
+	// Reject expired tokens. Without this check, scopes/client_id from an
+	// expired token would still be injected into the context, allowing
+	// HasScope-based authorization to succeed after the identity-layer check
+	// (which does verify expiry) has failed.
+	if ti.GetAccessCreateAt().Add(ti.GetAccessExpiresIn()).Before(time.Now()) {
+		return ctx
+	}
+
 	// Inject OAuth-specific values
 	scope := ti.GetScope()
 	scopes := strings.Fields(scope)
@@ -427,7 +435,9 @@ func (p *OAuthPlugin) extractIdentityFromOAuthToken(ctx context.Context) (auth.I
 	return identity, nil
 }
 
-// extractBearerToken extracts a bearer token from metadata.
+// extractBearerToken extracts a bearer token from metadata. Only the Bearer
+// scheme (RFC 6750 §2.1) is recognized; other Authorization schemes return ""
+// so we don't spuriously look up non-OAuth credentials in the token store.
 func extractBearerToken(md metadata.MD) string {
 	authHeader, ok := md["authorization"]
 	if !ok || len(authHeader) == 0 || authHeader[0] == "" {
@@ -435,10 +445,10 @@ func extractBearerToken(md metadata.MD) string {
 	}
 
 	parts := strings.SplitN(authHeader[0], " ", 2)
-	if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+	if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
 		return parts[1]
 	}
-	return authHeader[0]
+	return ""
 }
 
 // Context keys for OAuth-specific values.

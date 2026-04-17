@@ -290,9 +290,14 @@ func TestExtractBearerToken(t *testing.T) {
 			expected: "my-token",
 		},
 		{
-			name:     "no prefix",
+			name:     "no prefix is rejected",
 			md:       metadata.Pairs("authorization", "my-token"),
-			expected: "my-token",
+			expected: "",
+		},
+		{
+			name:     "non-bearer scheme is rejected",
+			md:       metadata.Pairs("authorization", "Basic dXNlcjpwYXNz"),
+			expected: "",
 		},
 		{
 			name:     "empty",
@@ -1430,6 +1435,39 @@ func TestOAuthPlugin_EmptySecretConfidentialClient_Rejected(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code,
 			"confidential client with empty stored secret must not authenticate")
 	})
+}
+
+// TestOAuthPlugin_InjectOAuthContext_RejectsExpiredToken verifies that
+// expired access tokens do not populate OAuth scopes or client_id into the
+// request context. Without this check, a handler that gates on
+// HasScope(ctx, ...) without first verifying identity would authorize requests
+// bearing expired tokens as long as the token record remained in the store.
+func TestOAuthPlugin_InjectOAuthContext_RejectsExpiredToken(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "c",
+			Secret:       "s",
+			RedirectURIs: []string{"http://localhost/cb"},
+		}).
+		Build()
+
+	ctx := context.Background()
+	require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+		ClientID:        "c",
+		UserID:          "u",
+		Scope:           "read write",
+		Access:          "expired-token",
+		AccessCreateAt:  time.Now().Add(-2 * time.Hour),
+		AccessExpiresIn: time.Hour, // expired 1 hour ago
+	}))
+
+	md := metadata.Pairs("authorization", "Bearer expired-token")
+	inCtx := metadata.NewIncomingContext(ctx, md)
+	outCtx := plugin.injectOAuthContext(inCtx)
+
+	assert.False(t, IsOAuthRequest(outCtx), "expired token must not mark request as OAuth")
+	assert.Nil(t, OAuthScopesFromContext(outCtx), "expired token must not inject scopes")
+	assert.False(t, HasScope(outCtx, "read"), "HasScope must not return true for expired token")
 }
 
 // TestClient_Validate exercises the redirect URI and secret rules.
