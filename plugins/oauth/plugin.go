@@ -9,7 +9,6 @@ import (
 	"github.com/dpup/prefab"
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/plugins/auth"
-	"github.com/dpup/prefab/plugins/storage"
 	"github.com/go-oauth2/oauth2/v4"
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
@@ -256,11 +255,6 @@ func (p *OAuthPlugin) Name() string {
 // Deps returns the plugin dependencies.
 func (p *OAuthPlugin) Deps() []string {
 	return []string{auth.PluginName}
-}
-
-// OptDeps returns optional dependencies.
-func (p *OAuthPlugin) OptDeps() []string {
-	return []string{storage.PluginName}
 }
 
 // Init initializes the OAuth plugin.

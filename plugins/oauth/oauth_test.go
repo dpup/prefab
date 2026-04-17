@@ -1437,6 +1437,78 @@ func TestOAuthPlugin_EmptySecretConfidentialClient_Rejected(t *testing.T) {
 	})
 }
 
+// TestOAuthPlugin_RevokeInvalidatesFullGrant verifies that revoking one
+// side of an access/refresh pair also invalidates the other. RFC 7009 §2.1
+// recommends this so a client that revokes its access token cannot silently
+// keep extending the session via the still-live refresh token.
+func TestOAuthPlugin_RevokeInvalidatesFullGrant(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "c",
+			Secret:       "s",
+			RedirectURIs: []string{"http://localhost/cb"},
+		}).
+		Build()
+
+	ctx := context.Background()
+
+	t.Run("revoking access also removes paired refresh", func(t *testing.T) {
+		require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+			ClientID:         "c",
+			UserID:           "u",
+			Access:           "pair1-access",
+			AccessCreateAt:   time.Now(),
+			AccessExpiresIn:  time.Hour,
+			Refresh:          "pair1-refresh",
+			RefreshCreateAt:  time.Now(),
+			RefreshExpiresIn: 24 * time.Hour,
+		}))
+
+		form := url.Values{}
+		form.Set("token", "pair1-access")
+		form.Set("token_type_hint", "access_token")
+		req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.SetBasicAuth("c", "s")
+		w := httptest.NewRecorder()
+		plugin.revokeHandler().ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		_, err := plugin.tokenStore.store.GetByAccess(ctx, "pair1-access")
+		assert.Error(t, err)
+		_, err = plugin.tokenStore.store.GetByRefresh(ctx, "pair1-refresh")
+		assert.Error(t, err, "revoking access token must also remove paired refresh token")
+	})
+
+	t.Run("revoking refresh also removes paired access", func(t *testing.T) {
+		require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+			ClientID:         "c",
+			UserID:           "u",
+			Access:           "pair2-access",
+			AccessCreateAt:   time.Now(),
+			AccessExpiresIn:  time.Hour,
+			Refresh:          "pair2-refresh",
+			RefreshCreateAt:  time.Now(),
+			RefreshExpiresIn: 24 * time.Hour,
+		}))
+
+		form := url.Values{}
+		form.Set("token", "pair2-refresh")
+		form.Set("token_type_hint", "refresh_token")
+		req := httptest.NewRequest("POST", "/oauth/revoke", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.SetBasicAuth("c", "s")
+		w := httptest.NewRecorder()
+		plugin.revokeHandler().ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		_, err := plugin.tokenStore.store.GetByRefresh(ctx, "pair2-refresh")
+		assert.Error(t, err)
+		_, err = plugin.tokenStore.store.GetByAccess(ctx, "pair2-access")
+		assert.Error(t, err, "revoking refresh token must also remove paired access token")
+	})
+}
+
 // TestOAuthPlugin_InjectOAuthContext_RejectsExpiredToken verifies that
 // expired access tokens do not populate OAuth scopes or client_id into the
 // request context. Without this check, a handler that gates on

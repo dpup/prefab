@@ -263,22 +263,38 @@ func (p *OAuthPlugin) revokeTokenWithOwnershipCheck(ctx context.Context, token, 
 	}
 }
 
-// tryRevokeAccessToken attempts to revoke an access token if it belongs to the client.
+// tryRevokeAccessToken attempts to revoke an access token if it belongs to
+// the client. Also removes the paired refresh token (RFC 7009 §2.1
+// recommends revoking the full grant).
 func (p *OAuthPlugin) tryRevokeAccessToken(ctx context.Context, token, clientID string) bool {
 	info, err := p.tokenStore.store.GetByAccess(ctx, token)
 	if err != nil || info.ClientID != clientID {
 		return false
 	}
-	return p.tokenStore.store.RemoveByAccess(ctx, token) == nil
+	if err := p.tokenStore.store.RemoveByAccess(ctx, token); err != nil {
+		return false
+	}
+	if info.Refresh != "" {
+		_ = p.tokenStore.store.RemoveByRefresh(ctx, info.Refresh)
+	}
+	return true
 }
 
-// tryRevokeRefreshToken attempts to revoke a refresh token if it belongs to the client.
+// tryRevokeRefreshToken attempts to revoke a refresh token if it belongs to
+// the client. Per RFC 7009 §2.1, revoking a refresh token also invalidates
+// the access tokens issued alongside it.
 func (p *OAuthPlugin) tryRevokeRefreshToken(ctx context.Context, token, clientID string) bool {
 	info, err := p.tokenStore.store.GetByRefresh(ctx, token)
 	if err != nil || info.ClientID != clientID {
 		return false
 	}
-	return p.tokenStore.store.RemoveByRefresh(ctx, token) == nil
+	if err := p.tokenStore.store.RemoveByRefresh(ctx, token); err != nil {
+		return false
+	}
+	if info.Access != "" {
+		_ = p.tokenStore.store.RemoveByAccess(ctx, info.Access)
+	}
+	return true
 }
 
 // introspectHandler handles token introspection requests per RFC 7662.
