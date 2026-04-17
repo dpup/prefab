@@ -78,12 +78,49 @@ func (p *OAuthPlugin) tokenHandler() http.Handler {
 			logger = logging.NewDevLogger()
 		}
 
+		// Pre-authenticate the client on the refresh_token grant. go-oauth2's
+		// RefreshAccessToken does not verify request credentials against the
+		// token's owner — without this check, anyone who possesses a refresh
+		// token can exchange it for a new access token, bypassing client
+		// authentication entirely.
+		if err := r.ParseForm(); err == nil && r.FormValue("grant_type") == "refresh_token" {
+			if err := p.authenticateRefreshGrant(r); err != nil {
+				logger.Warn("refresh token client authentication failed", "error", err)
+				writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")
+				return
+			}
+		}
+
 		err := p.server.HandleTokenRequest(w, r)
 		if err != nil {
 			logger.Error("token error", "error", err)
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "The token request is invalid")
 		}
 	})
+}
+
+// authenticateRefreshGrant verifies that the request is authenticated as the
+// same client that owns the supplied refresh token.
+func (p *OAuthPlugin) authenticateRefreshGrant(r *http.Request) error {
+	refresh := r.FormValue("refresh_token")
+	if refresh == "" {
+		return ErrInvalidGrant
+	}
+
+	info, err := p.tokenStore.store.GetByRefresh(r.Context(), refresh)
+	if err != nil {
+		return ErrInvalidGrant
+	}
+
+	client, err := p.authenticateClient(r)
+	if err != nil {
+		return err
+	}
+
+	if client.ID != info.ClientID {
+		return ErrInvalidClient
+	}
+	return nil
 }
 
 // writeOAuthError writes a standard OAuth2 error response.
@@ -371,6 +408,13 @@ func (p *OAuthPlugin) authenticateClient(r *http.Request) (*Client, error) {
 	// Public clients don't require secret validation
 	if client.Public {
 		return client, nil
+	}
+
+	// Refuse to authenticate a confidential client with an empty stored secret;
+	// otherwise subtle.ConstantTimeCompare("", "") returns 1 and any caller
+	// authenticates as the misconfigured client.
+	if client.Secret == "" {
+		return nil, ErrInvalidClient
 	}
 
 	// Use constant-time comparison to prevent timing attacks

@@ -180,7 +180,6 @@ func (b *Builder) Build() *OAuthPlugin {
 	// Create server with sensible defaults
 	p.server = server.NewDefaultServer(p.manager)
 	p.server.SetAllowGetAccessRequest(false)
-	p.server.SetClientInfoHandler(server.ClientFormHandler)
 
 	// Allow both form and basic auth for client credentials
 	p.server.SetClientInfoHandler(func(r *http.Request) (string, string, error) {
@@ -188,21 +187,55 @@ func (b *Builder) Build() *OAuthPlugin {
 		if ok {
 			return clientID, clientSecret, nil
 		}
-		return r.Form.Get("client_id"), r.Form.Get("client_secret"), nil
+		return r.FormValue("client_id"), r.FormValue("client_secret"), nil
 	})
 
 	// Configure allowed grant types and response types
 	p.server.SetAllowedGrantType(oauth2.AuthorizationCode, oauth2.Refreshing, oauth2.ClientCredentials)
 	p.server.SetAllowedResponseType(oauth2.Code)
 
-	// Set scope validation handler
+	// Set scope validation handler for the authorization_code flow.
 	p.server.SetAuthorizeScopeHandler(func(w http.ResponseWriter, r *http.Request) (string, error) {
 		scope := r.FormValue("scope")
 		clientID := r.FormValue("client_id")
 		return p.validateScopes(r.Context(), clientID, scope)
 	})
 
+	// Enforce the client's configured scope allowlist on client_credentials and
+	// password grants. Without this, go-oauth2 passes the requested scope
+	// through unchecked, letting any client mint tokens with arbitrary scopes.
+	p.server.SetClientScopeHandler(func(tgr *oauth2.TokenGenerateRequest) (bool, error) {
+		if _, err := p.validateScopes(tgr.Request.Context(), tgr.ClientID, tgr.Scope); err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+
+	// On refresh, the new scope must be a subset of the originally-granted
+	// scope. This blocks scope escalation via the refresh_token grant.
+	p.server.SetRefreshingScopeHandler(func(tgr *oauth2.TokenGenerateRequest, oldScope string) (bool, error) {
+		if tgr.Scope == "" {
+			return true, nil
+		}
+		return isScopeSubset(tgr.Scope, oldScope), nil
+	})
+
 	return p
+}
+
+// isScopeSubset returns true if every scope in requested is present in granted.
+// Scopes are space-separated per RFC 6749 §3.3.
+func isScopeSubset(requested, granted string) bool {
+	allowed := make(map[string]bool)
+	for _, s := range strings.Fields(granted) {
+		allowed[s] = true
+	}
+	for _, s := range strings.Fields(requested) {
+		if !allowed[s] {
+			return false
+		}
+	}
+	return true
 }
 
 // Name returns the plugin name.

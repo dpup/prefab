@@ -1142,3 +1142,245 @@ func TestOAuthPlugin_PublicClientRevocation(t *testing.T) {
 	_, err = plugin.tokenStore.store.GetByAccess(ctx, "public-client-token")
 	assert.Error(t, err)
 }
+
+// TestOAuthPlugin_RefreshToken_RequiresClientAuth verifies that the refresh
+// token grant requires valid client credentials. Without this, anyone who
+// obtains a refresh token can mint new access tokens.
+func TestOAuthPlugin_RefreshToken_RequiresClientAuth(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "confidential",
+			Secret:       "correct-secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Scopes:       []string{"read", "write"},
+		}).
+		Build()
+
+	ctx := context.Background()
+	tokenInfo := TokenInfo{
+		ClientID:         "confidential",
+		UserID:           "user-1",
+		Scope:            "read write",
+		Access:           "stolen-access",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "stolen-refresh",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}
+	require.NoError(t, plugin.tokenStore.store.Create(ctx, tokenInfo))
+
+	handler := plugin.tokenHandler()
+
+	t.Run("no client auth is rejected", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", "stolen-refresh")
+		req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code,
+			"refresh without client credentials must be rejected")
+	})
+
+	t.Run("wrong secret is rejected", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", "stolen-refresh")
+		form.Set("client_id", "confidential")
+		form.Set("client_secret", "wrong-secret")
+		req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code,
+			"refresh with wrong client secret must be rejected")
+	})
+
+	t.Run("cross-client refresh is rejected", func(t *testing.T) {
+		plugin := NewBuilder().
+			WithClient(Client{
+				ID:           "victim",
+				Secret:       "victim-secret",
+				RedirectURIs: []string{"http://localhost/callback"},
+			}).
+			WithClient(Client{
+				ID:           "attacker",
+				Secret:       "attacker-secret",
+				RedirectURIs: []string{"http://localhost/callback"},
+			}).
+			Build()
+
+		ctx := context.Background()
+		require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+			ClientID:         "victim",
+			UserID:           "user-1",
+			Access:           "victim-access",
+			AccessCreateAt:   time.Now(),
+			AccessExpiresIn:  time.Hour,
+			Refresh:          "victim-refresh",
+			RefreshCreateAt:  time.Now(),
+			RefreshExpiresIn: 24 * time.Hour,
+		}))
+
+		handler := plugin.tokenHandler()
+
+		form := url.Values{}
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", "victim-refresh")
+		req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.SetBasicAuth("attacker", "attacker-secret")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code,
+			"attacker client must not be able to refresh another client's token")
+	})
+
+	t.Run("correct credentials succeed", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", "stolen-refresh")
+		form.Set("client_id", "confidential")
+		form.Set("client_secret", "correct-secret")
+		req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code, "valid refresh should succeed; got body=%s", w.Body.String())
+	})
+}
+
+// TestOAuthPlugin_ClientCredentialsScopeBypass verifies that the configured
+// client scope allowlist is enforced for the client_credentials grant. Without
+// this, clients could mint tokens with arbitrary scopes beyond their grant.
+func TestOAuthPlugin_ClientCredentialsScopeBypass(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "limited",
+			Secret:       "secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Scopes:       []string{"read"},
+		}).
+		Build()
+
+	handler := plugin.tokenHandler()
+
+	form := url.Values{}
+	form.Set("grant_type", "client_credentials")
+	form.Set("client_id", "limited")
+	form.Set("client_secret", "secret")
+	form.Set("scope", "read admin delete")
+
+	req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.NotEqual(t, http.StatusOK, w.Code,
+		"client must not receive scopes beyond its allowlist")
+}
+
+// TestOAuthPlugin_RefreshScopeEscalation verifies that the refresh_token grant
+// cannot escalate to scopes beyond those originally granted.
+func TestOAuthPlugin_RefreshScopeEscalation(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "confidential",
+			Secret:       "secret",
+			RedirectURIs: []string{"http://localhost/callback"},
+			Scopes:       []string{"read", "write", "admin"},
+		}).
+		Build()
+
+	ctx := context.Background()
+	require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+		ClientID:         "confidential",
+		UserID:           "user-1",
+		Scope:            "read",
+		Access:           "a1",
+		AccessCreateAt:   time.Now(),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "r1",
+		RefreshCreateAt:  time.Now(),
+		RefreshExpiresIn: 24 * time.Hour,
+	}))
+
+	handler := plugin.tokenHandler()
+
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", "r1")
+	form.Set("scope", "read admin") // attempts to gain 'admin'
+	req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("confidential", "secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.NotEqual(t, http.StatusOK, w.Code,
+		"refresh must not grant scopes beyond the original token's scope")
+}
+
+// TestOAuthPlugin_EmptySecretConfidentialClient_Rejected verifies that a
+// confidential client misconfigured with an empty secret is not authenticated
+// by an empty-secret request. Without this check, subtle.ConstantTimeCompare
+// returns equal on ("", "") and authentication succeeds.
+func TestOAuthPlugin_EmptySecretConfidentialClient_Rejected(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "misconfigured",
+			Secret:       "",    // accidental empty secret
+			Public:       false, // still marked confidential
+			RedirectURIs: []string{"http://localhost/callback"},
+		}).
+		Build()
+
+	ctx := context.Background()
+	require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+		ClientID:        "misconfigured",
+		UserID:          "user-1",
+		Access:          "a1",
+		AccessCreateAt:  time.Now(),
+		AccessExpiresIn: time.Hour,
+	}))
+
+	// Introspect endpoint should reject the empty-secret client.
+	handler := plugin.introspectHandler()
+	form := url.Values{}
+	form.Set("token", "a1")
+	req := httptest.NewRequest("POST", "/oauth/introspect", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("misconfigured", "")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code,
+		"confidential client with empty stored secret must not authenticate")
+
+	// Token endpoint (client_credentials) should also reject.
+	tokenHandler := plugin.tokenHandler()
+	tcForm := url.Values{}
+	tcForm.Set("grant_type", "client_credentials")
+	tcForm.Set("client_id", "misconfigured")
+	tcForm.Set("client_secret", "")
+	tReq := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(tcForm.Encode()))
+	tReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	tw := httptest.NewRecorder()
+	tokenHandler.ServeHTTP(tw, tReq)
+
+	assert.NotEqual(t, http.StatusOK, tw.Code,
+		"token endpoint must reject empty-secret confidential client")
+}

@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"context"
+	"crypto/subtle"
 	"strings"
 	"sync"
 	"time"
@@ -158,12 +159,32 @@ type clientAdapter struct {
 func (c *clientAdapter) GetID() string     { return c.client.ID }
 func (c *clientAdapter) GetSecret() string { return c.client.Secret }
 func (c *clientAdapter) GetDomain() string {
-	// Return all redirect URIs joined by newline for custom validation handler
+	// Return all redirect URIs joined by newline for custom validation handler.
+	// RedirectURIs are validated at registration time to reject control chars,
+	// so the newline separator is unambiguous.
 	return strings.Join(c.client.RedirectURIs, "\n")
 }
 func (c *clientAdapter) IsPublic() bool { return c.client.Public }
 func (c *clientAdapter) GetUserID() string {
 	return c.client.CreatedBy
+}
+
+// VerifyPassword implements oauth2.ClientPasswordVerifier for constant-time
+// comparison of client secrets and explicit rejection of confidential clients
+// with empty secrets. Without this interface, go-oauth2 falls back to a naive
+// `!=` compare that is (a) vulnerable to timing attacks, and (b) silently
+// skipped when the stored secret is empty — allowing any caller to authenticate
+// as a misconfigured confidential client.
+func (c *clientAdapter) VerifyPassword(secret string) bool {
+	if c.client.Public {
+		// Public clients authenticate by client_id alone; no secret involved.
+		return true
+	}
+	if c.client.Secret == "" {
+		// Refuse to authenticate a confidential client with no stored secret.
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(c.client.Secret), []byte(secret)) == 1
 }
 
 // tokenStoreAdapter adapts TokenStore to go-oauth2's TokenStore interface.
