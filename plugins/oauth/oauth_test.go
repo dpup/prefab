@@ -1437,6 +1437,42 @@ func TestOAuthPlugin_EmptySecretConfidentialClient_Rejected(t *testing.T) {
 	})
 }
 
+// TestMemoryTokenStore_SweepsExpired verifies that the default in-memory
+// store removes expired entries on Create so long-running processes don't
+// accumulate stale tokens indefinitely.
+func TestMemoryTokenStore_SweepsExpired(t *testing.T) {
+	store := NewMemoryTokenStore().(*memoryTokenStore)
+	ctx := context.Background()
+
+	// Insert an expired token.
+	require.NoError(t, store.Create(ctx, TokenInfo{
+		ClientID:         "c",
+		Access:           "expired-access",
+		AccessCreateAt:   time.Now().Add(-2 * time.Hour),
+		AccessExpiresIn:  time.Hour,
+		Refresh:          "expired-refresh",
+		RefreshCreateAt:  time.Now().Add(-2 * time.Hour),
+		RefreshExpiresIn: time.Hour,
+	}))
+
+	// Trigger a sweep by creating a new token.
+	require.NoError(t, store.Create(ctx, TokenInfo{
+		ClientID:        "c",
+		Access:          "fresh-access",
+		AccessCreateAt:  time.Now(),
+		AccessExpiresIn: time.Hour,
+	}))
+
+	_, err := store.GetByAccess(ctx, "expired-access")
+	assert.Error(t, err, "expired access entries should be swept")
+	_, err = store.GetByRefresh(ctx, "expired-refresh")
+	assert.Error(t, err, "expired refresh entries should be swept")
+
+	// Fresh token still present.
+	_, err = store.GetByAccess(ctx, "fresh-access")
+	assert.NoError(t, err)
+}
+
 // TestOAuthPlugin_RevokeInvalidatesFullGrant verifies that revoking one
 // side of an access/refresh pair also invalidates the other. RFC 7009 §2.1
 // recommends this so a client that revokes its access token cannot silently

@@ -291,7 +291,7 @@ Response includes:
 
 ### In-Memory Storage (Default)
 
-Clients and tokens are stored in memory. Suitable for development and single-instance deployments where token persistence isn't required.
+Clients and tokens are stored in memory. Suitable for development, tests, and single-instance deployments where token persistence isn't required.
 
 ```go
 oauthPlugin := oauth.NewBuilder().
@@ -299,7 +299,7 @@ oauthPlugin := oauth.NewBuilder().
     Build()
 ```
 
-Tokens are lost on server restart.
+Tokens are lost on server restart. Expired entries are swept on each write to prevent unbounded memory growth, but production deployments should supply a persistent `TokenStore` (see below) to preserve tokens across restarts and scale beyond a single instance.
 
 ### Persistent Storage
 
@@ -378,9 +378,10 @@ Then visit http://localhost:8080 to test the OAuth flows.
 
 ## Security Considerations
 
-- **Client secrets**: Store securely, never commit to version control
-- **PKCE**: Enable for public clients with `oauth.enforcePkce` config
-- **Redirect URIs**: Whitelist exact URIs, never use wildcards
-- **HTTPS**: Use HTTPS in production for all OAuth endpoints
-- **Scopes**: Grant minimum necessary scopes for each client
-- **Token expiry**: Use short-lived access tokens, longer refresh tokens
+- **Client secrets**: Store securely, never commit to version control. Confidential clients must set a non-empty secret; public clients must not.
+- **PKCE**: Enable `oauth.enforcePkce` for public clients. Only the S256 method is accepted when enforcement is on.
+- **Redirect URIs**: Whitelist exact URIs, never use wildcards. Control characters and relative URLs are rejected at registration.
+- **HTTPS**: Use HTTPS in production for all OAuth endpoints. Set `oauth.issuer` explicitly to a stable https URL so metadata doesn't depend on request headers.
+- **Scopes**: Grant minimum necessary scopes for each client. Scope allowlists are enforced on all grant types; refresh tokens cannot escalate scope beyond the original grant.
+- **Consent**: The plugin does not render a consent UI. When integrating the `/oauth/authorize` endpoint with third-party clients, interpose your own approval step so an authenticated user's session cannot be used to issue tokens to an attacker-registered client without explicit approval.
+- **Token expiry**: Use short-lived access tokens and longer refresh tokens. Revoking either side of a grant invalidates both.

@@ -315,7 +315,11 @@ func (t *tokenInfoAdapter) SetRefreshExpiresIn(s time.Duration) { t.info.Refresh
 func (t *tokenInfoAdapter) GetRedirectURI() string              { return t.info.RedirectURI }
 func (t *tokenInfoAdapter) SetRedirectURI(s string)             { t.info.RedirectURI = s }
 
-// memoryTokenStore is an in-memory implementation of TokenStore.
+// memoryTokenStore is an in-memory implementation of TokenStore intended for
+// development and tests. Production deployments should supply a persistent
+// TokenStore via WithTokenStore so tokens survive restart and token lifetimes
+// can be managed by the storage layer. To prevent unbounded growth, Create
+// sweeps expired entries before inserting new ones.
 type memoryTokenStore struct {
 	mu           sync.RWMutex
 	accessTokens map[string]TokenInfo
@@ -332,10 +336,13 @@ func NewMemoryTokenStore() TokenStore {
 	}
 }
 
-// Create stores a new token.
+// Create stores a new token. It first sweeps expired records so the maps
+// don't grow unboundedly for long-running processes.
 func (s *memoryTokenStore) Create(ctx context.Context, info TokenInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	s.sweepExpiredLocked(time.Now())
 
 	if info.Code != "" {
 		s.codes[info.Code] = info
@@ -347,6 +354,25 @@ func (s *memoryTokenStore) Create(ctx context.Context, info TokenInfo) error {
 		s.refresh[info.Refresh] = info
 	}
 	return nil
+}
+
+// sweepExpiredLocked removes expired entries from every map. Caller holds mu.
+func (s *memoryTokenStore) sweepExpiredLocked(now time.Time) {
+	for k, v := range s.codes {
+		if v.CodeExpiresIn > 0 && v.CodeCreateAt.Add(v.CodeExpiresIn).Before(now) {
+			delete(s.codes, k)
+		}
+	}
+	for k, v := range s.accessTokens {
+		if v.AccessExpiresIn > 0 && v.AccessCreateAt.Add(v.AccessExpiresIn).Before(now) {
+			delete(s.accessTokens, k)
+		}
+	}
+	for k, v := range s.refresh {
+		if v.RefreshExpiresIn > 0 && v.RefreshCreateAt.Add(v.RefreshExpiresIn).Before(now) {
+			delete(s.refresh, k)
+		}
+	}
 }
 
 // RemoveByCode removes a token by authorization code.
