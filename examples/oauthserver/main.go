@@ -3,6 +3,7 @@
 // This example shows:
 // - Setting up an OAuth authorization server
 // - Registering OAuth clients
+// - Interposing an explicit consent step before code issuance
 // - Protecting endpoints with OAuth scopes
 // - Using the authorization code flow
 //
@@ -25,6 +26,8 @@ import (
 	"html"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/dpup/prefab"
@@ -33,8 +36,15 @@ import (
 	"github.com/dpup/prefab/plugins/oauth"
 )
 
+// consentSigningKey signs the CSRF/consent tokens handed to the browser. In a
+// real deployment, pull this from config or KMS; hardcoding is fine for a demo.
+var consentSigningKey = []byte("demo-consent-signing-key-change-me")
+
+// consentCookieName holds the CSRF token that guards the consent form.
+const consentCookieName = "oauth-consent-csrf"
+
 func main() {
-	// Create OAuth plugin with demo clients
+	// Create OAuth plugin with demo clients and a consent-enforcing handler.
 	oauthPlugin := oauth.NewBuilder().
 		// A confidential client for server-to-server communication
 		WithClient(oauth.Client{
@@ -48,7 +58,6 @@ func main() {
 		// A public client for SPAs or mobile apps
 		WithClient(oauth.Client{
 			ID:           "public-client",
-			Secret:       "",
 			Name:         "Public Client",
 			RedirectURIs: []string{"http://localhost:3000/callback", "http://127.0.0.1:3000/callback"},
 			Scopes:       []string{"read", "write"},
@@ -57,14 +66,17 @@ func main() {
 		WithAccessTokenExpiry(time.Hour).
 		WithRefreshTokenExpiry(7 * 24 * time.Hour).
 		WithIssuer("http://localhost:8080").
+		// Require an explicit consent step rather than auto-approving any
+		// authenticated user's request.
+		WithUserAuthorizationHandler(consentGatedAuthorization).
 		Build()
 
-	// Create server with auth and OAuth plugins
 	server := prefab.New(
 		prefab.WithPlugin(auth.Plugin()),
-		prefab.WithPlugin(fakeauth.Plugin()), // For easy testing - auto-login
+		prefab.WithPlugin(fakeauth.Plugin()),
 		prefab.WithPlugin(oauthPlugin),
 		prefab.WithHTTPHandler("/", homeHandler()),
+		prefab.WithHTTPHandler("/consent", consentHandler()),
 		prefab.WithHTTPHandler("/callback", callbackHandler()),
 		prefab.WithHTTPHandler("/api/public", publicHandler()),
 		prefab.WithHTTPHandler("/api/protected", protectedHandler()),
@@ -80,6 +92,203 @@ func main() {
 	}
 }
 
+// consentGatedAuthorization is the custom UserAuthorizationHandler that
+// interposes a consent step between "user is authenticated" and "code is
+// issued." It expects the request to carry a `consent` form value holding a
+// signed CSRF token which must match the cookie set by the consent page.
+// If no valid token is present, it redirects the browser to /consent with the
+// original authorize parameters preserved.
+func consentGatedAuthorization(w http.ResponseWriter, r *http.Request) (string, error) {
+	identity, err := auth.IdentityFromContext(r.Context())
+	if err != nil {
+		// Not authenticated — let go-oauth2's default error redirect fire so
+		// the client sees a proper error rather than a consent page.
+		return "", err
+	}
+
+	submitted := r.FormValue("consent")
+	cookie, cookieErr := r.Cookie(consentCookieName)
+
+	// If the request carries a submitted token that matches the cookie and
+	// has a valid HMAC, treat it as explicit approval.
+	if submitted != "" && cookieErr == nil && submitted == cookie.Value {
+		if verifyErr := prefab.VerifyCSRFToken(submitted, consentSigningKey); verifyErr == nil {
+			// Consume the cookie so the approval can't be replayed.
+			http.SetCookie(w, &http.Cookie{
+				Name:     consentCookieName,
+				Value:    "",
+				Path:     "/",
+				MaxAge:   -1,
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+			})
+			return identity.Subject, nil
+		}
+	}
+
+	// No (or invalid) approval — bounce the browser through our consent page,
+	// preserving the authorize params so we can replay them on approval.
+	redirect := "/consent?" + r.URL.RawQuery
+	http.Redirect(w, r, redirect, http.StatusFound)
+	return "", nil
+}
+
+// consentHandler shows a consent page for GET requests and replays the
+// authorize request with a signed consent token on POST (approval).
+func consentHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			renderConsentPage(w, r)
+		case http.MethodPost:
+			handleConsentApproval(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+}
+
+// renderConsentPage shows the approval form. It mints a fresh CSRF token,
+// sets it as a cookie, and embeds it in the form as a hidden field.
+func renderConsentPage(w http.ResponseWriter, r *http.Request) {
+	params := r.URL.Query()
+	clientID := params.Get("client_id")
+	scope := params.Get("scope")
+
+	if clientID == "" {
+		http.Error(w, "missing client_id", http.StatusBadRequest)
+		return
+	}
+
+	token := prefab.GenerateCSRFToken(consentSigningKey)
+	http.SetCookie(w, &http.Cookie{
+		Name:     consentCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600, // 10 minutes
+	})
+
+	// Build hidden fields that replay the original authorize params on approval.
+	var hiddenFields strings.Builder
+	for key, values := range params {
+		for _, v := range values {
+			fmt.Fprintf(&hiddenFields, `<input type="hidden" name="%s" value="%s">`,
+				html.EscapeString(key), html.EscapeString(v))
+		}
+	}
+
+	scopeList := "<em>(no specific scopes requested)</em>"
+	if scope != "" {
+		var items []string
+		for _, s := range strings.Fields(scope) {
+			items = append(items, "<li><code>"+html.EscapeString(s)+"</code></li>")
+		}
+		scopeList = "<ul>" + strings.Join(items, "") + "</ul>"
+	}
+
+	page := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Authorize %s</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .card { padding: 30px; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; }
+        .btn { padding: 10px 20px; border: 0; border-radius: 4px; cursor: pointer; margin-right: 10px; font-size: 16px; }
+        .btn-approve { background: #28a745; color: white; }
+        .btn-deny { background: #dc3545; color: white; }
+        .scope { background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Authorize <strong>%s</strong>?</h1>
+        <p>This application is requesting the following permissions:</p>
+        %s
+        <form method="POST" action="/consent">
+            %s
+            <input type="hidden" name="consent" value="%s">
+            <button class="btn btn-approve" name="decision" value="approve">Approve</button>
+            <button class="btn btn-deny" name="decision" value="deny">Deny</button>
+        </form>
+        <p style="margin-top: 20px; color: #666; font-size: 14px;">
+            You'll be redirected back to the application after you decide.
+        </p>
+    </div>
+</body>
+</html>`,
+		html.EscapeString(clientID),
+		html.EscapeString(clientID),
+		scopeList,
+		hiddenFields.String(),
+		html.EscapeString(token))
+
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = w.Write([]byte(page))
+}
+
+// handleConsentApproval handles the form POST. On approve, it replays the
+// authorize request with the consent token attached so the oauth plugin's
+// consentGatedAuthorization handler can verify and proceed.
+func handleConsentApproval(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	decision := r.FormValue("decision")
+	clientID := r.FormValue("client_id")
+	redirectURI := r.FormValue("redirect_uri")
+	state := r.FormValue("state")
+	consent := r.FormValue("consent")
+
+	cookie, err := r.Cookie(consentCookieName)
+	if err != nil || cookie.Value == "" || cookie.Value != consent {
+		http.Error(w, "missing or mismatched consent token", http.StatusForbidden)
+		return
+	}
+	if err := prefab.VerifyCSRFToken(consent, consentSigningKey); err != nil {
+		http.Error(w, "invalid consent token", http.StatusForbidden)
+		return
+	}
+
+	if decision != "approve" {
+		// User denied — redirect to the client's redirect_uri with an OAuth
+		// access_denied error per RFC 6749.
+		if redirectURI == "" {
+			http.Error(w, "access denied", http.StatusForbidden)
+			return
+		}
+		q := url.Values{}
+		q.Set("error", "access_denied")
+		q.Set("error_description", "The user denied the request")
+		if state != "" {
+			q.Set("state", state)
+		}
+		http.Redirect(w, r, redirectURI+"?"+q.Encode(), http.StatusFound)
+		return
+	}
+
+	// Replay the original authorize request, preserving all params and
+	// attaching the consent token so the plugin's handler lets it through.
+	authorizeParams := url.Values{}
+	for key, values := range r.PostForm {
+		if key == "decision" {
+			continue
+		}
+		for _, v := range values {
+			authorizeParams.Add(key, v)
+		}
+	}
+	if clientID == "" || redirectURI == "" {
+		http.Error(w, "missing required authorize parameters", http.StatusBadRequest)
+		return
+	}
+
+	http.Redirect(w, r, "/oauth/authorize?"+authorizeParams.Encode(), http.StatusFound)
+}
+
 // homeHandler serves a simple HTML page for testing OAuth flows.
 func homeHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +297,7 @@ func homeHandler() http.Handler {
 			return
 		}
 
-		html := `<!DOCTYPE html>
+		page := `<!DOCTYPE html>
 <html>
 <head>
     <title>OAuth Example Server</title>
@@ -102,7 +311,6 @@ func homeHandler() http.Handler {
         .btn-secondary:hover { background: #545b62; }
         pre { background: #f5f5f5; padding: 10px; overflow-x: auto; border-radius: 4px; }
         code { font-family: monospace; }
-        #result { margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -110,16 +318,16 @@ func homeHandler() http.Handler {
 
     <div class="section">
         <h2>Test Authorization Code Flow</h2>
-        <p>This will redirect you through the OAuth authorization flow:</p>
+        <p>This initiates an authorization request. The server will show you a consent page before issuing a code:</p>
         <a class="btn" href="/oauth/authorize?client_id=demo-client&response_type=code&redirect_uri=http://localhost:8080/callback&scope=read%20write&state=test123">
             Start OAuth Flow
         </a>
-        <p><small>Uses demo-client with scopes: read, write</small></p>
+        <p><small>Requests read + write scopes on behalf of demo-client.</small></p>
     </div>
 
     <div class="section">
         <h2>Test Client Credentials Flow</h2>
-        <p>Get an access token using client credentials:</p>
+        <p>Get an access token using client credentials (no user involved, so no consent step):</p>
         <button class="btn" onclick="testClientCredentials()">Get Token</button>
         <pre id="token-result"></pre>
     </div>
@@ -138,7 +346,6 @@ func homeHandler() http.Handler {
 
     <div class="section">
         <h2>OAuth Metadata</h2>
-        <p>View the OAuth server metadata:</p>
         <a class="btn btn-secondary" href="/.well-known/oauth-authorization-server" target="_blank">
             View Metadata
         </a>
@@ -197,7 +404,7 @@ func homeHandler() http.Handler {
 </body>
 </html>`
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(html))
+		_, _ = w.Write([]byte(page))
 	})
 }
 
@@ -258,7 +465,6 @@ func callbackHandler() http.Handler {
             }
         }
 
-        // Auto-exchange if we have a code
         if ('%s') {
             exchangeCode();
         }
@@ -288,11 +494,10 @@ func callbackHandler() http.Handler {
 			code, code)
 
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	})
 }
 
-// publicHandler is accessible without authentication.
 func publicHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, map[string]interface{}{
@@ -302,19 +507,16 @@ func publicHandler() http.Handler {
 	})
 }
 
-// protectedHandler requires authentication and "read" scope.
 func protectedHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		// Check if user is authenticated
 		identity, err := auth.IdentityFromContext(ctx)
 		if err != nil {
 			jsonError(w, http.StatusUnauthorized, "Authentication required")
 			return
 		}
 
-		// Check OAuth scope if this is an OAuth request
 		if oauth.IsOAuthRequest(ctx) {
 			if !oauth.HasScope(ctx, "read") {
 				jsonError(w, http.StatusForbidden, "Missing 'read' scope")
@@ -333,19 +535,16 @@ func protectedHandler() http.Handler {
 	})
 }
 
-// adminHandler requires authentication and "admin" scope.
 func adminHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		// Check if user is authenticated
 		identity, err := auth.IdentityFromContext(ctx)
 		if err != nil {
 			jsonError(w, http.StatusUnauthorized, "Authentication required")
 			return
 		}
 
-		// Check OAuth scope if this is an OAuth request
 		if oauth.IsOAuthRequest(ctx) {
 			if !oauth.HasScope(ctx, "admin") {
 				jsonError(w, http.StatusForbidden, "Missing 'admin' scope")
@@ -363,7 +562,6 @@ func adminHandler() http.Handler {
 	})
 }
 
-// userinfoHandler returns information about the authenticated user.
 func userinfoHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -391,13 +589,13 @@ func userinfoHandler() http.Handler {
 
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func jsonError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": message,
 	})
 }
