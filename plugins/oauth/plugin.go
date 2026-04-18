@@ -135,70 +135,73 @@ func (b *Builder) WithUserAuthorizationHandler(h server.UserAuthorizationHandler
 func (b *Builder) Build() *OAuthPlugin {
 	p := b.plugin
 
-	// Use user-provided client store or default in-memory store
-	var clientStore ClientStore
-	if p.userClientStore != nil {
-		clientStore = p.userClientStore
-	} else {
-		clientStore = newMemoryClientStore()
-	}
-
-	// Use user-provided token store or default in-memory store
-	var tokenStore TokenStore
-	if p.userTokenStore != nil {
-		tokenStore = p.userTokenStore
-	} else {
-		tokenStore = NewMemoryTokenStore()
-	}
-
-	// Create adapters that wrap the stores
+	clientStore, tokenStore := p.resolveStores()
 	p.clientStore = newClientStoreAdapter(clientStore)
 	p.tokenStore = newTokenStoreAdapter(tokenStore)
+	p.registerStaticClients(clientStore)
 
-	// Register static clients. On a fresh store CreateClient succeeds; on a
-	// persistent store the client may already exist, so fall back to Update.
-	// Both paths validate the client configuration.
+	p.manager = p.buildManager()
+	p.server = p.buildServer()
+
+	return p
+}
+
+// resolveStores returns the user-supplied stores or fresh in-memory defaults.
+func (p *OAuthPlugin) resolveStores() (ClientStore, TokenStore) {
+	clientStore := p.userClientStore
+	if clientStore == nil {
+		clientStore = newMemoryClientStore()
+	}
+	tokenStore := p.userTokenStore
+	if tokenStore == nil {
+		tokenStore = NewMemoryTokenStore()
+	}
+	return clientStore, tokenStore
+}
+
+// registerStaticClients inserts each statically-declared client. On a fresh
+// store CreateClient succeeds; on a persistent store the client may already
+// exist, so we fall back to Update. Both paths validate the client config.
+// Panics if neither succeeds — static client misconfiguration is a bug.
+func (p *OAuthPlugin) registerStaticClients(store ClientStore) {
 	for i := range p.staticClients {
 		client := p.staticClients[i]
-		if err := clientStore.CreateClient(context.Background(), &client); err != nil {
-			if updateErr := clientStore.UpdateClient(context.Background(), &client); updateErr != nil {
+		if err := store.CreateClient(context.Background(), &client); err != nil {
+			if updateErr := store.UpdateClient(context.Background(), &client); updateErr != nil {
 				panic("oauth: failed to register static client " + client.ID + ": " + updateErr.Error())
 			}
 		}
 	}
+}
 
-	// Create manager with configuration
-	p.manager = manage.NewDefaultManager()
-
-	// Configure token expiration
-	p.manager.SetAuthorizeCodeTokenCfg(&manage.Config{
+// buildManager creates the go-oauth2 manager with token lifetimes and storage.
+func (p *OAuthPlugin) buildManager() *manage.Manager {
+	m := manage.NewDefaultManager()
+	m.SetAuthorizeCodeTokenCfg(&manage.Config{
 		AccessTokenExp:    p.accessTokenExpiry,
 		RefreshTokenExp:   p.refreshTokenExpiry,
 		IsGenerateRefresh: true,
 	})
-	p.manager.SetRefreshTokenCfg(&manage.RefreshingConfig{
+	m.SetRefreshTokenCfg(&manage.RefreshingConfig{
 		AccessTokenExp:     p.accessTokenExpiry,
 		RefreshTokenExp:    p.refreshTokenExpiry,
 		IsGenerateRefresh:  true,
 		IsRemoveAccess:     true,
 		IsRemoveRefreshing: true,
 	})
-	p.manager.SetClientTokenCfg(&manage.Config{
+	m.SetClientTokenCfg(&manage.Config{
 		AccessTokenExp: p.accessTokenExpiry,
 	})
+	m.SetAuthorizeCodeExp(p.authCodeExpiry)
+	m.MapClientStorage(p.clientStore)
+	m.MapTokenStorage(p.tokenStore)
 
-	// Set authorization code expiration
-	p.manager.SetAuthorizeCodeExp(p.authCodeExpiry)
-
-	// Map storage
-	p.manager.MapClientStorage(p.clientStore)
-	p.manager.MapTokenStorage(p.tokenStore)
-
-	// Set custom redirect URI validation to support multiple redirect URIs
-	// baseURI contains all redirect URIs joined by newline (from GetDomain())
-	p.manager.SetValidateURIHandler(func(baseURI, redirectURI string) error {
-		allowedURIs := strings.Split(baseURI, "\n")
-		for _, allowed := range allowedURIs {
+	// Custom redirect URI validation — baseURI holds all registered redirect
+	// URIs joined by newline (see clientAdapter.GetDomain). Redirect URIs
+	// containing control characters are rejected at registration so the
+	// newline separator is unambiguous.
+	m.SetValidateURIHandler(func(baseURI, redirectURI string) error {
+		for _, allowed := range strings.Split(baseURI, "\n") {
 			if allowed == redirectURI {
 				return nil
 			}
@@ -206,61 +209,55 @@ func (b *Builder) Build() *OAuthPlugin {
 		return ErrAccessDenied
 	})
 
-	// Create server with sensible defaults
-	p.server = server.NewDefaultServer(p.manager)
-	p.server.SetAllowGetAccessRequest(false)
+	return m
+}
 
-	// Allow both form and basic auth for client credentials
-	p.server.SetClientInfoHandler(func(r *http.Request) (string, string, error) {
-		clientID, clientSecret, ok := r.BasicAuth()
-		if ok {
+// buildServer creates the go-oauth2 server and installs the plugin's grant,
+// scope, and user-authorization handlers.
+func (p *OAuthPlugin) buildServer() *server.Server {
+	srv := server.NewDefaultServer(p.manager)
+	srv.SetAllowGetAccessRequest(false)
+	srv.SetAllowedGrantType(oauth2.AuthorizationCode, oauth2.Refreshing, oauth2.ClientCredentials)
+	srv.SetAllowedResponseType(oauth2.Code)
+
+	// Accept client credentials via either Basic auth or form-encoded fields.
+	srv.SetClientInfoHandler(func(r *http.Request) (string, string, error) {
+		if clientID, clientSecret, ok := r.BasicAuth(); ok {
 			return clientID, clientSecret, nil
 		}
 		return r.FormValue("client_id"), r.FormValue("client_secret"), nil
 	})
 
-	// Configure allowed grant types and response types
-	p.server.SetAllowedGrantType(oauth2.AuthorizationCode, oauth2.Refreshing, oauth2.ClientCredentials)
-	p.server.SetAllowedResponseType(oauth2.Code)
-
-	// Set scope validation handler for the authorization_code flow.
-	p.server.SetAuthorizeScopeHandler(func(w http.ResponseWriter, r *http.Request) (string, error) {
-		scope := r.FormValue("scope")
-		clientID := r.FormValue("client_id")
-		return p.validateScopes(r.Context(), clientID, scope)
+	// Enforce the client's scope allowlist on every grant that accepts a scope.
+	srv.SetAuthorizeScopeHandler(func(w http.ResponseWriter, r *http.Request) (string, error) {
+		return p.validateScopes(r.Context(), r.FormValue("client_id"), r.FormValue("scope"))
 	})
-
-	// Enforce the client's configured scope allowlist on client_credentials and
-	// password grants. Without this, go-oauth2 passes the requested scope
-	// through unchecked, letting any client mint tokens with arbitrary scopes.
 	// We return (false, nil) on invalid scope so go-oauth2 emits its standard
 	// invalid_scope response rather than surfacing an internal error.
-	p.server.SetClientScopeHandler(func(tgr *oauth2.TokenGenerateRequest) (bool, error) {
+	srv.SetClientScopeHandler(func(tgr *oauth2.TokenGenerateRequest) (bool, error) {
 		if _, err := p.validateScopes(tgr.Request.Context(), tgr.ClientID, tgr.Scope); err != nil {
-			return false, nil //nolint:nilerr // scope rejection is signalled via allowed=false; returning err would surface an internal error response
+			return false, nil //nolint:nilerr // rejection is signalled via allowed=false
 		}
 		return true, nil
 	})
-
-	// On refresh, the new scope must be a subset of the originally-granted
-	// scope. This blocks scope escalation via the refresh_token grant.
-	p.server.SetRefreshingScopeHandler(func(tgr *oauth2.TokenGenerateRequest, oldScope string) (bool, error) {
+	// On refresh, the new scope must be a subset of the original grant —
+	// prevents scope escalation via refresh_token.
+	srv.SetRefreshingScopeHandler(func(tgr *oauth2.TokenGenerateRequest, oldScope string) (bool, error) {
 		if tgr.Scope == "" {
 			return true, nil
 		}
 		return isScopeSubset(tgr.Scope, oldScope), nil
 	})
 
-	// Configure user authorization handler. The default treats any
-	// authenticated identity as consent; integrators override this via
-	// WithUserAuthorizationHandler to interpose an explicit consent step.
+	// The default UserAuthorizationHandler treats authentication as consent;
+	// integrators override this via WithUserAuthorizationHandler.
 	if p.userAuthHandler != nil {
-		p.server.SetUserAuthorizationHandler(p.userAuthHandler)
+		srv.SetUserAuthorizationHandler(p.userAuthHandler)
 	} else {
-		p.server.SetUserAuthorizationHandler(defaultUserAuthorizationHandler)
+		srv.SetUserAuthorizationHandler(defaultUserAuthorizationHandler)
 	}
 
-	return p
+	return srv
 }
 
 // defaultUserAuthorizationHandler resolves the authenticated user's subject

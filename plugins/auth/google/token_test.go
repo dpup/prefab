@@ -7,6 +7,7 @@ import (
 
 	"github.com/dpup/prefab/plugins/auth"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOAuthToken_HasRefreshToken(t *testing.T) {
@@ -123,7 +124,7 @@ func TestWithTokenHandler(t *testing.T) {
 
 	// Call the handler to verify it's set correctly
 	err := p.tokenHandler(context.Background(), auth.Identity{}, OAuthToken{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, called)
 }
 
@@ -154,7 +155,7 @@ func TestWithTokenHandler_ReceivesCorrectData(t *testing.T) {
 	}
 
 	err := p.tokenHandler(context.Background(), testIdentity, testToken)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, testIdentity.Subject, receivedIdentity.Subject)
 	assert.Equal(t, testIdentity.Email, receivedIdentity.Email)
 	assert.Equal(t, testToken.AccessToken, receivedToken.AccessToken)

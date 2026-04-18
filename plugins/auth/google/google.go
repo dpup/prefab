@@ -71,6 +71,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/dpup/prefab"
@@ -268,10 +269,13 @@ func (p *GooglePlugin) redirectToGoogle(ctx context.Context, dest string, state 
 	wrappedState := p.newOauthState(dest, state)
 
 	// Build scope string with default scopes plus any extra scopes.
-	scopes := "openid email profile"
+	var scopesSb strings.Builder
+	scopesSb.WriteString("openid email profile")
 	for _, scope := range p.extraScopes {
-		scopes += " " + scope
+		scopesSb.WriteByte(' ')
+		scopesSb.WriteString(scope)
 	}
+	scopes := scopesSb.String()
 
 	q := url.Values{}
 	q.Add("client_id", p.clientID)

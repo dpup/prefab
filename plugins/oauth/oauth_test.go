@@ -99,11 +99,11 @@ func TestMemoryClientStore(t *testing.T) {
 
 	// Try to create duplicate
 	err = store.CreateClient(ctx, client)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Get non-existent client
 	_, err = store.GetClient(ctx, "non-existent")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Update client
 	client.Name = "Updated Name"
@@ -181,19 +181,19 @@ func TestMemoryTokenStore(t *testing.T) {
 	err = store.RemoveByAccess(ctx, "test-access-token")
 	require.NoError(t, err)
 	_, err = store.GetByAccess(ctx, "test-access-token")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Test RemoveByRefresh
 	err = store.RemoveByRefresh(ctx, "test-refresh-token")
 	require.NoError(t, err)
 	_, err = store.GetByRefresh(ctx, "test-refresh-token")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Test RemoveByCode
 	err = store.RemoveByCode(ctx, "test-code")
 	require.NoError(t, err)
 	_, err = store.GetByCode(ctx, "test-code")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // mockTokenInfo implements oauth2.TokenInfo for testing
@@ -426,10 +426,10 @@ func TestOAuthPlugin_ScopeValidation(t *testing.T) {
 
 	// Test restricted client - disallowed scope
 	_, err = plugin.validateScopes(ctx, "restricted-client", "admin")
-	assert.ErrorIs(t, err, ErrInvalidScope)
+	require.ErrorIs(t, err, ErrInvalidScope)
 
 	_, err = plugin.validateScopes(ctx, "restricted-client", "read admin")
-	assert.ErrorIs(t, err, ErrInvalidScope)
+	require.ErrorIs(t, err, ErrInvalidScope)
 
 	// Test unrestricted client - any scope allowed
 	scope, err = plugin.validateScopes(ctx, "unrestricted-client", "anything goes")
@@ -439,7 +439,7 @@ func TestOAuthPlugin_ScopeValidation(t *testing.T) {
 	// Test empty scope
 	scope, err = plugin.validateScopes(ctx, "restricted-client", "")
 	require.NoError(t, err)
-	assert.Equal(t, "", scope)
+	assert.Empty(t, scope)
 }
 
 func TestOAuthPlugin_RedirectURIValidation(t *testing.T) {
@@ -485,34 +485,34 @@ func TestOAuthPlugin_PKCEEnforcement(t *testing.T) {
 	// Test that public client without code_challenge is rejected
 	req := httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback", nil)
 	err := plugin.validatePKCERequired(req)
-	assert.ErrorIs(t, err, ErrPKCERequired)
+	require.ErrorIs(t, err, ErrPKCERequired)
 
 	// Test that public client with code_challenge is accepted
 	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=S256", nil)
 	err = plugin.validatePKCERequired(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test that confidential client without code_challenge is accepted (PKCE not required)
 	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=confidential-client&response_type=code&redirect_uri=http://localhost/callback", nil)
 	err = plugin.validatePKCERequired(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test invalid code_challenge_method
 	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=invalid", nil)
 	err = plugin.validatePKCERequired(req)
-	assert.ErrorIs(t, err, ErrPKCEMethodRequired)
+	require.ErrorIs(t, err, ErrPKCEMethodRequired)
 
 	// Plain PKCE offers no protection (challenge == verifier) and must be
 	// rejected when enforcement is on.
 	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123&code_challenge_method=plain", nil)
 	err = plugin.validatePKCERequired(req)
-	assert.ErrorIs(t, err, ErrPKCEMethodRequired)
+	require.ErrorIs(t, err, ErrPKCEMethodRequired)
 
 	// Missing method defaults to plain in the underlying library and must
 	// also be rejected when enforcement is on.
 	req = httptest.NewRequest("GET", "/oauth/authorize?client_id=public-client&response_type=code&redirect_uri=http://localhost/callback&code_challenge=abc123", nil)
 	err = plugin.validatePKCERequired(req)
-	assert.ErrorIs(t, err, ErrPKCEMethodRequired)
+	require.ErrorIs(t, err, ErrPKCEMethodRequired)
 }
 
 // TestOAuthPlugin_MetadataReflectsPKCEEnforcement verifies the advertised
