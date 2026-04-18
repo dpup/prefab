@@ -9,11 +9,11 @@
 //
 // To test:
 // 1. Run: go run ./examples/oauthserver
-// 2. Visit: http://localhost:8080
+// 2. Visit: http://localhost:8000
 // 3. Click "Start OAuth Flow" to test the authorization code flow
 // 4. Or use curl to test the client credentials flow:
 //
-//	curl -X POST http://localhost:8080/oauth/token \
+//	curl -X POST http://localhost:8000/oauth/token \
 //	  -d "grant_type=client_credentials" \
 //	  -d "client_id=demo-client" \
 //	  -d "client_secret=demo-secret" \
@@ -51,7 +51,7 @@ func main() {
 			ID:           "demo-client",
 			Secret:       "demo-secret",
 			Name:         "Demo Client",
-			RedirectURIs: []string{"http://localhost:8080/callback"},
+			RedirectURIs: []string{"http://localhost:8000/callback"},
 			Scopes:       []string{"read", "write", "admin"},
 			Public:       false,
 		}).
@@ -65,7 +65,7 @@ func main() {
 		}).
 		WithAccessTokenExpiry(time.Hour).
 		WithRefreshTokenExpiry(7 * 24 * time.Hour).
-		WithIssuer("http://localhost:8080").
+		WithIssuer("http://localhost:8000").
 		// Require an explicit consent step rather than auto-approving any
 		// authenticated user's request.
 		WithUserAuthorizationHandler(consentGatedAuthorization).
@@ -84,8 +84,8 @@ func main() {
 		prefab.WithHTTPHandler("/api/userinfo", userinfoHandler()),
 	)
 
-	log.Println("Starting OAuth example server on http://localhost:8080")
-	log.Println("Visit http://localhost:8080 to test the OAuth flow")
+	log.Println("Starting OAuth example server on http://localhost:8000")
+	log.Println("Visit http://localhost:8000 to test the OAuth flow")
 
 	if err := server.Start(); err != nil {
 		log.Fatalf("Server error: %v", err)
@@ -317,24 +317,33 @@ func homeHandler() http.Handler {
     <h1>OAuth2 Example Server</h1>
 
     <div class="section">
-        <h2>Test Authorization Code Flow</h2>
+        <h2>Step 1: Sign in as a demo user</h2>
+        <p>The authorization code flow requires an authenticated session. This demo uses
+        the <code>fakeauth</code> plugin which mints a session cookie for a canned identity.
+        In a real deployment you'd use Google, magic link, password, etc.</p>
+        <button class="btn" onclick="fakeLogin()">Log in as demo user</button>
+        <pre id="login-result"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Start the authorization code flow</h2>
         <p>This initiates an authorization request. The server will show you a consent page before issuing a code:</p>
-        <a class="btn" href="/oauth/authorize?client_id=demo-client&response_type=code&redirect_uri=http://localhost:8080/callback&scope=read%20write&state=test123">
+        <a class="btn" href="/oauth/authorize?client_id=demo-client&response_type=code&redirect_uri=http://localhost:8000/callback&scope=read%20write&state=test123">
             Start OAuth Flow
         </a>
         <p><small>Requests read + write scopes on behalf of demo-client.</small></p>
     </div>
 
     <div class="section">
-        <h2>Test Client Credentials Flow</h2>
-        <p>Get an access token using client credentials (no user involved, so no consent step):</p>
+        <h2>Alternative: Client Credentials Flow</h2>
+        <p>For server-to-server auth. No user involved, so no consent step:</p>
         <button class="btn" onclick="testClientCredentials()">Get Token</button>
         <pre id="token-result"></pre>
     </div>
 
     <div class="section">
         <h2>Test Protected Endpoints</h2>
-        <p>Enter an access token to test the protected endpoints:</p>
+        <p>Paste an access token to test the protected endpoints:</p>
         <input type="text" id="access-token" placeholder="Access Token" style="width: 100%; padding: 8px; margin: 10px 0;">
         <br>
         <button class="btn btn-secondary" onclick="testEndpoint('/api/public')">Public API</button>
@@ -352,6 +361,25 @@ func homeHandler() http.Handler {
     </div>
 
     <script>
+        async function fakeLogin() {
+            const result = document.getElementById('login-result');
+            result.textContent = 'Logging in...';
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-protection': '1',
+                    },
+                    body: JSON.stringify({ provider: 'fakeauth' }),
+                });
+                const data = await response.json();
+                result.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                result.textContent = 'Error: ' + err.message;
+            }
+        }
+
         async function testClientCredentials() {
             const result = document.getElementById('token-result');
             result.textContent = 'Loading...';
@@ -454,7 +482,7 @@ func callbackHandler() http.Handler {
                         code: code,
                         client_id: 'demo-client',
                         client_secret: 'demo-secret',
-                        redirect_uri: 'http://localhost:8080/callback'
+                        redirect_uri: 'http://localhost:8000/callback'
                     })
                 });
 
