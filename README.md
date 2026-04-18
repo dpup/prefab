@@ -212,16 +212,17 @@ See [docs/authz.md](./docs/authz.md) for comprehensive documentation and [exampl
 
 ### OAuth2
 
-The `oauth` plugin turns your Prefab server into an OAuth2 authorization server. It supports standard OAuth2 flows including authorization code (with PKCE), client credentials, and refresh tokens.
+The `oauth` plugin turns your Prefab server into an OAuth2 authorization server, integrated with the auth plugin so the same protected endpoints can accept either user sessions or OAuth bearer tokens.
 
 **Key Features:**
-- **Standard OAuth2 flows**: Authorization code, client credentials, refresh tokens
-- **PKCE support**: Secure authorization for public clients (SPAs, mobile apps)
-- **Token management**: Token revocation (RFC 7009) and introspection (RFC 7662)
-- **Scope-based authorization**: Fine-grained access control with OAuth scopes
-- **Flexible storage**: In-memory or persistent storage for clients and tokens
+- **Standard OAuth2 flows (RFC 6749)**: authorization code with PKCE, client credentials, refresh tokens
+- **PKCE enforcement**: `oauth.enforcePkce` requires public clients to use `S256`; the weaker `plain` method is rejected
+- **Token management**: revocation (RFC 7009) and introspection (RFC 7662), with server metadata at `/.well-known/oauth-authorization-server` (RFC 8414)
+- **Scope enforcement on every grant**: client allowlists apply to authorization code, client credentials, and refresh — refresh tokens cannot escalate scope
+- **Pluggable consent**: `WithUserAuthorizationHandler` lets you interpose your own consent UI (defaults to auto-approve for first-party clients only)
+- **Flexible storage**: in-memory by default (dev), pluggable `ClientStore` / `TokenStore` interfaces for production persistence
 
-See [plugins/oauth/README.md](./plugins/oauth/README.md) for detailed documentation and [examples/oauthserver](./examples/oauthserver) for a complete working example.
+See [plugins/oauth/README.md](./plugins/oauth/README.md) for the integration checklist and detailed documentation, and [examples/oauthserver](./examples/oauthserver) for a complete working example with a CSRF-protected consent page.
 
 ### Storage
 
