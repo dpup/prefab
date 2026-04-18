@@ -1642,6 +1642,41 @@ func TestOAuthPlugin_MetadataHandlerForwardedProto(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/oauth/token", meta["token_endpoint"])
 }
 
+// TestOAuthPlugin_WithUserAuthorizationHandler verifies that a custom
+// consent handler replaces the default "any authenticated user counts" logic
+// and that the handler can suppress code issuance by writing a redirect and
+// returning an empty userID.
+func TestOAuthPlugin_WithUserAuthorizationHandler(t *testing.T) {
+	called := false
+
+	custom := func(w http.ResponseWriter, r *http.Request) (string, error) {
+		called = true
+		// Simulate redirecting to a consent page and suppressing code
+		// issuance for this request.
+		w.Header().Set("Location", "/consent")
+		w.WriteHeader(http.StatusFound)
+		return "", nil
+	}
+
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "demo",
+			Secret:       "secret",
+			RedirectURIs: []string{"http://localhost/cb"},
+			Scopes:       []string{"read"},
+		}).
+		WithUserAuthorizationHandler(custom).
+		Build()
+
+	req := httptest.NewRequest("GET", "/oauth/authorize?client_id=demo&response_type=code&redirect_uri=http://localhost/cb&scope=read&state=x", nil)
+	w := httptest.NewRecorder()
+	plugin.authorizeHandler().ServeHTTP(w, req)
+
+	assert.True(t, called, "custom user authorization handler must be invoked")
+	assert.Equal(t, http.StatusFound, w.Code, "handler's redirect should be the final response")
+	assert.Equal(t, "/consent", w.Header().Get("Location"))
+}
+
 // TestClient_Validate exercises the redirect URI and secret rules.
 func TestClient_Validate(t *testing.T) {
 	tests := []struct {

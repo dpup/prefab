@@ -31,6 +31,7 @@ type OAuthPlugin struct {
 	staticClients   []Client
 	userClientStore ClientStore
 	userTokenStore  TokenStore
+	userAuthHandler server.UserAuthorizationHandler
 }
 
 // Builder provides a fluent interface for configuring the OAuth plugin.
@@ -108,6 +109,25 @@ func (b *Builder) WithTokenStore(store TokenStore) *Builder {
 // If not set, the value is read from config key "oauth.enforcePkce".
 func (b *Builder) WithEnforcePKCE(enforce bool) *Builder {
 	b.plugin.enforcePKCE = &enforce
+	return b
+}
+
+// WithUserAuthorizationHandler overrides how the /oauth/authorize endpoint
+// resolves the authenticated user. The default uses auth.IdentityFromContext
+// and conflates authentication with consent: any authenticated user's request
+// is treated as an approval, which is only safe when every registered client
+// is first-party.
+//
+// For multi-tenant or third-party setups, provide a handler that enforces an
+// explicit consent step. The handler receives the raw request and can:
+//
+//   - Write a redirect to a consent page and return ("", nil) to suppress
+//     code issuance for this request while keeping the response valid.
+//   - Verify a consent token (e.g., via prefab.VerifyCSRFToken) and return
+//     the user's subject on approval.
+//   - Return an error to produce an OAuth error redirect to the client.
+func (b *Builder) WithUserAuthorizationHandler(h server.UserAuthorizationHandler) *Builder {
+	b.plugin.userAuthHandler = h
 	return b
 }
 
@@ -231,7 +251,27 @@ func (b *Builder) Build() *OAuthPlugin {
 		return isScopeSubset(tgr.Scope, oldScope), nil
 	})
 
+	// Configure user authorization handler. The default treats any
+	// authenticated identity as consent; integrators override this via
+	// WithUserAuthorizationHandler to interpose an explicit consent step.
+	if p.userAuthHandler != nil {
+		p.server.SetUserAuthorizationHandler(p.userAuthHandler)
+	} else {
+		p.server.SetUserAuthorizationHandler(defaultUserAuthorizationHandler)
+	}
+
 	return p
+}
+
+// defaultUserAuthorizationHandler resolves the authenticated user's subject
+// directly from the auth context, treating authentication as consent. This is
+// only safe when every registered client is first-party.
+func defaultUserAuthorizationHandler(w http.ResponseWriter, r *http.Request) (string, error) {
+	identity, err := auth.IdentityFromContext(r.Context())
+	if err != nil {
+		return "", err
+	}
+	return identity.Subject, nil
 }
 
 // isScopeSubset returns true if every scope in requested is present in granted.
@@ -278,17 +318,6 @@ func (p *OAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 			p.issuer = prefab.Config.String("address")
 		}
 	}
-
-	// Configure user authorization handler
-	p.server.SetUserAuthorizationHandler(func(w http.ResponseWriter, r *http.Request) (string, error) {
-		ctx := r.Context()
-		identity, err := auth.IdentityFromContext(ctx)
-		if err != nil {
-			// Redirect to login
-			return "", err
-		}
-		return identity.Subject, nil
-	})
 
 	return nil
 }

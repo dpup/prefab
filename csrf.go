@@ -100,6 +100,24 @@ func csrfTokenFromCookie(ctx context.Context) string {
 	return c.Value
 }
 
+// GenerateCSRFToken returns a freshly-generated CSRF token signed with the
+// provided key. The token is suitable for embedding in a form field, a
+// cookie, or a response body; use VerifyCSRFToken to check it on a later
+// request. Unlike SendCSRFToken, this function does not touch any request
+// or response state, so it can be used from plain http.Handler code (e.g.,
+// an OAuth consent page) where the gRPC metadata pipeline isn't available.
+func GenerateCSRFToken(signingKey []byte) string {
+	return generateCSRFToken(signingKey)
+}
+
+// VerifyCSRFToken checks that a token's HMAC signature matches the signing
+// key. It does not check that the token matches a separately-stored value
+// (e.g., a cookie) — callers are expected to do that comparison themselves
+// before invoking this function (the double-submit pattern).
+func VerifyCSRFToken(token string, signingKey []byte) error {
+	return verifyCSRFToken(token, signingKey)
+}
+
 func generateCSRFToken(signingKey []byte) string {
 	randomData := make([]byte, csrfTokenLength)
 	if _, err := rand.Read(randomData); err != nil {

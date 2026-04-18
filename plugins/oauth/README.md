@@ -121,14 +121,15 @@ curl -X POST http://localhost:8080/oauth/token \
 
 ```go
 oauth.NewBuilder().
-    WithClient(client).                          // Add OAuth client
-    WithAccessTokenExpiry(time.Hour).            // Default: 1 hour
-    WithRefreshTokenExpiry(7 * 24 * time.Hour).  // Default: 14 days
-    WithAuthCodeExpiry(10 * time.Minute).        // Default: 10 minutes
-    WithIssuer("https://api.example.com").       // Token issuer URL
-    WithEnforcePKCE(true).                       // Require PKCE for public clients
-    WithClientStore(customStore).                // Custom client storage
-    WithTokenStore(customStore).                 // Custom token storage
+    WithClient(client).                             // Add OAuth client
+    WithAccessTokenExpiry(time.Hour).               // Default: 1 hour
+    WithRefreshTokenExpiry(7 * 24 * time.Hour).     // Default: 14 days
+    WithAuthCodeExpiry(10 * time.Minute).           // Default: 10 minutes
+    WithIssuer("https://api.example.com").          // Token issuer URL
+    WithEnforcePKCE(true).                          // Require PKCE for public clients
+    WithClientStore(customStore).                   // Custom client storage
+    WithTokenStore(customStore).                    // Custom token storage
+    WithUserAuthorizationHandler(consentHandler).   // Custom consent/approval logic
     Build()
 ```
 
@@ -137,7 +138,7 @@ oauth.NewBuilder().
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `oauth.enforcePkce` | bool | `false` | Require PKCE for public clients |
-| `oauth.issuer` | string | `server.address` | Token issuer URL |
+| `oauth.issuer` | string | `address` config | Token issuer URL |
 
 ## Client Types
 
@@ -173,6 +174,39 @@ Public clients:
 - Cannot authenticate with a client secret
 - Should use PKCE when `oauth.enforcePkce` is enabled
 - Tokens are still secure when PKCE is used correctly
+
+## Consent
+
+The `/oauth/authorize` endpoint does not render a consent UI. By default, any authenticated user's request is treated as an approval — safe only when all registered clients are first-party (you trust every client equally, e.g., your own apps and internal services).
+
+For multi-tenant or third-party setups, supply a custom `UserAuthorizationHandler` that enforces an explicit consent step. The handler can redirect the browser to your consent page, verify a signed approval token on return, and then resolve the user's subject:
+
+```go
+oauth.NewBuilder().
+    WithUserAuthorizationHandler(func(w http.ResponseWriter, r *http.Request) (string, error) {
+        identity, err := auth.IdentityFromContext(r.Context())
+        if err != nil {
+            return "", err
+        }
+
+        // Check for a valid consent token (double-submit cookie pattern).
+        submitted := r.FormValue("consent")
+        cookie, cookieErr := r.Cookie("oauth-consent-csrf")
+        if submitted != "" && cookieErr == nil && submitted == cookie.Value {
+            if err := prefab.VerifyCSRFToken(submitted, signingKey); err == nil {
+                return identity.Subject, nil
+            }
+        }
+
+        // No valid approval — redirect to the consent page with the
+        // original authorize params preserved.
+        http.Redirect(w, r, "/consent?"+r.URL.RawQuery, http.StatusFound)
+        return "", nil
+    }).
+    Build()
+```
+
+The consent page mints a CSRF token via `prefab.GenerateCSRFToken`, sets it as a cookie, and embeds it as a hidden form field. On approval, the form POSTs back to a handler that replays the authorize request with the consent token attached. See [examples/oauthserver](../../examples/oauthserver) for a full working implementation.
 
 ## Scope-Based Authorization
 
