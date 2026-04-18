@@ -517,7 +517,6 @@ func httpContextMiddleware(h http.Handler, cf []ConfigInjector, gateway *runtime
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		ctx = logging.With(r.Context(), logging.FromContext(ctx).Named(r.URL.Path))
-		ctx = injectConfigs(ctx, cf)
 
 		// TODO: Is this worth specifying? It is read via runtime.RPCMethod()
 		name := "HttpHandler"
@@ -540,6 +539,12 @@ func httpContextMiddleware(h http.Handler, cf []ConfigInjector, gateway *runtime
 			logging.Errorw(r.Context(), "Failed to annotate context", "error", err)
 			return
 		}
+
+		// Config injectors run after metadata is annotated so that injectors
+		// which inspect request headers (e.g., OAuth token extraction) see
+		// the same metadata that gRPC interceptors would. In the gRPC path,
+		// metadata is populated by the framework before any interceptor runs.
+		ctx = injectConfigs(ctx, cf)
 
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
