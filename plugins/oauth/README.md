@@ -27,7 +27,21 @@ server := prefab.New(
 )
 ```
 
-The OAuth plugin requires the auth plugin to authenticate users during the authorization flow.
+The OAuth plugin requires the auth plugin to authenticate users during the authorization flow. Run the full working demo at [examples/oauthserver](../../examples/oauthserver) to see every flow end-to-end, including a consent page with CSRF-protected approval.
+
+The snippet above is the bare minimum for local development. See the [Integration Checklist](#integration-checklist) below for what to configure before taking this to production.
+
+## Integration Checklist
+
+Before going to production, make sure you've done the following:
+
+- [ ] **Set `oauth.issuer`** to your public HTTPS URL (e.g., `https://api.example.com`). Without this, metadata falls back to request-derived URLs, which can be poisoned by a spoofed `Host` header and may advertise `http://` behind a TLS-terminating proxy.
+- [ ] **Register every redirect URI exactly** — no wildcards. URIs containing control characters or missing a scheme are rejected at registration (`WithClient` will panic).
+- [ ] **Enable `oauth.enforcePkce`** if you have any public clients. This rejects the `plain` PKCE method (which provides no protection) and requires `S256`.
+- [ ] **Use a persistent `TokenStore`** (see [Storage](#storage)). The default in-memory store loses all tokens on restart and doesn't scale past a single instance.
+- [ ] **Decide how consent works.** The default treats any authenticated user's request as approval. If you register third-party clients, supply a `WithUserAuthorizationHandler` that interposes an explicit consent step (see [Consent](#consent)).
+- [ ] **Store client secrets securely.** Confidential clients must have a non-empty secret — `WithClient` panics if `Public: false` and `Secret` is empty.
+- [ ] **Require `state` on all authorization requests** from your clients as a CSRF defense (OAuth 2.0 §10.12).
 
 ## OAuth Flows
 
@@ -49,7 +63,7 @@ Standard OAuth2 flow for web and mobile applications. Users authorize access, re
 
 4. Exchange code for access token:
    ```bash
-   curl -X POST http://localhost:8080/oauth/token \
+   curl -X POST http://localhost:8000/oauth/token \
      -d "grant_type=authorization_code" \
      -d "code=AUTH_CODE" \
      -d "client_id=my-app" \
@@ -71,6 +85,8 @@ Response:
 
 Required for public clients (mobile apps, SPAs) when `oauth.enforcePkce` is enabled. PKCE prevents authorization code interception attacks.
 
+When enforcement is on, **only the `S256` method is accepted**. The `plain` method sets `code_challenge == code_verifier` and provides no protection against an attacker who can observe the authorization request — it's explicitly rejected. Requests without `code_challenge_method` are also rejected (the underlying library would otherwise default them to `plain`).
+
 1. Generate code verifier and challenge:
    ```javascript
    const verifier = base64url(randomBytes(32));
@@ -84,7 +100,7 @@ Required for public clients (mobile apps, SPAs) when `oauth.enforcePkce` is enab
 
 3. Token request includes verifier:
    ```bash
-   curl -X POST http://localhost:8080/oauth/token \
+   curl -X POST http://localhost:8000/oauth/token \
      -d "grant_type=authorization_code" \
      -d "code=AUTH_CODE" \
      -d "client_id=my-app" \
@@ -96,7 +112,7 @@ Required for public clients (mobile apps, SPAs) when `oauth.enforcePkce` is enab
 For server-to-server authentication without user involvement.
 
 ```bash
-curl -X POST http://localhost:8080/oauth/token \
+curl -X POST http://localhost:8000/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=my-app" \
   -d "client_secret=secret-key" \
@@ -105,15 +121,19 @@ curl -X POST http://localhost:8080/oauth/token \
 
 ### Refresh Tokens
 
-Exchange a refresh token for a new access token:
+Exchange a refresh token for a new access token. **The client must authenticate** — the refresh token alone is not sufficient credential. Confidential clients send `client_secret`; public clients are authenticated by `client_id` only.
 
 ```bash
-curl -X POST http://localhost:8080/oauth/token \
+curl -X POST http://localhost:8000/oauth/token \
   -d "grant_type=refresh_token" \
   -d "refresh_token=REFRESH_TOKEN" \
   -d "client_id=my-app" \
   -d "client_secret=secret-key"
 ```
+
+The refreshed token's scope is capped at the original grant's scope — clients cannot escalate scope via refresh. Omitting `scope` retains the original scope; passing a subset is allowed.
+
+Refresh tokens rotate on use (the old refresh token is invalidated and a new one is issued). A `refresh_token` in the response replaces any previous one; revoking either the access or refresh token invalidates both.
 
 ## Configuration
 
@@ -141,6 +161,13 @@ oauth.NewBuilder().
 | `oauth.issuer` | string | `address` config | Token issuer URL |
 
 ## Client Types
+
+`WithClient` validates each registered client and **panics at startup** if the configuration is invalid. This surfaces bootstrap mistakes immediately rather than at the first request. The validation rules are:
+
+- `ID` must be non-empty.
+- Confidential clients (`Public: false`) must have a non-empty `Secret`.
+- Public clients (`Public: true`) must not have a `Secret`.
+- Each `RedirectURIs` entry must be an absolute URL with a scheme and must not contain control characters (`\r`, `\n`, `\t`, `\0`). Newline-containing URIs are rejected specifically to prevent smuggling extra callbacks past the allow-list.
 
 ### Confidential Clients
 
@@ -208,35 +235,44 @@ oauth.NewBuilder().
 
 The consent page mints a CSRF token via `prefab.GenerateCSRFToken`, sets it as a cookie, and embeds it as a hidden form field. On approval, the form POSTs back to a handler that replays the authorize request with the consent token attached. See [examples/oauthserver](../../examples/oauthserver) for a full working implementation.
 
-## Scope-Based Authorization
+## Authentication and Scope-Based Authorization
 
-Check OAuth scopes in your handlers:
+### How the server picks an identity
+
+When a request arrives, the auth plugin walks a chain of identity extractors and uses the first one that produces an identity:
+
+1. **`Authorization: Bearer <opaque-token>`** — resolved by the OAuth plugin. If the token is valid, the request is authenticated as the OAuth subject and the scopes are exposed via `oauth.HasScope`, `oauth.OAuthScopesFromContext`, etc. **If the bearer is unknown or expired, the request is rejected with 401 — the server does not fall back to cookie authentication.** This prevents a revoked OAuth token from silently being treated as unauthenticated.
+2. **`Authorization: Bearer <jwt>`** — resolved by the auth plugin's JWT header extractor.
+3. **`Cookie: pf-id=<jwt>`** — resolved by the auth plugin's cookie extractor.
+
+Net: a request with both a cookie and a Bearer is authenticated by the Bearer. Only requests with no Bearer fall back to the cookie.
+
+### Checking scopes
 
 ```go
 func protectedHandler(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-    // Verify user is authenticated
+    // Verify the request is authenticated (bearer or cookie).
     identity, err := auth.IdentityFromContext(ctx)
     if err != nil {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
 
-    // Check if request uses OAuth
+    // If the request is using OAuth, enforce the required scope.
     if oauth.IsOAuthRequest(ctx) {
-        // Require specific scope
         if !oauth.HasScope(ctx, "read") {
             http.Error(w, "Missing 'read' scope", http.StatusForbidden)
             return
         }
 
-        // Get OAuth metadata
-        clientID := oauth.OAuthClientIDFromContext(ctx)
-        scopes := oauth.OAuthScopesFromContext(ctx)
+        // OAuth metadata is also available:
+        _ = oauth.OAuthClientIDFromContext(ctx)
+        _ = oauth.OAuthScopesFromContext(ctx)
     }
 
-    // Handle request
+    // Handle request using identity.Subject.
 }
 ```
 
@@ -249,6 +285,8 @@ oauth.HasAllScopes(ctx, "read", "write") // Check all scopes present
 oauth.IsOAuthRequest(ctx)                // Check if OAuth token was used
 ```
 
+Scopes are space-separated strings, per RFC 6749 §3.3.
+
 ## Token Management
 
 ### Token Revocation (RFC 7009)
@@ -256,7 +294,7 @@ oauth.IsOAuthRequest(ctx)                // Check if OAuth token was used
 Revoke an access or refresh token:
 
 ```bash
-curl -X POST http://localhost:8080/oauth/revoke \
+curl -X POST http://localhost:8000/oauth/revoke \
   -u "client_id:client_secret" \
   -d "token=ACCESS_TOKEN" \
   -d "token_type_hint=access_token"
@@ -269,7 +307,7 @@ Clients can only revoke their own tokens. The endpoint returns 200 OK even if th
 Check token status and metadata:
 
 ```bash
-curl -X POST http://localhost:8080/oauth/introspect \
+curl -X POST http://localhost:8000/oauth/introspect \
   -u "client_id:client_secret" \
   -d "token=ACCESS_TOKEN"
 ```
@@ -302,7 +340,7 @@ Clients can only introspect their own tokens.
 The plugin exposes OAuth server metadata at `/.well-known/oauth-authorization-server` per RFC 8414:
 
 ```bash
-curl http://localhost:8080/.well-known/oauth-authorization-server
+curl http://localhost:8000/.well-known/oauth-authorization-server
 ```
 
 Response includes:
@@ -321,11 +359,33 @@ Response includes:
 | `/oauth/introspect` | POST | Check token status and metadata |
 | `/.well-known/oauth-authorization-server` | GET | OAuth server metadata |
 
+## Error Responses
+
+OAuth errors are returned as JSON following RFC 6749 §5.2:
+
+```json
+{
+  "error": "invalid_client",
+  "error_description": "Client authentication failed"
+}
+```
+
+| Error code | When |
+|------------|------|
+| `invalid_request` | Malformed request, missing required parameter, unsupported grant type |
+| `invalid_client` | Unknown client, wrong secret, public client misconfigured with a secret |
+| `invalid_grant` | Bad/expired authorization code, invalid refresh token, PKCE verifier mismatch |
+| `invalid_scope` | Requested scope not permitted for the client; refresh tried to escalate scope |
+| `access_denied` | User denied consent, or redirect URI not in the client's allow list |
+| `unauthorized_client` | Client not allowed to use this grant type |
+
+For the authorization endpoint, errors are delivered as a redirect to the client's `redirect_uri` with `error=` and `state=` query parameters (when the redirect URI is valid; otherwise the response is a plain 400).
+
 ## Storage
 
-### In-Memory Storage (Default)
+### In-Memory Storage (Default — dev only)
 
-Clients and tokens are stored in memory. Suitable for development, tests, and single-instance deployments where token persistence isn't required.
+Clients and tokens are stored in memory. This is the default if you don't supply a `ClientStore` or `TokenStore`. Suitable for development, tests, and single-instance deployments where token persistence isn't required.
 
 ```go
 oauthPlugin := oauth.NewBuilder().
@@ -333,7 +393,11 @@ oauthPlugin := oauth.NewBuilder().
     Build()
 ```
 
-Tokens are lost on server restart. Expired entries are swept on each write to prevent unbounded memory growth, but production deployments should supply a persistent `TokenStore` (see below) to preserve tokens across restarts and scale beyond a single instance.
+Caveats — none of these are appropriate for production:
+
+- All tokens are lost on restart. Any user holding an access token at restart time must reauthorize.
+- No horizontal scaling: each server instance has its own independent token store, so clients may authenticate on one instance and get rejected on another.
+- Expired entries are swept on each `Create` to bound memory use, but there is no persistent rate limiting, audit trail, or replication.
 
 ### Persistent Storage
 
@@ -408,7 +472,7 @@ Run the example:
 go run ./examples/oauthserver
 ```
 
-Then visit http://localhost:8080 to test the OAuth flows.
+Then visit http://localhost:8000 to test the OAuth flows.
 
 ## Security Considerations
 
