@@ -270,6 +270,16 @@ func (ap *AuthPlugin) AddIdentityExtractor(provider IdentityExtractor) {
 	ap.identityExtractors = append(ap.identityExtractors, provider)
 }
 
+// PrependIdentityExtractor inserts an extractor at the front of the chain,
+// giving it priority over the default JWT-header and cookie extractors. Use
+// this when the extractor has authoritative knowledge about a credential
+// scheme it can recognize — e.g., an OAuth plugin that should definitively
+// accept or reject opaque bearer tokens rather than letting the request fall
+// through to cookie-based authentication when the bearer is invalid.
+func (ap *AuthPlugin) PrependIdentityExtractor(provider IdentityExtractor) {
+	ap.identityExtractors = append([]IdentityExtractor{provider}, ap.identityExtractors...)
+}
+
 func (ap *AuthPlugin) injectBlocklist(ctx context.Context) context.Context {
 	if ap.blocklist == nil {
 		return ctx

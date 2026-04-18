@@ -307,8 +307,11 @@ func (p *OAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 		return errors.New("failed to get auth plugin")
 	}
 
-	// Register OAuth token identity extractor
-	authPlugin.AddIdentityExtractor(p.extractIdentityFromOAuthToken)
+	// Register OAuth token identity extractor at the front of the chain.
+	// The extractor defers JWT-shaped bearers to identityFromAuthHeader but
+	// hard-fails on invalid opaque bearers so that a malformed or revoked
+	// OAuth token cannot silently fall back to cookie-based authentication.
+	authPlugin.PrependIdentityExtractor(p.extractIdentityFromOAuthToken)
 
 	// Set issuer from config if not set. The global "address" key (not
 	// "server.address") is the canonical external URL for the service.
@@ -426,6 +429,18 @@ func (p *OAuthPlugin) injectOAuthContext(ctx context.Context) context.Context {
 }
 
 // extractIdentityFromOAuthToken extracts identity from an OAuth access token.
+//
+// The extractor has three outcomes:
+//
+//   - No bearer in the request → auth.ErrNotFound (fall through to the next
+//     extractor in the chain).
+//   - Bearer that looks like a JWT (three dot-separated parts) → auth.ErrNotFound
+//     (defer to identityFromAuthHeader, which parses JWTs authoritatively).
+//   - Bearer that is opaque (not JWT-shaped) → looked up in the token store.
+//     On success, the identity is returned. On failure (unknown or expired
+//     token) the extractor returns auth.ErrInvalidToken, a hard error that
+//     stops the chain — without this, a stolen-then-revoked bearer would
+//     silently fall back to the user's session cookie.
 func (p *OAuthPlugin) extractIdentityFromOAuthToken(ctx context.Context) (auth.Identity, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	tokenString := extractBearerToken(md)
@@ -433,32 +448,33 @@ func (p *OAuthPlugin) extractIdentityFromOAuthToken(ctx context.Context) (auth.I
 		return auth.Identity{}, errors.Mark(auth.ErrNotFound, 0)
 	}
 
-	// Get token info from store
+	// JWT-shaped tokens belong to identityFromAuthHeader; let the chain
+	// continue rather than treating an opaque-token lookup miss as definitive.
+	if strings.Count(tokenString, ".") == 2 {
+		return auth.Identity{}, errors.Mark(auth.ErrNotFound, 0)
+	}
+
+	// Opaque bearer — it must resolve here or the request is unauthorized.
 	ti, err := p.tokenStore.GetByAccess(ctx, tokenString)
 	if err != nil || ti == nil {
-		return auth.Identity{}, errors.Mark(auth.ErrNotFound, 0)
+		return auth.Identity{}, errors.Mark(auth.ErrInvalidToken, 0)
 	}
-
-	// Check expiration
 	if ti.GetAccessCreateAt().Add(ti.GetAccessExpiresIn()).Before(time.Now()) {
-		return auth.Identity{}, errors.Mark(auth.ErrNotFound, 0)
+		return auth.Identity{}, errors.Mark(auth.ErrInvalidToken, 0)
 	}
 
-	// Build identity
 	accessToken := ti.GetAccess()
 	sessionID := accessToken
 	if len(accessToken) > 16 {
 		sessionID = accessToken[:16]
 	}
 
-	identity := auth.Identity{
+	return auth.Identity{
 		SessionID: sessionID,
 		Subject:   ti.GetUserID(),
 		Provider:  "oauth:" + ti.GetClientID(),
 		AuthTime:  ti.GetAccessCreateAt(),
-	}
-
-	return identity, nil
+	}, nil
 }
 
 // extractBearerToken extracts a bearer token from metadata. Only the Bearer

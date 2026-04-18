@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dpup/prefab/plugins/auth"
 	"github.com/go-oauth2/oauth2/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1640,6 +1641,74 @@ func TestOAuthPlugin_MetadataHandlerForwardedProto(t *testing.T) {
 
 	assert.Equal(t, "https://api.example.com", meta["issuer"])
 	assert.Equal(t, "https://api.example.com/oauth/token", meta["token_endpoint"])
+}
+
+// TestExtractIdentityFromOAuthToken verifies the extractor's three-way
+// outcome: no bearer → ErrNotFound, JWT-shaped bearer → ErrNotFound (let
+// identityFromAuthHeader handle it), opaque bearer → either success or
+// ErrInvalidToken. The last distinction is what prevents a malformed OAuth
+// token from silently falling back to the session cookie.
+func TestExtractIdentityFromOAuthToken(t *testing.T) {
+	plugin := NewBuilder().
+		WithClient(Client{
+			ID:           "demo",
+			Secret:       "secret",
+			RedirectURIs: []string{"http://localhost/cb"},
+		}).
+		Build()
+
+	ctx := context.Background()
+	require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+		ClientID:        "demo",
+		UserID:          "user-1",
+		Access:          "good-access",
+		AccessCreateAt:  time.Now(),
+		AccessExpiresIn: time.Hour,
+	}))
+
+	makeCtx := func(auth string) context.Context {
+		md := metadata.MD{}
+		if auth != "" {
+			md.Set("authorization", auth)
+		}
+		return metadata.NewIncomingContext(context.Background(), md)
+	}
+
+	t.Run("no bearer returns ErrNotFound", func(t *testing.T) {
+		_, err := plugin.extractIdentityFromOAuthToken(makeCtx(""))
+		assert.ErrorIs(t, err, auth.ErrNotFound)
+	})
+
+	t.Run("JWT-shaped bearer returns ErrNotFound so JWT extractor can handle", func(t *testing.T) {
+		_, err := plugin.extractIdentityFromOAuthToken(makeCtx("Bearer header.payload.sig"))
+		assert.ErrorIs(t, err, auth.ErrNotFound)
+	})
+
+	t.Run("valid opaque bearer returns identity", func(t *testing.T) {
+		id, err := plugin.extractIdentityFromOAuthToken(makeCtx("Bearer good-access"))
+		require.NoError(t, err)
+		assert.Equal(t, "user-1", id.Subject)
+		assert.Equal(t, "oauth:demo", id.Provider)
+	})
+
+	t.Run("unknown opaque bearer returns ErrInvalidToken (hard error)", func(t *testing.T) {
+		_, err := plugin.extractIdentityFromOAuthToken(makeCtx("Bearer unknown-token"))
+		assert.ErrorIs(t, err, auth.ErrInvalidToken,
+			"invalid opaque bearer must hard-fail; without this the chain silently falls back to cookie auth")
+	})
+
+	t.Run("expired opaque bearer returns ErrInvalidToken", func(t *testing.T) {
+		require.NoError(t, plugin.tokenStore.store.Create(ctx, TokenInfo{
+			ClientID:        "demo",
+			UserID:          "user-1",
+			Access:          "expired-access",
+			AccessCreateAt:  time.Now().Add(-2 * time.Hour),
+			AccessExpiresIn: time.Hour,
+		}))
+
+		_, err := plugin.extractIdentityFromOAuthToken(makeCtx("Bearer expired-access"))
+		assert.ErrorIs(t, err, auth.ErrInvalidToken)
+	})
 }
 
 // TestOAuthPlugin_WithUserAuthorizationHandler verifies that a custom
