@@ -90,6 +90,17 @@ func Plugin(opts ...AuthzOption) *AuthzPlugin {
 	return ap
 }
 
+// WithDebugEndpoint enables the /debug/authz HTTP endpoint, which renders the
+// full role hierarchy and policy set as plaintext. It is disabled by default
+// because it exposes the authorization model with no access control; only
+// enable it in trusted environments (e.g. behind a private network or an
+// authenticating proxy).
+func WithDebugEndpoint() AuthzOption {
+	return func(ap *AuthzPlugin) {
+		ap.debugEnabled = true
+	}
+}
+
 // WithRoleHierarchy configures the plugin with a hierarchy of roles.
 //
 // The first role is the most powerful, and the last role has no hierarchy from
@@ -173,6 +184,7 @@ type AuthzPlugin struct {
 	roleDescribers map[string]RoleDescriber
 	roleParents    map[Role]Role
 	auditLogger    AuditLogger
+	debugEnabled   bool
 }
 
 // From plugin.Plugin.
@@ -186,11 +198,18 @@ func (ap *AuthzPlugin) Deps() []string {
 }
 
 // From prefab.OptionProvider, registers an additional interceptor.
+//
+// The /debug/authz endpoint exposes the full policy and role configuration and
+// is only registered when explicitly enabled via WithDebugEndpoint, since it
+// would otherwise leak the authorization model to any unauthenticated caller.
 func (ap *AuthzPlugin) ServerOptions() []prefab.ServerOption {
-	return []prefab.ServerOption{
+	opts := []prefab.ServerOption{
 		prefab.WithGRPCInterceptor(ap.Interceptor),
-		prefab.WithHTTPHandlerFunc("/debug/authz", ap.DebugHandler),
 	}
+	if ap.debugEnabled {
+		opts = append(opts, prefab.WithHTTPHandlerFunc("/debug/authz", ap.DebugHandler))
+	}
+	return opts
 }
 
 // DefinePolicy defines an policy which allows/denies the given role to perform

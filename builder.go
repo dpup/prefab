@@ -2,8 +2,10 @@ package prefab
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -58,7 +60,7 @@ func New(opts ...ServerOption) *Server {
 		certFile:        Config.String("server.tls.certFile"),
 		keyFile:         Config.String("server.tls.keyFile"),
 		maxMsgSizeBytes: Config.Int("server.maxMsgSizeBytes"),
-		csrfSigningKey:  []byte(Config.String("server.csrfSigningKey")),
+		csrfSigningKey:  resolveCSRFSigningKey(),
 		securityHeaders: &SecurityHeaders{
 			XFramesOptions:        XFramesOptions(Config.String("server.security.xFramesOptions")),
 			HSTSExpiration:        Config.Duration("server.security.hstsExpiration"),
@@ -308,6 +310,25 @@ func WithCRSFSigningKey(signingKey string) ServerOption {
 	return func(b *builder) {
 		b.csrfSigningKey = []byte(signingKey)
 	}
+}
+
+// resolveCSRFSigningKey returns the configured CSRF signing key, or a randomly
+// generated key (with a warning) when none is configured. An empty key would
+// HMAC-sign tokens with the empty string, providing no signing strength, so we
+// fail safe by generating an ephemeral key instead — mirroring the auth
+// plugin's JWT signing key behavior.
+func resolveCSRFSigningKey() []byte {
+	if key := Config.String("server.csrfSigningKey"); key != "" {
+		return []byte(key)
+	}
+	log.Println("⚠️  WARNING: Using randomly generated CSRF signing key. " +
+		"Tokens will be invalidated on server restart and are not shared across instances. " +
+		"Set PF__SERVER__CSRF_SIGNING_KEY or server.csrfSigningKey in prefab.yaml for production.")
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic("prefab: failed to generate random CSRF signing key: " + err.Error())
+	}
+	return key
 }
 
 // WithSecurityHeaders sets the security headers that should be set on HTTP

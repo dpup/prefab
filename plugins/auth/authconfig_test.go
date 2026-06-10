@@ -29,11 +29,14 @@ func TestSigningKeyFromContext(t *testing.T) {
 		assert.Equal(t, []byte("custom-key"), key)
 	})
 
-	t.Run("WithoutKey_UsesDefault", func(t *testing.T) {
+	t.Run("WithoutKey_UsesEphemeralFallback", func(t *testing.T) {
 		ctx := t.Context()
 		key := signingKeyFromContext(ctx)
-		// Should return default key
-		assert.Equal(t, []byte("In a world of prefab dreams, authenticity gleams."), key)
+		// Falls back to the randomly generated per-process key rather than a
+		// hardcoded constant, so it is unguessable and stable within a process.
+		assert.Equal(t, fallbackSigningKey, key)
+		assert.Len(t, key, 32)
+		assert.NotEqual(t, []byte("In a world of prefab dreams, authenticity gleams."), key)
 	})
 }
 

@@ -2,10 +2,32 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"log"
+	"sync"
 	"time"
 
 	"github.com/dpup/prefab"
 )
+
+// fallbackSigningKey is an ephemeral, per-process key used only when a token
+// operation runs on a context that never passed through the auth plugin's
+// request-config injector. It is generated randomly at startup rather than
+// being a hardcoded constant, so tokens produced on this path cannot be forged
+// by anyone who has read the source. Reaching this path indicates a
+// misconfiguration; the key is non-portable across processes by design.
+var (
+	fallbackSigningKey     = newFallbackSigningKey()
+	fallbackSigningKeyOnce sync.Once
+)
+
+func newFallbackSigningKey() []byte {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic("auth: failed to generate fallback signing key: " + err.Error())
+	}
+	return key
+}
 
 func init() {
 	prefab.RegisterConfigKeys(
@@ -63,7 +85,13 @@ func signingKeyFromContext(ctx context.Context) []byte {
 	if v, ok := ctx.Value(signingKey{}).(string); ok {
 		return []byte(v)
 	}
-	return []byte("In a world of prefab dreams, authenticity gleams.")
+	fallbackSigningKeyOnce.Do(func() {
+		log.Println("⚠️  WARNING: auth signing key not found in context; using an " +
+			"ephemeral per-process key. This usually means a token operation ran on a " +
+			"context that did not pass through the auth plugin's request config. Tokens " +
+			"signed this way are not portable across processes or restarts.")
+	})
+	return fallbackSigningKey
 }
 
 // SigningKeyFromContext returns the JWT signing key from context.
