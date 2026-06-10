@@ -4,7 +4,7 @@
 // Examples:
 //
 //	store := sqlitestore.New(
-//		"file:test.s3db?_auth&_auth_user=admin&_auth_pass=admin",
+//		"file:test.s3db",
 //		sqlitestore.WithTableName("plugin_store"),
 //	)
 //
@@ -24,7 +24,8 @@ import (
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/plugins/storage"
 
-	"github.com/mattn/go-sqlite3"
+	sqlitedriver "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // Option is a functional option for configuring the store.
@@ -41,7 +42,7 @@ func WithPrefix(prefix string) Option {
 // created optimistically on initialization. Any errors are considered
 // non-recoverable and will panic.
 func New(conn string, opts ...Option) storage.Store {
-	db, err := sql.Open("sqlite3", conn)
+	db, err := sql.Open("sqlite", conn)
 	if err != nil {
 		panic("failed to open sqlite connection: " + err.Error())
 	}
@@ -346,12 +347,14 @@ func translateError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return errors.Mark(storage.ErrNotFound, 0)
 	}
-	var sqlErr sqlite3.Error
+	var sqlErr *sqlitedriver.Error
 	if errors.As(err, &sqlErr) {
-		switch sqlErr.Code {
-		case sqlite3.ErrNotFound:
+		// Code() may return an extended result code; the low 8 bits hold the
+		// primary code we want to match against.
+		switch sqlErr.Code() & 0xff {
+		case sqlite3.SQLITE_NOTFOUND:
 			return errors.Mark(storage.ErrNotFound, 0)
-		case sqlite3.ErrConstraint:
+		case sqlite3.SQLITE_CONSTRAINT:
 			return errors.Mark(storage.ErrAlreadyExists, 0)
 		}
 	}

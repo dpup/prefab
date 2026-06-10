@@ -6,10 +6,6 @@ setup and conventions for the project.
 ## Prerequisites
 
 - **Go 1.25 or later** (see the `go` directive in [go.mod](./go.mod)).
-- **A C compiler** (e.g. `gcc` or `clang`). The SQLite storage backend uses
-  [`mattn/go-sqlite3`](https://github.com/mattn/go-sqlite3), which is CGO-based,
-  so building or testing that package requires `CGO_ENABLED=1` and a C
-  toolchain.
 - **Protocol Buffers compiler** (`protoc`) — only needed when regenerating code
   from `.proto` files. Generated `*.pb.go` files are committed, so most changes
   do not require it.

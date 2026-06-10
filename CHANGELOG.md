@@ -28,6 +28,10 @@ may change between minor versions).
 
 ### Changed
 
+- **SQLite store is now pure Go.** Replaced the CGO-based `mattn/go-sqlite3`
+  driver with `modernc.org/sqlite`, so the entire module builds and tests with
+  `CGO_ENABLED=0` and no C toolchain. The DSN no longer supports the
+  mattn-specific `_auth` userauth parameters.
 - `staticcheck` is now a managed Go tool dependency; `make test` invokes it via
   `go tool staticcheck` and no longer requires a separate global install.
 

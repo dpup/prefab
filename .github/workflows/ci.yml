@@ -22,9 +22,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # CGO is enabled by default; the SQLite storage backend
-      # (mattn/go-sqlite3) requires it. ubuntu-latest ships a C toolchain.
+      # The module is pure Go (the SQLite store uses modernc.org/sqlite), so it
+      # builds and tests with CGO disabled.
       - name: Build
+        env:
+          CGO_ENABLED: "0"
         run: go build ./...
 
       - name: Vet
