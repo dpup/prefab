@@ -227,14 +227,14 @@ func (p *UploadPlugin) handleUpload(r *http.Request) (any, error) {
 				return nil, errors.NewC("upload: invalid file type: "+contentType, codes.InvalidArgument)
 			}
 
-			exts, err := mime.ExtensionsByType(contentType)
-			if err != nil || len(exts) == 0 {
-				return nil, errors.NewC("upload: error detecting file type", codes.InvalidArgument)
+			ext, err := canonicalExtension(contentType)
+			if err != nil {
+				return nil, err
 			}
 
 			hash := sha256.New()
 			hash.Write(data)
-			path := fmt.Sprintf("%s/%s/%s%s", domain, folder, hex.EncodeToString(hash.Sum(nil)), exts[0])
+			path := fmt.Sprintf("%s/%s/%s%s", domain, folder, hex.EncodeToString(hash.Sum(nil)), ext)
 
 			if err := p.be.Save(path, data); err != nil {
 				return nil, errors.WrapPrefix(err, "upload: error saving file", 0)
@@ -249,6 +249,32 @@ func (p *UploadPlugin) handleUpload(r *http.Request) (any, error) {
 
 	logging.Infow(ctx, "upload: files uploaded", "files", resp.Files)
 	return resp, nil
+}
+
+// canonicalExtensions maps content types to a stable, preferred file
+// extension. mime.ExtensionsByType returns extensions in an order that depends
+// on the host's mime database (e.g. "image/jpeg" may resolve to ".jfif" before
+// ".jpg"), which makes generated upload paths non-deterministic across
+// environments. Pinning the common types keeps stored paths stable.
+var canonicalExtensions = map[string]string{
+	"image/jpeg": ".jpg",
+	"image/png":  ".png",
+	"image/gif":  ".gif",
+	"image/webp": ".webp",
+}
+
+// canonicalExtension returns a deterministic file extension for the given
+// content type. Known types use a pinned extension; anything else falls back to
+// the first extension reported by the mime package.
+func canonicalExtension(contentType string) (string, error) {
+	if ext, ok := canonicalExtensions[contentType]; ok {
+		return ext, nil
+	}
+	exts, err := mime.ExtensionsByType(contentType)
+	if err != nil || len(exts) == 0 {
+		return "", errors.NewC("upload: error detecting file type", codes.InvalidArgument)
+	}
+	return exts[0], nil
 }
 
 func (p *UploadPlugin) validateUploadRequest(r *http.Request) error {

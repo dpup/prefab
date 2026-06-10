@@ -51,7 +51,7 @@ func TestUpload(t *testing.T) {
 		},
 		{
 			OriginalName: "test.jpg",
-			UploadPath:   "-/-/b9380faf5b9fde41b0625e88f42900c3ee955b36f91c1f3d59be5989a8f2b133.jpe",
+			UploadPath:   "-/-/b9380faf5b9fde41b0625e88f42900c3ee955b36f91c1f3d59be5989a8f2b133.jpg",
 		},
 	}
 	assert.ElementsMatch(t, expectedResponse, resp.(*UploadResponse).Files)
