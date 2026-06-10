@@ -15,8 +15,6 @@ import (
 	"github.com/dpup/prefab/errors"
 	"github.com/dpup/prefab/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -237,7 +235,13 @@ func (s *Server) Start() error {
 		logging.Infof(s.baseContext, "🚀  Listening for traffic on https://%s\n", addr)
 		err = s.httpServer.ServeTLS(ln, s.certFile, s.keyFile)
 	} else {
-		s.httpServer.Handler = h2c.NewHandler(handler, &http2.Server{})
+		// Enable cleartext HTTP/2 (h2c) alongside HTTP/1.1 so that gRPC traffic
+		// works without TLS. This replaces the deprecated h2c.NewHandler wrapper.
+		protocols := new(http.Protocols)
+		protocols.SetHTTP1(true)
+		protocols.SetUnencryptedHTTP2(true)
+		s.httpServer.Handler = handler
+		s.httpServer.Protocols = protocols
 		logging.Infof(s.baseContext, "🚀  Listening for traffic on http://%s\n", addr)
 		err = s.httpServer.Serve(ln)
 	}
