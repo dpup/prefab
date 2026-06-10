@@ -297,7 +297,12 @@ func homeHandler() http.Handler {
 			return
 		}
 
-		page := `<!DOCTYPE html>
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(homePageHTML))
+	})
+}
+
+const homePageHTML = `<!DOCTYPE html>
 <html>
 <head>
     <title>OAuth Example Server</title>
@@ -431,10 +436,6 @@ func homeHandler() http.Handler {
     </script>
 </body>
 </html>`
-		w.Header().Set("Content-Type", "text/html")
-		_, _ = w.Write([]byte(page))
-	})
-}
 
 // callbackHandler handles the OAuth redirect callback.
 func callbackHandler() http.Handler {

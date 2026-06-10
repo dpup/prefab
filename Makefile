@@ -1,5 +1,7 @@
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
+GOPATH ?= $(shell go env GOPATH)
+
 GEN_OUT := $(ROOT_DIR)/out
 
 PROTO_FILES := $(shell find $(ROOT_DIR) -name "*.proto" -not -path "*/third_party/*")
@@ -86,9 +88,9 @@ gen-proto: gen-proto.touchfile
 gen-proto.touchfile: $(GEN_OUT)/openapiv2 $(PROTO_FILES) tools.touchfile
 	@protoc -I$(ROOT_DIR)/proto \
 		-I$(ROOT_DIR)/proto/third_party/googleapis \
-		--go_out=$(GOPATH)src/ \
-		--grpc_out=$(GOPATH)src/ \
-		--grpc-gateway_out $(GOPATH)src \
+		--go_out=$(GOPATH)/src/ \
+		--grpc_out=$(GOPATH)/src/ \
+		--grpc-gateway_out $(GOPATH)/src \
 		--grpc-gateway_opt logtostderr=true \
 		--grpc-gateway_opt generate_unbound_methods=false \
 		--grpc-gateway_opt omit_package_doc=true \

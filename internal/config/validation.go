@@ -14,18 +14,19 @@ type ValidationWarning struct {
 }
 
 func (w ValidationWarning) String() string {
-	msg := fmt.Sprintf("'%s' is not a known config key", w.Key)
+	var msg strings.Builder
+	fmt.Fprintf(&msg, "'%s' is not a known config key", w.Key)
 	if len(w.Suggestions) > 0 {
 		if len(w.Suggestions) == 1 {
-			msg += fmt.Sprintf(". Did you mean '%s'?", w.Suggestions[0])
+			fmt.Fprintf(&msg, ". Did you mean '%s'?", w.Suggestions[0])
 		} else {
-			msg += ". Did you mean one of these?\n"
+			msg.WriteString(". Did you mean one of these?\n")
 			for _, suggestion := range w.Suggestions {
-				msg += fmt.Sprintf("    - %s\n", suggestion)
+				fmt.Fprintf(&msg, "    - %s\n", suggestion)
 			}
 		}
 	}
-	return msg
+	return msg.String()
 }
 
 // ValidateConfigKeys checks all loaded configuration keys against the registry

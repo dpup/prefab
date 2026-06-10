@@ -15,6 +15,7 @@ const (
 )
 
 // Subscriber is a function type for event subscribers.
+//
 // Deprecated: Use Handler instead.
 type Subscriber func(context.Context, any) error
 
