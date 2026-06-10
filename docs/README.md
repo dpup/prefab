@@ -68,9 +68,10 @@ func main() {
 
 ## What You'll Need
 
-1. Go 1.16 or later
+1. Go 1.25 or later
 2. Protocol Buffers compiler (protoc)
 3. gRPC Gateway protoc plugins
+4. A C compiler (only required to build/test the CGO-based SQLite store)
 
 ## Additional Resources
 

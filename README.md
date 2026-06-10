@@ -59,7 +59,7 @@ viable product, while always being production ready.
 ## 🚀 Quick Start
 
 Given a GRPC service implementation, the following snippet will start a running
-server on `localhost:5678` serving both GRPC requests and JSON rest, with the
+server on `localhost:8000` serving both GRPC requests and JSON rest, with the
 only constraint that the GRPC path bindings must be prefixed with `/api/`.
 
 ```go
@@ -94,6 +94,7 @@ func main() {
 - [Storage](#storage)
 - Templates
 - Upload
+- Work Queue
 
 ### Plugin Model Overview
 
@@ -138,7 +139,7 @@ provider should be registered. The following providers are currently included.
 
 - [Google SSO](./examples/googleauth/googleauth.go)
 - [Magiclink passwordless login](./examples/magiclinkauth/magiclinkauth.go)
-- [Pasword auth](./examples/pwdauth/pwdauth.go)
+- [Password auth](./examples/pwdauth/pwdauth.go)
 - [Fake auth](./examples/fakeauth/fakeauth.go)
 - API Key
 
@@ -180,7 +181,6 @@ s := prefab.New(
   ...
   prefab.WithPlugin(storage.Plugin(store)),
   prefab.WithPlugin(auth.Plugin()),
-  )),
   ...
 )
 ```
@@ -228,23 +228,28 @@ See [plugins/oauth/README.md](./plugins/oauth/README.md) for the integration che
 
 Prefab includes a simple Storage interface, primarily for use within plugins,
 but also for simple applications. The interface exposes Create, Read, Update,
-Upsert, Delete, List, and Exists (CRUUDLE) methods and can be backed by a memory
-store, filesystems, RDS, or NoSQL databases.
+Upsert, Delete, List, and Exists (CRUUDLE) methods and can be backed by the
+included memory, SQLite, and Postgres stores, or any custom implementation of
+the `Store` interface.
 
 Entities are modeled as Go structs which expose a `PK()` method. The internal
 storage representation is implementation specific, however JSON is a common
 default, and as such `List` operations may not be performant for many situations.
 
+The included implementations are listed below; you can also back the interface
+with any custom `Store` implementation (e.g. a filesystem, another RDBMS, or a
+NoSQL database).
+
 Included implementations:
 
-**[In-Memory](./storage/memorystore/)**: Stores data in simple Go maps.
+**[In-Memory](./plugins/storage/memstore/)**: Stores data in simple Go maps.
 
-**[SQLite3](./storage/sqlitestore/)**: SQLite backed storage. Explicitly
+**[SQLite3](./plugins/storage/sqlite/)**: SQLite backed storage. Explicitly
 initialized models are stored in their own table, with a `prefab_` prefix.
 Uninitialized models are stored in `prefab_default` indexed by `ID` and
 `EntityType`.
 
-**[Postgres](./storage/postgres/)**: Postgres backed storage. Explicitly
+**[Postgres](./plugins/storage/postgres/)**: Postgres backed storage. Explicitly
 initialized models are stored in their own table, uninitialized models are
 stored in a default table. There is an option to have tables automatically
 created.
