@@ -46,7 +46,7 @@ func init() {
 			Key:         "oauth.enforcePkce",
 			Description: "Require PKCE (Proof Key for Code Exchange) for public OAuth clients",
 			Type:        "bool",
-			Default:     "false",
+			Default:     "true",
 		},
 		prefab.ConfigKeyInfo{
 			Key:         "oauth.issuer",

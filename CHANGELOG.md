@@ -9,6 +9,11 @@ may change between minor versions).
 
 ### Security
 
+- **PKCE is now enforced for public OAuth clients by default.** The
+  `oauth.enforcePkce` config now defaults to `true`, so public clients must use
+  `S256` PKCE (the `plain` method is rejected). Set `oauth.enforcePkce=false` to
+  restore the previous behavior. **Breaking** for public clients that were not
+  already sending a `code_challenge`.
 - **CSRF signing key now fails safe.** When `server.csrfSigningKey` is unset, a
   random key is generated at startup and a warning is logged, instead of
   silently signing tokens with an empty key.
@@ -19,6 +24,9 @@ may change between minor versions).
 - **`/debug/authz` is now opt-in.** The endpoint, which exposes the full role
   hierarchy and policy set, is disabled by default and must be enabled with
   `authz.WithDebugEndpoint()`.
+- **OAuth warns when using the in-memory token store.** The plugin now logs a
+  warning at startup when no persistent `TokenStore` is configured, since tokens
+  are otherwise lost on restart and not shared across instances.
 
 ### Added
 

@@ -37,7 +37,7 @@ Before going to production, make sure you've done the following:
 
 - [ ] **Set `oauth.issuer`** to your public HTTPS URL (e.g., `https://api.example.com`). Without this, metadata falls back to request-derived URLs, which can be poisoned by a spoofed `Host` header and may advertise `http://` behind a TLS-terminating proxy.
 - [ ] **Register every redirect URI exactly** — no wildcards. URIs containing control characters or missing a scheme are rejected at registration (`WithClient` will panic).
-- [ ] **Enable `oauth.enforcePkce`** if you have any public clients. This rejects the `plain` PKCE method (which provides no protection) and requires `S256`.
+- [ ] **Keep `oauth.enforcePkce` enabled** (the default). It requires public clients to use `S256` PKCE and rejects the `plain` method (which provides no protection). Only disable it if you have a specific reason and understand the authorization-code interception risk.
 - [ ] **Use a persistent `TokenStore`** (see [Storage](#storage)). The default in-memory store loses all tokens on restart and doesn't scale past a single instance.
 - [ ] **Decide how consent works.** The default treats any authenticated user's request as approval. If you register third-party clients, supply a `WithUserAuthorizationHandler` that interposes an explicit consent step (see [Consent](#consent)).
 - [ ] **Store client secrets securely.** Confidential clients must have a non-empty secret — `WithClient` panics if `Public: false` and `Secret` is empty.
@@ -83,7 +83,7 @@ Response:
 
 ### PKCE (Proof Key for Code Exchange)
 
-Required for public clients (mobile apps, SPAs) when `oauth.enforcePkce` is enabled. PKCE prevents authorization code interception attacks.
+Required for public clients (mobile apps, SPAs) when `oauth.enforcePkce` is enabled, which is the default. PKCE prevents authorization code interception attacks.
 
 When enforcement is on, **only the `S256` method is accepted**. The `plain` method sets `code_challenge == code_verifier` and provides no protection against an attacker who can observe the authorization request — it's explicitly rejected. Requests without `code_challenge_method` are also rejected (the underlying library would otherwise default them to `plain`).
 
@@ -157,7 +157,7 @@ oauth.NewBuilder().
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `oauth.enforcePkce` | bool | `false` | Require PKCE for public clients |
+| `oauth.enforcePkce` | bool | `true` | Require PKCE (`S256`) for public clients |
 | `oauth.issuer` | string | `address` config | Token issuer URL |
 
 ## Client Types

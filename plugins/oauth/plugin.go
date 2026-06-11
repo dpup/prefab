@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -43,7 +44,11 @@ type OAuthPlugin struct {
 	staticClients   []Client
 	userClientStore ClientStore
 	userTokenStore  TokenStore
-	userAuthHandler server.UserAuthorizationHandler
+
+	// usingMemoryTokenStore is true when no token store was supplied and the
+	// default in-memory store is in use. Tracked so Init can warn operators.
+	usingMemoryTokenStore bool
+	userAuthHandler       server.UserAuthorizationHandler
 }
 
 // Builder provides a fluent interface for configuring the OAuth plugin.
@@ -167,6 +172,7 @@ func (p *OAuthPlugin) resolveStores() (ClientStore, TokenStore) {
 	tokenStore := p.userTokenStore
 	if tokenStore == nil {
 		tokenStore = NewMemoryTokenStore()
+		p.usingMemoryTokenStore = true
 	}
 	return clientStore, tokenStore
 }
@@ -321,6 +327,12 @@ func (p *OAuthPlugin) Init(ctx context.Context, r *prefab.Registry) error {
 	// hard-fails on invalid opaque bearers so that a malformed or revoked
 	// OAuth token cannot silently fall back to cookie-based authentication.
 	authPlugin.PrependIdentityExtractor(p.extractIdentityFromOAuthToken)
+
+	if p.usingMemoryTokenStore {
+		log.Println("⚠️  WARNING: OAuth token store is in-memory. Tokens are lost " +
+			"on restart and are not shared across instances. Configure a persistent " +
+			"TokenStore via oauth.WithTokenStore for production.")
+	}
 
 	// Set issuer from config if not set. The global "address" key (not
 	// "server.address") is the canonical external URL for the service.
