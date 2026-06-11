@@ -22,6 +22,11 @@ may change between minor versions).
 
 ### Added
 
+- **OAuth fail-closed scope guards:** `oauth.RequireScope`, `oauth.RequireOAuth`,
+  and `oauth.RequireAnyScope`. Unlike a bare `IsOAuthRequest`/`HasScope` check
+  (which skips for first-party cookie sessions), these reject non-OAuth requests,
+  making them the correct guard for OAuth-only endpoints where scope is the
+  authorization boundary. The OAuth plugin README now documents both models.
 - GitHub Actions CI workflow running build, vet, test, staticcheck, and
   golangci-lint on pushes and pull requests.
 - `SECURITY.md`, `CONTRIBUTING.md`, and this `CHANGELOG.md`.

@@ -249,6 +249,15 @@ Net: a request with both a cookie and a Bearer is authenticated by the Bearer. O
 
 ### Checking scopes
 
+There are two distinct authorization models, and they need different guards.
+Choosing the wrong one is the most common footgun, because scopes are only ever
+present on OAuth-bearer requests — a first-party session cookie carries none.
+
+**Model A — scopes constrain delegated (third-party) access.** A user
+authenticated directly via their session cookie is exercising their own full
+authority and is not limited by scopes; scopes only restrict what a delegated
+OAuth client may do on their behalf. Guard with `IsOAuthRequest` + `HasScope`:
+
 ```go
 func protectedHandler(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
@@ -260,21 +269,38 @@ func protectedHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // If the request is using OAuth, enforce the required scope.
+    // If (and only if) the request is using OAuth, enforce the required scope.
+    // Cookie sessions intentionally retain full access here.
     if oauth.IsOAuthRequest(ctx) {
         if !oauth.HasScope(ctx, "read") {
             http.Error(w, "Missing 'read' scope", http.StatusForbidden)
             return
         }
-
-        // OAuth metadata is also available:
-        _ = oauth.OAuthClientIDFromContext(ctx)
-        _ = oauth.OAuthScopesFromContext(ctx)
     }
 
     // Handle request using identity.Subject.
 }
 ```
+
+**Model B — the endpoint is OAuth-only and scope is the authorization
+boundary** (e.g. a machine-to-machine API). Here the `if oauth.IsOAuthRequest`
+guard above would **fail open** for any logged-in cookie user. Use the
+fail-closed `RequireScope`, which rejects both non-OAuth requests and OAuth
+requests missing the scope:
+
+```go
+func machineHandler(w http.ResponseWriter, r *http.Request) {
+    if err := oauth.RequireScope(r.Context(), "read"); err != nil {
+        // ErrOAuthRequired (cookie/no bearer) or ErrMissingScope.
+        http.Error(w, err.Error(), http.StatusForbidden)
+        return
+    }
+    // ...
+}
+```
+
+Related fail-closed guards: `oauth.RequireOAuth(ctx)` (bearer required, any
+scope) and `oauth.RequireAnyScope(ctx, "read", "write")`.
 
 Scope helper functions:
 

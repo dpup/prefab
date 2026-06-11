@@ -274,6 +274,30 @@ func TestScopeHelpers(t *testing.T) {
 	assert.Equal(t, "test-client", OAuthClientIDFromContext(ctx))
 }
 
+func TestRequireScope(t *testing.T) {
+	// A first-party cookie session carries no OAuth client ID, even if scopes
+	// somehow ended up on the context. RequireScope must fail closed here — this
+	// is the case a bare `if IsOAuthRequest { HasScope }` guard would skip.
+	t.Run("CookieSession_FailsClosed", func(t *testing.T) {
+		ctx := WithOAuthScopes(context.Background(), []string{"read"})
+		assert.False(t, IsOAuthRequest(ctx))
+		require.ErrorIs(t, RequireOAuth(ctx), ErrOAuthRequired)
+		require.ErrorIs(t, RequireScope(ctx, "read"), ErrOAuthRequired)
+	})
+
+	// A genuine OAuth request has both a client ID and scopes injected.
+	t.Run("OAuthRequest", func(t *testing.T) {
+		ctx := WithOAuthClientID(context.Background(), "test-client")
+		ctx = WithOAuthScopes(ctx, []string{"read", "write"})
+
+		require.NoError(t, RequireOAuth(ctx))
+		require.NoError(t, RequireScope(ctx, "read"))
+		require.ErrorIs(t, RequireScope(ctx, "admin"), ErrMissingScope)
+		require.NoError(t, RequireAnyScope(ctx, "admin", "write"))
+		require.ErrorIs(t, RequireAnyScope(ctx, "admin", "delete"), ErrMissingScope)
+	})
+}
+
 func TestExtractBearerToken(t *testing.T) {
 	tests := []struct {
 		name     string

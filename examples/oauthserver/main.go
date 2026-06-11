@@ -81,6 +81,7 @@ func main() {
 		prefab.WithHTTPHandler("/api/public", publicHandler()),
 		prefab.WithHTTPHandler("/api/protected", protectedHandler()),
 		prefab.WithHTTPHandler("/api/admin", adminHandler()),
+		prefab.WithHTTPHandler("/api/machine", machineHandler()),
 		prefab.WithHTTPHandler("/api/userinfo", userinfoHandler()),
 	)
 
@@ -546,6 +547,11 @@ func protectedHandler() http.Handler {
 			return
 		}
 
+		// Model A: scopes constrain delegated OAuth access only. A first-party
+		// cookie session is not an OAuth request, so it skips this check and
+		// retains full access by design. For an OAuth-only endpoint where scope
+		// is the authorization boundary, use oauth.RequireScope instead (see
+		// machineHandler below), which fails closed for cookie sessions.
 		if oauth.IsOAuthRequest(ctx) {
 			if !oauth.HasScope(ctx, "read") {
 				jsonError(w, http.StatusForbidden, "Missing 'read' scope")
@@ -585,6 +591,27 @@ func adminHandler() http.Handler {
 			"message":   "This is an admin endpoint",
 			"subject":   identity.Subject,
 			"is_oauth":  oauth.IsOAuthRequest(ctx),
+			"client_id": oauth.OAuthClientIDFromContext(ctx),
+			"scopes":    oauth.OAuthScopesFromContext(ctx),
+		})
+	})
+}
+
+// machineHandler demonstrates Model B: an OAuth-only endpoint where the scope
+// is the authorization boundary. RequireScope fails closed — a first-party
+// cookie session (no bearer token) is rejected with ErrOAuthRequired rather than
+// silently allowed.
+func machineHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		if err := oauth.RequireScope(ctx, "read"); err != nil {
+			jsonError(w, http.StatusForbidden, err.Error())
+			return
+		}
+
+		jsonResponse(w, map[string]interface{}{
+			"message":   "This is an OAuth-only (machine-to-machine) endpoint",
 			"client_id": oauth.OAuthClientIDFromContext(ctx),
 			"scopes":    oauth.OAuthScopesFromContext(ctx),
 		})

@@ -12,7 +12,19 @@ import (
 	"github.com/go-oauth2/oauth2/v4"
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+)
+
+var (
+	// ErrOAuthRequired indicates an endpoint requires OAuth bearer-token
+	// authentication, but the request was not authenticated via an OAuth token
+	// (e.g. it used a first-party session cookie instead).
+	ErrOAuthRequired = errors.NewC("oauth: bearer token required", codes.Unauthenticated)
+
+	// ErrMissingScope indicates the request's OAuth token does not carry a
+	// required scope.
+	ErrMissingScope = errors.NewC("oauth: missing required scope", codes.PermissionDenied)
 )
 
 // OAuthPlugin provides OAuth2 authorization server functionality using go-oauth2.
@@ -554,6 +566,48 @@ func HasAllScopes(ctx context.Context, scopes ...string) bool {
 // IsOAuthRequest returns true if the current request is authenticated via OAuth.
 func IsOAuthRequest(ctx context.Context) bool {
 	return OAuthClientIDFromContext(ctx) != ""
+}
+
+// RequireOAuth returns ErrOAuthRequired unless the request was authenticated via
+// an OAuth bearer token. Use it to ensure an endpoint is reachable only by OAuth
+// clients and not by first-party session cookies.
+func RequireOAuth(ctx context.Context) error {
+	if !IsOAuthRequest(ctx) {
+		return errors.Mark(ErrOAuthRequired, 0)
+	}
+	return nil
+}
+
+// RequireScope returns an error unless the request was authenticated via an
+// OAuth bearer token AND that token carries the given scope.
+//
+// Unlike a bare HasScope check, RequireScope fails closed for first-party
+// cookie sessions (which carry no scopes), so it is the correct guard for
+// endpoints where an OAuth scope is the authorization boundary. Use the plain
+// HasScope/IsOAuthRequest helpers instead when scopes are only meant to
+// constrain delegated third-party access and cookie users should retain full
+// access.
+func RequireScope(ctx context.Context, scope string) error {
+	if err := RequireOAuth(ctx); err != nil {
+		return err
+	}
+	if !HasScope(ctx, scope) {
+		return errors.Mark(ErrMissingScope, 0).Append(scope)
+	}
+	return nil
+}
+
+// RequireAnyScope returns an error unless the request was authenticated via an
+// OAuth bearer token carrying at least one of the given scopes. See RequireScope
+// for the fail-closed semantics.
+func RequireAnyScope(ctx context.Context, scopes ...string) error {
+	if err := RequireOAuth(ctx); err != nil {
+		return err
+	}
+	if !HasAnyScope(ctx, scopes...) {
+		return errors.Mark(ErrMissingScope, 0).Append(strings.Join(scopes, " "))
+	}
+	return nil
 }
 
 // ParseScopes parses a space-separated scope string into a slice.
