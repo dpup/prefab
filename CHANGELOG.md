@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format is based on
 follow [Semantic Versioning](https://semver.org/) (note: pre-1.0, the public API
 may change between minor versions).
 
-## [Unreleased]
+## [0.5.0] - 2026-06-17
 
 ### Security
 
@@ -77,5 +77,5 @@ may change between minor versions).
 See the [releases page](https://github.com/dpup/prefab/releases) and the git
 history for changes prior to 0.4.2.
 
-[Unreleased]: https://github.com/dpup/prefab/compare/v0.4.2...HEAD
+[0.5.0]: https://github.com/dpup/prefab/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/dpup/prefab/releases/tag/v0.4.2
