@@ -34,10 +34,12 @@ func main() {
 		prefab.WithPlugin(etag.Plugin()),
 	)
 
+	// Typed as the interface so it's registered as a SimpleServiceServer.
+	var svc simpleservice.SimpleServiceServer = &etagServer{}
 	s.RegisterService(
 		&simpleservice.SimpleService_ServiceDesc,
 		simpleservice.RegisterSimpleServiceHandler,
-		&etagServer{},
+		svc,
 	)
 
 	fmt.Println("")
@@ -61,6 +63,7 @@ type etagServer struct {
 
 // Health is a plain, unconditional endpoint.
 func (s *etagServer) Health(ctx context.Context, in *simpleservice.HealthRequest) (*simpleservice.HealthResponse, error) {
+	logging.Info(ctx, "health check")
 	return &simpleservice.HealthResponse{Status: "OK"}, nil
 }
 
