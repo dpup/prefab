@@ -5,6 +5,35 @@ All notable changes to this project are documented here. The format is based on
 follow [Semantic Versioning](https://semver.org/) (note: pre-1.0, the public API
 may change between minor versions).
 
+## [0.6.0] - 2026-07-09
+
+### Added
+
+- **ETag plugin (`etag.Plugin()`) for conditional requests.** Handlers advertise
+  a validator and short-circuit response generation when the caller already
+  holds a current copy:
+
+  ```go
+  if err := etag.Guard(ctx, etag.Weak(version)); err != nil {
+      return nil, err // 304 / not-modified; the expensive load below is skipped
+  }
+  ```
+
+  `etag.Matches` is also exposed for handlers that need custom logic before
+  bailing. The plugin is transport agnostic: it reads `If-None-Match` from the
+  HTTP header (Gateway) or `if-none-match` request metadata (native gRPC), and
+  signals not-modified via a `304` status (Gateway) or a `prefab-not-modified`
+  response metadata flag with an `OK` status (native gRPC), so it never overloads
+  a gRPC error code. Client helpers `etag.IfNoneMatch`, `etag.IsNotModified`, and
+  `etag.ETag` support native callers. See `examples/etag` for a curl-driven demo.
+
+### Changed
+
+- **Gateway responses now enforce conditional-response hygiene.** A `304 Not
+  Modified` emitted via `serverutil.SendStatusCode` is stripped of its body and
+  content headers (per RFC 7232) before being written. Applied only to the
+  Gateway mux, so streaming endpoints are unaffected.
+
 ## [0.5.0] - 2026-06-17
 
 ### Security
@@ -77,5 +106,6 @@ may change between minor versions).
 See the [releases page](https://github.com/dpup/prefab/releases) and the git
 history for changes prior to 0.4.2.
 
+[0.6.0]: https://github.com/dpup/prefab/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dpup/prefab/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/dpup/prefab/releases/tag/v0.4.2

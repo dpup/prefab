@@ -177,7 +177,7 @@ func (b *builder) build() *Server {
 		fn(s)
 	}
 
-	s.httpMux.Handle("/api/", securityMiddleware(http.Handler(gateway), b.securityHeaders))
+	s.httpMux.Handle("/api/", securityMiddleware(conditionalResponse(http.Handler(gateway)), b.securityHeaders))
 	for _, h := range b.handlers {
 		var handler http.Handler
 		if h.jsonHandler != nil {
