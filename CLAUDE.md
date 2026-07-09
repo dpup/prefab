@@ -11,6 +11,12 @@
 - `make gen-proto` - Generate protocol buffer code
 - `go mod tidy` - Update dependencies
 
+Before committing or pushing, run `make lint` with **no** `TARGET` (this runs
+`golangci-lint run` over the whole module, exactly as CI does). Do not scope the
+lint to only the packages you changed: linters such as `unparam` report issues
+in call sites and examples that a scoped run misses, so a package-scoped lint can
+pass locally while CI fails on another package (e.g. an `examples/` binary).
+
 ### Coverage Commands
 
 - `make test-coverage` - Generate test coverage for all packages (human-readable summary)
