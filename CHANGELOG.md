@@ -5,6 +5,27 @@ All notable changes to this project are documented here. The format is based on
 follow [Semantic Versioning](https://semver.org/) (note: pre-1.0, the public API
 may change between minor versions).
 
+## [0.6.1] - 2026-08-06
+
+### Added
+
+- **Wildcard `"*"` CORS origin.** `SecurityHeaders.CORSOrigins` (config
+  `server.security.corsOrigins`) now accepts a `"*"` sentinel that emits a
+  literal `Access-Control-Allow-Origin: *` for every request, so a genuinely
+  public API can serve arbitrary browser origins. This is distinct from — and
+  safer than — reflecting the caller's `Origin`:
+
+  - `"*"` **cannot be combined with credentials**. The Fetch spec forbids the
+    pairing, so prefab now fails fast with the new exported
+    `ErrCORSWildcardCredentials` instead of shipping an unusable policy (or one a
+    later "fix" turns into a credentialed cross-origin hole by reflecting the
+    origin). The check runs on every `Apply`, not just the first.
+  - Wildcard mode omits `Vary: Origin`, since the response no longer varies by
+    request `Origin`.
+
+  The exact-match allowlist path and all preflight/expose-header handling are
+  unchanged.
+
 ## [0.6.0] - 2026-07-09
 
 ### Added
@@ -106,6 +127,7 @@ may change between minor versions).
 See the [releases page](https://github.com/dpup/prefab/releases) and the git
 history for changes prior to 0.4.2.
 
+[0.6.1]: https://github.com/dpup/prefab/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dpup/prefab/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dpup/prefab/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/dpup/prefab/releases/tag/v0.4.2
