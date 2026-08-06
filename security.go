@@ -24,6 +24,14 @@ const (
 var (
 	// HSTS requires a minimum expiration of 1 year for preload.
 	ErrBadHSTSExpiration = errors.NewC("prefab: HSTS preload requires expiration of at least 1 year", codes.FailedPrecondition)
+
+	// ErrCORSWildcardCredentials is returned when the wildcard origin "*" is
+	// combined with credentialed CORS. The Fetch spec forbids the pairing
+	// (browsers reject "*" alongside Access-Control-Allow-Credentials: true), so
+	// prefab refuses it at startup rather than shipping a policy that is either
+	// unusable or — if an implementation "fixed" it by reflecting the origin
+	// instead — a credential-leaking hole.
+	ErrCORSWildcardCredentials = errors.NewC(`prefab: CORS wildcard origin "*" cannot be combined with CORSAllowCredentials`, codes.FailedPrecondition)
 )
 
 // SecurityHeaders contains the security headers that should be set on HTTP
@@ -40,8 +48,13 @@ type SecurityHeaders struct {
 	HSTSPreload           bool
 
 	// Access-Control headers define which origins are allowed to access the
-	// resource and what methods are allowed.
-	// TODO: Should this allow for patterns instead of only exact origin matches?
+	// resource and what methods are allowed. Origins are matched exactly, with
+	// one special value: a single "*" entry opts into wildcard CORS, emitting a
+	// literal Access-Control-Allow-Origin: * for every request. That is distinct
+	// from — and safer than — reflecting the caller's Origin: "*" cannot be
+	// paired with credentials (see ErrCORSWildcardCredentials), so it can never
+	// silently become a credentialed cross-origin hole.
+	// TODO: Should this allow for prefix/suffix patterns too, not just "*"?
 	CORSOrigins          []string
 	CORSAllowMethods     []string
 	CORSAllowHeaders     []string
@@ -53,6 +66,7 @@ type SecurityHeaders struct {
 	staticHeaders    map[string]string
 	preflightHeaders map[string]string
 	allowedOrigins   map[string]bool
+	corsWildcard     bool       // CORSOrigins contains "*": emit a literal ACAO: *.
 	mu               sync.Mutex // Protects precomputed fields.
 }
 
@@ -66,9 +80,16 @@ func (s *SecurityHeaders) Apply(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if len(s.CORSOrigins) > 0 {
-		origin := r.Header.Get("Origin")
-		if s.allowedOrigins[origin] {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
+		// Wildcard emits a constant "*" for every request; otherwise the caller's
+		// Origin is echoed back only when it exactly matches the allowlist.
+		allowOrigin := ""
+		if s.corsWildcard {
+			allowOrigin = "*"
+		} else if s.allowedOrigins[r.Header.Get("Origin")] {
+			allowOrigin = r.Header.Get("Origin")
+		}
+		if allowOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 			if r.Method == http.MethodOptions {
 				for k, v := range s.preflightHeaders {
 					w.Header().Set(k, v)
@@ -88,6 +109,21 @@ func (s *SecurityHeaders) compute() error {
 
 	s.normalizeHeaders(s.CORSAllowHeaders)
 	s.normalizeHeaders(s.CORSExposeHeaders)
+
+	// Detect wildcard CORS and reject the credentialed pairing. Done before the
+	// staticHeaders memoization guard below so the invariant is re-checked on
+	// every call — a returned error must not stop recurring just because a prior
+	// call already populated staticHeaders.
+	s.corsWildcard = false
+	for _, origin := range s.CORSOrigins {
+		if origin == "*" {
+			s.corsWildcard = true
+			break
+		}
+	}
+	if s.corsWildcard && s.CORSAllowCredentials {
+		return errors.Mark(ErrCORSWildcardCredentials, 0)
+	}
 
 	if s.staticHeaders == nil {
 		s.staticHeaders = make(map[string]string)
@@ -129,7 +165,12 @@ func (s *SecurityHeaders) computeHSTSHeaders() error {
 // See https://fetch.spec.whatwg.org/#http-responses for details on
 // headers required on preflight and non-preflight requests.
 func (s *SecurityHeaders) computeCORSHeaders() {
-	s.staticHeaders["Vary"] = "Origin"
+	// Vary: Origin matters only for the reflected-origin path, where the response
+	// depends on the request's Origin. A wildcard emits a constant "*", so Vary
+	// would needlessly defeat shared-cache reuse.
+	if !s.corsWildcard {
+		s.staticHeaders["Vary"] = "Origin"
+	}
 
 	if s.CORSAllowCredentials {
 		s.staticHeaders["Access-Control-Allow-Credentials"] = "true"
