@@ -206,6 +206,63 @@ func TestSecurityHeaders(t *testing.T) {
 				"Access-Control-Expose-Headers": "X-Exposed",
 			},
 		},
+
+		{
+			// A wildcard emits a literal "*", not the request's Origin (which here
+			// is https://example.com) — proving it is not origin reflection — and
+			// deliberately omits Vary: Origin.
+			name: "cors wildcard",
+			req:  httptest.NewRequest(http.MethodOptions, "https://example.com/foobar", nil),
+			conf: &SecurityHeaders{
+				CORSOrigins: []string{"*"},
+			},
+			expectedHeaders: map[string]string{
+				"Referrer-Policy":              "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":       "nosniff",
+				"Access-Control-Allow-Origin":  "*",
+				"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH",
+			},
+		},
+		{
+			name: "cors wildcard method override",
+			req:  httptest.NewRequest(http.MethodOptions, "https://example.com/foobar", nil),
+			conf: &SecurityHeaders{
+				CORSOrigins:      []string{"*"},
+				CORSAllowMethods: []string{"GET"},
+				CORSMaxAge:       time.Hour,
+			},
+			expectedHeaders: map[string]string{
+				"Referrer-Policy":              "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":       "nosniff",
+				"Access-Control-Allow-Origin":  "*",
+				"Access-Control-Allow-Methods": "GET",
+				"Access-Control-Max-Age":       "3600",
+			},
+		},
+		{
+			name: "cors wildcard expose headers on get request",
+			req:  httptest.NewRequest(http.MethodGet, "https://third-party.example/foobar", nil),
+			conf: &SecurityHeaders{
+				CORSOrigins:       []string{"*"},
+				CORSExposeHeaders: []string{"X-Exposed"},
+			},
+			expectedHeaders: map[string]string{
+				"Referrer-Policy":               "strict-origin-when-cross-origin",
+				"X-Content-Type-Options":        "nosniff",
+				"Access-Control-Allow-Origin":   "*",
+				"Access-Control-Expose-Headers": "X-Exposed",
+			},
+		},
+		{
+			name: "cors wildcard with credentials is rejected",
+			req:  httptest.NewRequest(http.MethodOptions, "https://example.com/foobar", nil),
+			conf: &SecurityHeaders{
+				CORSOrigins:          []string{"*"},
+				CORSAllowCredentials: true,
+			},
+			expectedHeaders: map[string]string{},
+			expectedError:   ErrCORSWildcardCredentials,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
